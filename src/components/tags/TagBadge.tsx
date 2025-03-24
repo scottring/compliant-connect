@@ -38,6 +38,7 @@ const TagBadge: React.FC<TagBadgeProps> = ({
         borderColor: tag.color,
         borderWidth: "1px",
         borderStyle: "solid",
+        // Remove the ringColor property and use CSS classes for ring color
       }}
       onClick={onClick}
     >
