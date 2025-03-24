@@ -130,7 +130,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     }
     
     // Show success message for the product sheet request
-    toast.success(`Product sheet requested from ${supplierName}`);
+    toast.success(`Product Information Request (PIR) sent to ${supplierName}`);
     
     // Reset form and close modal
     form.reset();
@@ -150,9 +150,9 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Request Product Sheet</DialogTitle>
+          <DialogTitle>Create Product Information Request (PIR)</DialogTitle>
           <DialogDescription>
-            Request a new product sheet from {supplierName}.
+            Request product information from {supplierName}.
             {companies.find(c => c.id === supplierId)?.contactEmail && (
               <div className="flex items-center mt-2 text-xs text-muted-foreground">
                 <Mail className="h-3 w-3 mr-1" />
@@ -204,7 +204,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
             />
 
             <FormItem>
-              <FormLabel>Tags</FormLabel>
+              <FormLabel>Information Categories (Tags)</FormLabel>
               <div className="flex flex-wrap gap-2 p-4 border rounded-md">
                 {tags.map((tag) => (
                   <TagBadge 
@@ -215,7 +215,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                   />
                 ))}
                 {tags.length === 0 && (
-                  <div className="text-sm text-muted-foreground italic">No tags available</div>
+                  <div className="text-sm text-muted-foreground italic">No information categories available</div>
                 )}
               </div>
             </FormItem>

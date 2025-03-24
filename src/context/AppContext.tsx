@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState } from "react";
-import { Company, ProductSheet, Question, Tag, User, Section, Subsection, Comment } from "../types";
+import { Company, ProductSheet, Question, Tag, User, Section, Subsection, Comment, SupplierResponse, PIR } from "../types";
 import { mockCompanies, mockProductSheets, mockQuestions, mockTags, mockUsers } from "../data/mockData";
 import { toast } from "sonner";
 
@@ -31,7 +32,7 @@ interface AppContextType {
   updateSubsection: (subsection: Subsection) => void;
   deleteSubsection: (id: string) => void;
   addComment: (answerId: string, text: string) => void;
-  updateAnswer: (sheetId: string, questionId: string, value: string | number | boolean | string[]) => void;
+  updateSupplierResponse: (sheetId: string, questionId: string, value: string | number | boolean | string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -112,17 +113,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `tag${tags.length + 1}`,
     };
     setTags([...tags, newTag]);
-    toast.success("Tag added successfully");
+    toast.success("Information category added successfully");
   };
 
   const updateTag = (tag: Tag) => {
     setTags(tags.map((t) => (t.id === tag.id ? tag : t)));
-    toast.success("Tag updated successfully");
+    toast.success("Information category updated successfully");
   };
 
   const deleteTag = (id: string) => {
     setTags(tags.filter((t) => t.id !== id));
-    toast.success("Tag deleted successfully");
+    toast.success("Information category deleted successfully");
   };
 
   const addSection = (section: Omit<Section, "id">) => {
@@ -204,7 +205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toast.success("Comment added successfully");
   };
 
-  const updateAnswer = (sheetId: string, questionId: string, value: string | number | boolean | string[]) => {
+  const updateSupplierResponse = (sheetId: string, questionId: string, value: string | number | boolean | string[]) => {
     setProductSheets(
       productSheets.map((sheet) => {
         if (sheet.id !== sheetId) return sheet;
@@ -237,7 +238,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    toast.success("Answer saved successfully");
+    toast.success("Supplier response saved successfully");
   };
 
   return (
@@ -270,7 +271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateSubsection,
         deleteSubsection,
         addComment,
-        updateAnswer,
+        updateSupplierResponse,
       }}
     >
       {children}

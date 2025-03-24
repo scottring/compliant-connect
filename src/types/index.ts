@@ -1,4 +1,3 @@
-
 export type User = {
   id: string;
   name: string;
@@ -68,7 +67,7 @@ export type Question = {
   order?: number;
 };
 
-export type Answer = {
+export type SupplierResponse = {
   id: string;
   questionId: string;
   value: string | number | boolean | string[];
@@ -103,7 +102,7 @@ export type ProductSheet = {
   requestedById: string;
   status: 'draft' | 'submitted' | 'reviewing' | 'approved' | 'rejected';
   questions: Question[];
-  answers: Answer[];
+  answers: SupplierResponse[];
   createdAt: Date;
   updatedAt: Date;
   tags: string[];
@@ -111,7 +110,7 @@ export type ProductSheet = {
 
 export type RequestStatus = 'pending' | 'submitted' | 'reviewing' | 'approved' | 'rejected';
 
-export type Request = {
+export type PIR = {
   id: string;
   productSheetId: string;
   fromCompanyId: string;
@@ -120,3 +119,7 @@ export type Request = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+// For backwards compatibility, keep the old name as an alias
+export type Answer = SupplierResponse;
+export type Request = PIR;

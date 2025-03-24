@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -85,7 +86,7 @@ const SupplierDetail = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader 
-        title={`Supplier Sheet - ${supplier.name}`}
+        title={`Supplier Detail - ${supplier.name}`}
         actions={
           <Button variant="default" className="bg-brand hover:bg-brand-700">
             Edit
@@ -145,7 +146,7 @@ const SupplierDetail = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">Product Sheets for {supplier.name}</h2>
           <Button variant="default" className="bg-brand hover:bg-brand-700" onClick={handleRequestSheet}>
-            Request Product Sheet
+            Create PIR
           </Button>
         </div>
         
@@ -155,7 +156,7 @@ const SupplierDetail = () => {
               <TableRow>
                 <TableHead>Product ID</TableHead>
                 <TableHead>Product Name</TableHead>
-                <TableHead>Tags</TableHead>
+                <TableHead>Info Categories</TableHead>
                 <TableHead>Compliance Status</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -189,7 +190,7 @@ const SupplierDetail = () => {
         </div>
       </div>
 
-      {/* Request Sheet Modal */}
+      {/* PIR Modal */}
       <RequestSheetModal 
         open={isRequestModalOpen} 
         onOpenChange={setIsRequestModalOpen} 
