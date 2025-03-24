@@ -1,5 +1,6 @@
 
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Company } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ interface SupplierTableProps {
 const SupplierTable: React.FC<SupplierTableProps> = ({ suppliers, onAction }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredSuppliers, setFilteredSuppliers] = useState<Company[]>(suppliers);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     setFilteredSuppliers(
@@ -31,6 +33,10 @@ const SupplierTable: React.FC<SupplierTableProps> = ({ suppliers, onAction }) =>
       )
     );
   }, [searchTerm, suppliers]);
+
+  const handleRowClick = (supplier: Company) => {
+    navigate(`/suppliers/${supplier.id}`);
+  };
 
   return (
     <div className="w-full animate-fade-in">
@@ -88,7 +94,11 @@ const SupplierTable: React.FC<SupplierTableProps> = ({ suppliers, onAction }) =>
           </TableHeader>
           <TableBody>
             {filteredSuppliers.map((supplier) => (
-              <TableRow key={supplier.id} className="transition-colors hover:bg-muted/50">
+              <TableRow 
+                key={supplier.id} 
+                className="transition-colors hover:bg-muted/50 cursor-pointer"
+                onClick={() => handleRowClick(supplier)}
+              >
                 <TableCell className="font-medium">{supplier.id.padStart(3, '0')}</TableCell>
                 <TableCell>{supplier.name}</TableCell>
                 <TableCell className="max-w-[200px]">
@@ -97,7 +107,10 @@ const SupplierTable: React.FC<SupplierTableProps> = ({ suppliers, onAction }) =>
                 <TableCell>{supplier.contactName}</TableCell>
                 <TableCell className="text-right">
                   <Button
-                    onClick={() => onAction(supplier)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAction(supplier);
+                    }}
                     variant="secondary"
                     size="sm"
                     className="bg-brand hover:bg-brand-700 text-white"

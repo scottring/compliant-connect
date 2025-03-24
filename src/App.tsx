@@ -9,6 +9,7 @@ import Sidebar from "./components/Sidebar";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Suppliers from "./pages/Suppliers";
+import SupplierDetail from "./pages/SupplierDetail";
 import ProductSheets from "./pages/ProductSheets";
 import QuestionBank from "./pages/QuestionBank";
 import Tags from "./pages/Tags";
@@ -30,6 +31,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/suppliers" element={<Suppliers />} />
+                <Route path="/suppliers/:id" element={<SupplierDetail />} />
                 <Route path="/customers" element={<NotFound />} />
                 <Route path="/product-sheets" element={<ProductSheets />} />
                 <Route path="/supplier-products" element={<NotFound />} />
