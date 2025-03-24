@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -10,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Question, SupplierResponse } from "@/types";
 import QuestionItem from "@/components/supplierResponse/QuestionItem";
 import { MessageCircle, ChevronDown, ChevronUp, CheckCircle } from "lucide-react";
+import TaskProgress from "@/components/ui/progress/TaskProgress";
 
 const SupplierResponseForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -155,10 +155,40 @@ const SupplierResponseForm = () => {
     return `${section.order}.${subsection.order} ${subsection.name}`;
   };
   
-  // Calculate completion rate
   const answeredQuestions = Object.keys(answersByQuestionId).length;
   const totalQuestions = sheetQuestions.length;
   const completionRate = totalQuestions > 0 ? Math.floor((answeredQuestions / totalQuestions) * 100) : 0;
+  
+  const getDisplayStatus = () => {
+    if (completionRate === 0 && productSheet.status === "submitted") {
+      return "draft (pending submission)";
+    }
+    
+    if (completionRate > 0 && completionRate < 100 && productSheet.status === "submitted") {
+      return "partially submitted";
+    }
+    
+    return productSheet.status;
+  };
+  
+  const getStatusColorClass = () => {
+    if (completionRate === 0 && productSheet.status === "submitted") {
+      return "bg-amber-100 text-amber-800";
+    }
+    
+    switch (productSheet.status) {
+      case "approved":
+        return "bg-green-100 text-green-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
+      case "reviewing":
+        return "bg-blue-100 text-blue-800";
+      case "submitted":
+        return completionRate < 100 ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800";
+      default:
+        return "bg-amber-100 text-amber-800";
+    }
+  };
   
   return (
     <div className="space-y-6 pb-10">
@@ -183,8 +213,8 @@ const SupplierResponseForm = () => {
             <span>Product Information Request</span>
             <div className="flex items-center gap-2">
               <span className="text-sm font-normal text-muted-foreground">Status:</span>
-              <span className="text-sm bg-amber-100 text-amber-800 px-2 py-1 rounded capitalize">
-                {productSheet.status}
+              <span className={`text-sm px-2 py-1 rounded capitalize ${getStatusColorClass()}`}>
+                {getDisplayStatus()}
               </span>
             </div>
           </CardTitle>
@@ -226,11 +256,8 @@ const SupplierResponseForm = () => {
                 </p>
               </div>
             </div>
-            <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500"
-                style={{ width: `${completionRate}%` }}
-              />
+            <div className="w-32">
+              <TaskProgress value={completionRate} size="md" showLabel />
             </div>
           </div>
         </CardContent>
