@@ -135,6 +135,11 @@ const CustomerReview = () => {
   const handleFlag = (answerId: string, note: string) => {
     console.log("Flagging answer:", answerId, "with note:", note);
     
+    if (!note.trim()) {
+      toast.error("Please add a note before flagging");
+      return;
+    }
+    
     setReviewStatus(prev => ({
       ...prev,
       [answerId]: "flagged"
@@ -299,6 +304,8 @@ const CustomerReview = () => {
                       if (!answer) {
                         return null;
                       }
+                      
+                      console.log("Rendering question:", question.id, "answerId:", answer.id, "status:", reviewStatus[answer.id] || "pending");
                       
                       return (
                         <div key={question.id}>

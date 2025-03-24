@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Question, SupplierResponse } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -39,7 +38,6 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
 }) => {
   const [commentsOpen, setCommentsOpen] = useState(false);
   
-  // Format answer value based on type
   const formatAnswerValue = () => {
     if (answer.value === undefined || answer.value === null) {
       return <span className="text-muted-foreground italic">No answer provided</span>;
@@ -76,7 +74,6 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
     }
     
     console.log("Flagging question with note:", note);
-    // Call the onFlag callback with the note
     onFlag(note);
     toast.success("Question flagged for revision");
   };
@@ -156,12 +153,10 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 Approve
               </Button>
               <Button 
+                type="button"
                 variant="outline" 
-                className="border-red-500 text-red-700 hover:bg-red-50"
-                onClick={() => {
-                  console.log("Flag button clicked");
-                  handleSubmitFlag();
-                }}
+                className="border-red-500 text-red-700 hover:bg-red-50 cursor-pointer"
+                onClick={() => handleSubmitFlag()}
                 disabled={!note.trim()}
               >
                 <Flag className="mr-2 h-4 w-4" />
