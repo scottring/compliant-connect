@@ -72,6 +72,8 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
     if (!note.trim()) {
       return;
     }
+    
+    // Call the onFlag callback with the note
     onFlag(note);
   };
   

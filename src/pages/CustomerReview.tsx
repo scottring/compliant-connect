@@ -22,7 +22,8 @@ const CustomerReview = () => {
     questions, 
     tags,
     companies,
-    updateProductSheet 
+    updateProductSheet,
+    user
   } = useApp();
   
   const [activeTab, setActiveTab] = useState("all");
@@ -138,9 +139,16 @@ const CustomerReview = () => {
       ...prev,
       [answerId]: note
     }));
+    
+    toast.success("Question has been flagged for revision");
   };
   
   const handleSubmitReview = () => {
+    if (!user) {
+      toast.error("You must be logged in to submit a review");
+      return;
+    }
+    
     const updatedAnswers = productSheet.answers.map(answer => {
       const status = reviewStatus[answer.id];
       const note = reviewNotes[answer.id];
@@ -150,8 +158,8 @@ const CustomerReview = () => {
           id: `flag-${Date.now()}`,
           answerId: answer.id,
           comment: note,
-          createdBy: "current-user",
-          createdByName: "Current User",
+          createdBy: user.id,
+          createdByName: user.name,
           createdAt: new Date()
         };
         
@@ -167,7 +175,8 @@ const CustomerReview = () => {
       return answer;
     });
     
-    const updatedStatus: ProductSheet['status'] = "reviewing";
+    const hasFlags = Object.values(reviewStatus).some(status => status === "flagged");
+    const updatedStatus: ProductSheet['status'] = hasFlags ? "reviewing" : productSheet.status;
     
     const updatedSheet: ProductSheet = {
       ...productSheet,
