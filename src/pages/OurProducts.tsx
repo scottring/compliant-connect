@@ -36,9 +36,16 @@ const OurProducts = () => {
   // Filter product sheets to find customer PIRs for our products
   // These are sheets where our company is the supplier and there's a requestedById
   const customerRequests = productSheets.filter((sheet) => {
+    console.log("Checking sheet:", sheet.name, "supplierId:", sheet.supplierId, "requestedById:", sheet.requestedById, "user companyId:", user?.companyId);
     // Check if the current user's company is the supplier AND there's a customer requesting it
     return user && sheet.supplierId === user.companyId && sheet.requestedById;
   });
+
+  console.log("Total productSheets:", productSheets.length);
+  console.log("User company ID:", user?.companyId);
+  console.log("Our Products count:", ourProducts.length);
+  console.log("Customer Requests count:", customerRequests.length);
+  console.log("Customer Requests:", customerRequests);
 
   // Filter based on search term and active tab
   const getFilteredProducts = () => {
