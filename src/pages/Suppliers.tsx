@@ -6,18 +6,19 @@ import SupplierTable from "@/components/suppliers/SupplierTable";
 import InviteSupplierModal from "@/components/suppliers/InviteSupplierModal";
 import { Company } from "@/types";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const Suppliers = () => {
   const { companies, addCompany } = useApp();
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   const suppliers = companies.filter(
     (company) => company.role === "supplier" || company.role === "both"
   );
 
   const handleSupplierAction = (supplier: Company) => {
-    toast.info(`Viewing details for ${supplier.name}`);
-    // In a real application, this would navigate to the supplier detail page
+    navigate(`/suppliers/${supplier.id}`);
   };
 
   return (

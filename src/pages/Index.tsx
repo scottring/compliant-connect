@@ -10,7 +10,7 @@ const Index = () => {
     <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-gradient-to-b from-gray-50 to-gray-100">
       <div className="max-w-3xl text-center">
         <img 
-          src="/lovable-uploads/f586003e-96bf-4fc9-a319-a23ea3f422f8.png" 
+          src="/lovable-uploads/c2472b5a-b16b-4f53-9ea4-eb27391a2e5b.png" 
           alt="StacksData Logo" 
           className="h-16 mx-auto mb-6"
         />
