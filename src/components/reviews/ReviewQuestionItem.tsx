@@ -16,6 +16,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import CommentsThread from "@/components/comments/CommentsThread";
+import { toast } from "sonner";
 
 interface ReviewQuestionItemProps {
   question: Question;
@@ -70,11 +71,13 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   
   const handleSubmitFlag = () => {
     if (!note.trim()) {
+      toast.error("Please add a note before flagging");
       return;
     }
     
     // Call the onFlag callback with the note
     onFlag(note);
+    toast.success("Question flagged for revision");
   };
   
   return (

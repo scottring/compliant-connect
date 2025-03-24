@@ -127,9 +127,13 @@ const CustomerReview = () => {
       ...prev,
       [answerId]: ""
     }));
+    
+    toast.success("Question approved");
   };
   
   const handleFlag = (answerId: string, note: string) => {
+    console.log("Flagging answer:", answerId, "with note:", note);
+    
     setReviewStatus(prev => ({
       ...prev,
       [answerId]: "flagged"
@@ -139,8 +143,6 @@ const CustomerReview = () => {
       ...prev,
       [answerId]: note
     }));
-    
-    toast.success("Question has been flagged for revision");
   };
   
   const handleSubmitReview = () => {
@@ -155,7 +157,7 @@ const CustomerReview = () => {
       
       if (status === "flagged" && note) {
         const newFlag: FlagType = {
-          id: `flag-${Date.now()}`,
+          id: `flag-${Date.now()}-${Math.random().toString(36).substring(2)}`,
           answerId: answer.id,
           comment: note,
           createdBy: user.id,
@@ -176,7 +178,7 @@ const CustomerReview = () => {
     });
     
     const hasFlags = Object.values(reviewStatus).some(status => status === "flagged");
-    const updatedStatus: ProductSheet['status'] = hasFlags ? "reviewing" : productSheet.status;
+    const updatedStatus: ProductSheet['status'] = hasFlags ? "reviewing" : "approved";
     
     const updatedSheet: ProductSheet = {
       ...productSheet,
