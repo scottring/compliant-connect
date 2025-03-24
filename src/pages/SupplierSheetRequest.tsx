@@ -24,14 +24,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import TagBadge from "@/components/tags/TagBadge";
-import { Question, Answer, ProductSheet } from "@/types";
+import { Question, Answer, ProductSheet, Tag } from "@/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import CommentsThread from "@/components/comments/CommentsThread";
 
 const SupplierSheetRequest = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { productSheets, companies, questions, updateProductSheet, updateAnswer, addComment } = useApp();
+  const { productSheets, companies, questions, tags, sections, subsections, updateProductSheet, updateAnswer, addComment } = useApp();
   
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   
@@ -70,7 +70,7 @@ const SupplierSheetRequest = () => {
   // Get all questions that match the product sheet tags
   const sheetQuestions = questions.filter((question) =>
     question.tags.some((tag) => 
-      productSheet.tags.includes(tag.id)
+      productSheet.tags.some(tagId => tagId === tag.id)
     )
   ).sort((a, b) => {
     // Sort by section, subsection, and order

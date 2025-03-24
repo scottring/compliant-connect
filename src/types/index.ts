@@ -106,7 +106,7 @@ export type ProductSheet = {
   answers: Answer[];
   createdAt: Date;
   updatedAt: Date;
-  tags: Tag[];
+  tags: string[];
 };
 
 export type RequestStatus = 'pending' | 'submitted' | 'reviewing' | 'approved' | 'rejected';

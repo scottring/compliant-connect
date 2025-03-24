@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Mail, Search, SendHorizontal, Tag } from "lucide-react";
+import { Mail, Search, SendHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import TagBadge from "@/components/tags/TagBadge";
 
@@ -115,9 +115,10 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     addProductSheet({
       name: values.productName,
       supplierId: supplierId,
-      status: "submitted" as "draft" | "submitted" | "reviewing" | "approved" | "rejected", // Fixed type error
+      requestedById: "c1", // Assuming c1 is the current user's company ID
+      status: "submitted",
       tags: selectedTags,
-      note: values.note,
+      description: values.note,
     });
     
     // Find supplier email

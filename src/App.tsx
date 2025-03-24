@@ -33,7 +33,7 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <div className="flex h-screen w-full overflow-hidden">
-              <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
+              <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
               <main className="flex-1 overflow-auto p-8">
                 <Routes>
                   <Route path="/" element={<Index />} />
