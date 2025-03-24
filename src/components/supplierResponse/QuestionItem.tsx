@@ -246,16 +246,14 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
                   )}
                   
                   {question.type === "file" && (
-                    <div className="space-y-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full" 
-                        onClick={() => alert("File upload not implemented yet")}
-                      >
-                        Start upload
-                      </Button>
-                    </div>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="w-full" 
+                      onClick={() => alert("File upload not implemented yet")}
+                    >
+                      Start upload
+                    </Button>
                   )}
                 </FormControl>
                 <FormMessage />

@@ -26,6 +26,7 @@ const SupplierResponseForm = () => {
     addComment 
   } = useApp();
   
+  // Initialize with all sections expanded
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   
   const productSheet = productSheets.find((ps) => ps.id === id);
