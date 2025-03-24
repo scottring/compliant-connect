@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { toast } from "sonner";
-import { Question, SupplierResponse } from "@/types";
+import { Question, SupplierResponse, ProductSheet } from "@/types";
 import TagBadge from "@/components/tags/TagBadge";
 
 const CustomerReview = () => {
@@ -178,10 +178,13 @@ const CustomerReview = () => {
       return answer;
     });
     
-    const updatedSheet = {
+    // Make sure we use the correct status type from the ProductSheet union
+    const updatedStatus: ProductSheet['status'] = "reviewing";
+    
+    const updatedSheet: ProductSheet = {
       ...productSheet,
       answers: updatedAnswers,
-      status: "reviewing", // Update status to indicate it's been reviewed
+      status: updatedStatus, // Use the properly typed status
       updatedAt: new Date()
     };
     
