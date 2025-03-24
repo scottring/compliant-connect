@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -82,18 +81,20 @@ const SupplierDetail = () => {
   };
 
   const getStatusLabel = (sheet: ProductSheet) => {
-    if (sheet.status === "submitted") {
+    const status = sheet.status || "";
+    
+    if (status === "submitted") {
       return "New Request";
-    } else if (sheet.status === "reviewing") {
+    } else if (status === "reviewing") {
       return "In Review";
-    } else if (sheet.status === "approved") {
+    } else if (status === "approved") {
       return "Compliant";
-    } else if (sheet.status === "rejected") {
+    } else if (status === "rejected") {
       return "Rejected";
-    } else if (sheet.status === "draft") {
+    } else if (status === "draft") {
       return "Draft";
     }
-    return sheet.status.charAt(0).toUpperCase() + sheet.status.slice(1);
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   const getTagBadge = (tagId: string) => {
