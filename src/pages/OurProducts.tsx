@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
@@ -25,23 +24,18 @@ const OurProducts = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
-    // Log the current user details for debugging
     console.log("Current user:", user);
     if (!user?.companyId) {
       toast.error("Please select a user with a company to view products");
     }
   }, [user]);
 
-  // Filter product sheets to only include ones where our company is the supplier
   const ourProducts = productSheets.filter((sheet) => {
     return user?.companyId && sheet.supplierId === user.companyId;
   });
 
-  // Filter product sheets to find customer PIRs for our products
-  // These are sheets where our company is the supplier and there's a requestedById
   const customerRequests = productSheets.filter((sheet) => {
     console.log("Checking sheet:", sheet.name, "supplierId:", sheet.supplierId, "requestedById:", sheet.requestedById, "user companyId:", user?.companyId);
-    // Check if the current user's company is the supplier AND there's a customer requesting it
     return user?.companyId && sheet.supplierId === user.companyId && sheet.requestedById && sheet.requestedById !== user.companyId;
   });
 
@@ -51,7 +45,6 @@ const OurProducts = () => {
   console.log("Customer Requests count:", customerRequests.length);
   console.log("Customer Requests:", customerRequests);
 
-  // Filter based on search term and active tab
   const getFilteredProducts = () => {
     const productsToFilter = 
       activeTab === "our-products" ? ourProducts : 
@@ -69,20 +62,16 @@ const OurProducts = () => {
 
   const handleAddProduct = () => {
     toast.info("Adding new product...");
-    // This would open a modal to add a new product in a real implementation
   };
 
   const handleProductAction = (product: ProductSheet) => {
     if (activeTab === "customer-requests") {
-      // IMPORTANT CHANGE: Navigate to supplier response form instead of customer review
       navigate(`/supplier-response-form/${product.id}`);
     } else {
-      toast.info(`Viewing product ${product.name}`);
-      // This would navigate to a product detail page in a real implementation
+      navigate(`/product-sheets/${product.id}`);
     }
   };
 
-  // Get the number of customer requests for a product
   const getCustomerRequestCount = (productId: string) => {
     return customerRequests.filter(request => 
       request.name.includes(productId) || 
@@ -90,7 +79,6 @@ const OurProducts = () => {
     ).length;
   };
 
-  // Function to get company name by ID
   const getCompanyName = (companyId: string) => {
     const company = companies.find(c => c.id === companyId);
     return company ? company.name : "Unknown";
@@ -262,3 +250,4 @@ const OurProducts = () => {
 };
 
 export default OurProducts;
+

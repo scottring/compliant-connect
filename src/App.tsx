@@ -49,6 +49,7 @@ const App = () => {
                   <Route path="/suppliers/:id" element={<SupplierDetail />} />
                   <Route path="/customers" element={<Customers />} />
                   <Route path="/product-sheets" element={<ProductSheets />} />
+                  <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
                   <Route path="/supplier-products" element={<SupplierProducts />} />
                   <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
                   <Route path="/customer-review/:id" element={<CustomerReview />} />
