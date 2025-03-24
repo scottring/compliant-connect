@@ -13,27 +13,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { UserCircle } from "lucide-react";
 
+// Just provide a single admin user
 const mockUsers: User[] = [
   {
     id: "user1",
-    name: "Customer Admin",
-    email: "customer@example.com",
+    name: "Admin User",
+    email: "admin@example.com",
     role: "admin",
-    companyId: "c8", // Customer company
-  },
-  {
-    id: "user2",
-    name: "Supplier Admin",
-    email: "supplier@example.com",
-    role: "admin",
-    companyId: "c3", // Supplier company
-  },
-  {
-    id: "user3",
-    name: "Both Customer/Supplier",
-    email: "both@example.com",
-    role: "admin",
-    companyId: "c1", // Company that is both supplier and customer
+    companyId: "c1", // Admin company
   },
 ];
 
@@ -45,11 +32,11 @@ const UserSwitcher = () => {
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="gap-2">
           <UserCircle className="h-4 w-4" />
-          {user?.name || "Switch User"}
+          {user?.name || "Admin User"}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Test Different Users</DropdownMenuLabel>
+        <DropdownMenuLabel>Test User</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {mockUsers.map((mockUser) => (
           <DropdownMenuItem
@@ -57,7 +44,7 @@ const UserSwitcher = () => {
             onClick={() => setUser(mockUser)}
             className={mockUser.id === user?.id ? "bg-accent" : ""}
           >
-            {mockUser.name} ({mockUser.companyId})
+            {mockUser.name}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
