@@ -1,4 +1,3 @@
-
 import { Company, ProductSheet, Question, Tag, User } from "../types";
 
 export const mockUsers: User[] = [
@@ -8,6 +7,7 @@ export const mockUsers: User[] = [
     email: "amanda@example.com",
     role: "admin",
     avatar: "https://i.pravatar.cc/150?img=1",
+    companyId: "c9",
   },
   {
     id: "u2",
@@ -15,6 +15,7 @@ export const mockUsers: User[] = [
     email: "john@example.com",
     role: "user",
     avatar: "https://i.pravatar.cc/150?img=2",
+    companyId: "c9",
   },
 ];
 
@@ -55,21 +56,21 @@ export const mockQuestions: Question[] = [
   {
     id: "q1",
     text: "Does your product contain substances of very high concern (SVHC) above 0.1% weight by weight?",
-    tags: [mockTags[0]], // REACH
+    tags: [mockTags[0]],
     type: "boolean",
     required: true,
   },
   {
     id: "q2",
     text: "Please provide the Chemical Abstract Service (CAS) number for all chemical substances in your product.",
-    tags: [mockTags[1], mockTags[3]], // US EPA, TSCA
+    tags: [mockTags[1], mockTags[3]],
     type: "text",
     required: true,
   },
   {
     id: "q3",
     text: "Does your product contain any of the following restricted substances?",
-    tags: [mockTags[2]], // RoHS
+    tags: [mockTags[2]],
     type: "multi-select",
     options: ["Lead", "Mercury", "Cadmium", "Hexavalent chromium", "PBB", "PBDE"],
     required: true,
@@ -77,14 +78,14 @@ export const mockQuestions: Question[] = [
   {
     id: "q4",
     text: "What is the flash point of your chemical product?",
-    tags: [mockTags[4]], // CLP
+    tags: [mockTags[4]],
     type: "number",
     required: true,
   },
   {
     id: "q5",
     text: "Please select the hazard classification of your product according to GHS.",
-    tags: [mockTags[0], mockTags[4]], // REACH, CLP
+    tags: [mockTags[0], mockTags[4]],
     type: "select",
     options: ["Flammable", "Toxic", "Corrosive", "Environmentally hazardous", "Not classified as hazardous"],
     required: true,
@@ -92,21 +93,21 @@ export const mockQuestions: Question[] = [
   {
     id: "q6",
     text: "Has your product been registered under REACH?",
-    tags: [mockTags[0]], // REACH
+    tags: [mockTags[0]],
     type: "boolean",
     required: true,
   },
   {
     id: "q7",
     text: "Please provide the REACH registration number if applicable.",
-    tags: [mockTags[0]], // REACH
+    tags: [mockTags[0]],
     type: "text",
     required: false,
   },
   {
     id: "q8",
     text: "Is your product exempt from TSCA reporting requirements?",
-    tags: [mockTags[3]], // TSCA
+    tags: [mockTags[3]],
     type: "boolean",
     required: true,
   },
@@ -208,7 +209,7 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-10-15"),
     updatedAt: new Date("2023-10-20"),
-    tags: ["tag1", "tag5"], // Using tag IDs instead of Tag objects
+    tags: ["tag1", "tag5"],
   },
   {
     id: "ps2",
@@ -221,7 +222,7 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-09-05"),
     updatedAt: new Date("2023-09-25"),
-    tags: ["tag3"], // Using tag IDs instead of Tag objects
+    tags: ["tag3"],
   },
   {
     id: "ps3",
@@ -234,7 +235,7 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-08-12"),
     updatedAt: new Date("2023-08-30"),
-    tags: ["tag1", "tag2", "tag5"], // Using tag IDs instead of Tag objects
+    tags: ["tag1", "tag2", "tag5"],
   },
   {
     id: "ps4",
@@ -247,6 +248,32 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-11-01"),
     updatedAt: new Date("2023-11-01"),
-    tags: ["tag3"], // Using tag IDs instead of Tag objects
+    tags: ["tag3"],
+  },
+  {
+    id: "ps5",
+    name: "Eco-Friendly Adhesive",
+    description: "Low-VOC adhesive for industrial applications",
+    supplierId: "c9",
+    requestedById: "c8",
+    status: "approved",
+    questions: [mockQuestions[0], mockQuestions[1], mockQuestions[3]],
+    answers: [],
+    createdAt: new Date("2023-07-15"),
+    updatedAt: new Date("2023-07-30"),
+    tags: ["tag1", "tag2"],
+  },
+  {
+    id: "ps6",
+    name: "Antimicrobial Coating",
+    description: "Protective coating with antimicrobial properties",
+    supplierId: "c9",
+    requestedById: null,
+    status: "draft",
+    questions: [],
+    answers: [],
+    createdAt: new Date("2023-11-10"),
+    updatedAt: new Date("2023-11-10"),
+    tags: ["tag1", "tag5"],
   },
 ];

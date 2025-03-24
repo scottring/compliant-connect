@@ -18,6 +18,7 @@ import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
 import CustomerReview from "./pages/CustomerReview";
 import Customers from "./pages/Customers";
+import OurProducts from "./pages/OurProducts";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
 import UserSwitcher from "./components/UserSwitcher";
@@ -51,7 +52,7 @@ const App = () => {
                   <Route path="/supplier-products" element={<SupplierProducts />} />
                   <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
                   <Route path="/customer-review/:id" element={<CustomerReview />} />
-                  <Route path="/our-products" element={<NotFound />} />
+                  <Route path="/our-products" element={<OurProducts />} />
                   <Route path="/question-bank" element={<QuestionBank />} />
                   <Route path="/tags" element={<Tags />} />
                   <Route path="*" element={<NotFound />} />
