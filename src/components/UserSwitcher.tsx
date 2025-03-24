@@ -19,18 +19,21 @@ const mockUsers: User[] = [
     name: "Customer Admin",
     email: "customer@example.com",
     role: "admin",
+    companyId: "c8", // Customer company
   },
   {
     id: "user2",
     name: "Supplier Admin",
     email: "supplier@example.com",
     role: "admin",
+    companyId: "c3", // Supplier company
   },
   {
     id: "user3",
     name: "Both Customer/Supplier",
     email: "both@example.com",
     role: "admin",
+    companyId: "c1", // Company that is both supplier and customer
   },
 ];
 
@@ -54,7 +57,7 @@ const UserSwitcher = () => {
             onClick={() => setUser(mockUser)}
             className={mockUser.id === user?.id ? "bg-accent" : ""}
           >
-            {mockUser.name}
+            {mockUser.name} ({mockUser.companyId})
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
@@ -23,14 +22,18 @@ const OurProducts = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("our-products");
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    // Log the current user details for debugging
+    console.log("Current user:", user);
+    if (!user?.companyId) {
+      toast.error("Please select a user with a company to view products");
+    }
+  }, [user]);
 
   // Filter product sheets to only include ones where our company is the supplier
   const ourProducts = productSheets.filter((sheet) => {
-    const supplierCompany = companies.find(
-      (company) => company.id === sheet.supplierId
-    );
-    // If the current user's company is the supplier of this product
-    return user && supplierCompany && supplierCompany.id === user.companyId;
+    return user?.companyId && sheet.supplierId === user.companyId;
   });
 
   // Filter product sheets to find customer PIRs for our products
@@ -38,7 +41,7 @@ const OurProducts = () => {
   const customerRequests = productSheets.filter((sheet) => {
     console.log("Checking sheet:", sheet.name, "supplierId:", sheet.supplierId, "requestedById:", sheet.requestedById, "user companyId:", user?.companyId);
     // Check if the current user's company is the supplier AND there's a customer requesting it
-    return user && sheet.supplierId === user.companyId && sheet.requestedById;
+    return user?.companyId && sheet.supplierId === user.companyId && sheet.requestedById && sheet.requestedById !== user.companyId;
   });
 
   console.log("Total productSheets:", productSheets.length);
@@ -105,146 +108,153 @@ const OurProducts = () => {
         }
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="all">
-            All ({ourProducts.length + customerRequests.length})
-          </TabsTrigger>
-          <TabsTrigger value="our-products">
-            Our Products ({ourProducts.length})
-          </TabsTrigger>
-          <TabsTrigger value="customer-requests">
-            Customer PIRs ({customerRequests.length})
-          </TabsTrigger>
-        </TabsList>
+      {!user?.companyId ? (
+        <div className="rounded-md border p-4 my-4 bg-yellow-50 text-yellow-800">
+          <p className="font-medium">No company associated with current user</p>
+          <p className="text-sm mt-1">Please select a user with a company to view products</p>
+        </div>
+      ) : (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="all">
+              All ({ourProducts.length + customerRequests.length})
+            </TabsTrigger>
+            <TabsTrigger value="our-products">
+              Our Products ({ourProducts.length})
+            </TabsTrigger>
+            <TabsTrigger value="customer-requests">
+              Customer PIRs ({customerRequests.length})
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value={activeTab} className="mt-4">
-          <div className="flex items-center mb-4">
-            <div className="relative w-full max-w-md">
-              <Input
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <TabsContent value={activeTab} className="mt-4">
+            <div className="flex items-center mb-4">
+              <div className="relative w-full max-w-md">
+                <Input
+                  placeholder="Search products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              </div>
+              <Button variant="outline" className="ml-2 gap-2">
+                <Filter className="h-4 w-4" />
+                <span>Filter</span>
+              </Button>
             </div>
-            <Button variant="outline" className="ml-2 gap-2">
-              <Filter className="h-4 w-4" />
-              <span>Filter</span>
-            </Button>
-          </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  {activeTab === "customer-requests" && (
-                    <TableHead>Requested By</TableHead>
-                  )}
-                  <TableHead>Description</TableHead>
-                  <TableHead>Status</TableHead>
-                  {activeTab !== "customer-requests" && (
-                    <TableHead>Customer Requests</TableHead>
-                  )}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.length > 0 ? (
-                  filteredProducts.map((product) => (
-                    <TableRow
-                      key={product.id}
-                      className="transition-colors hover:bg-muted/50 cursor-pointer"
-                      onClick={() => handleProductAction(product)}
-                    >
-                      <TableCell className="font-medium">{product.name}</TableCell>
-                      {activeTab === "customer-requests" && (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product Name</TableHead>
+                    {activeTab === "customer-requests" && (
+                      <TableHead>Requested By</TableHead>
+                    )}
+                    <TableHead>Description</TableHead>
+                    <TableHead>Status</TableHead>
+                    {activeTab !== "customer-requests" && (
+                      <TableHead>Customer Requests</TableHead>
+                    )}
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.length > 0 ? (
+                    filteredProducts.map((product) => (
+                      <TableRow
+                        key={product.id}
+                        className="transition-colors hover:bg-muted/50 cursor-pointer"
+                        onClick={() => handleProductAction(product)}
+                      >
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        {activeTab === "customer-requests" && (
+                          <TableCell>
+                            {getCompanyName(product.requestedById || "")}
+                          </TableCell>
+                        )}
+                        <TableCell>{product.description}</TableCell>
                         <TableCell>
-                          {getCompanyName(product.requestedById || "")}
+                          <div className="flex items-center">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                product.status === "approved"
+                                  ? "bg-green-100 text-green-800"
+                                  : product.status === "rejected"
+                                  ? "bg-red-100 text-red-800"
+                                  : product.status === "reviewing"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : product.status === "submitted"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+                            </span>
+                          </div>
                         </TableCell>
-                      )}
-                      <TableCell>{product.description}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                              product.status === "approved"
-                                ? "bg-green-100 text-green-800"
-                                : product.status === "rejected"
-                                ? "bg-red-100 text-red-800"
-                                : product.status === "reviewing"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : product.status === "submitted"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
+                        {activeTab !== "customer-requests" && (
+                          <TableCell>
+                            {getCustomerRequestCount(product.id) > 0 ? (
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3 text-muted-foreground" />
+                                {getCustomerRequestCount(product.id)}
+                              </span>
+                            ) : "0"}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-right">
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleProductAction(product);
+                            }}
+                            variant="secondary"
+                            size="sm"
+                            className="bg-brand hover:bg-brand-700 text-white"
                           >
-                            {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
-                          </span>
+                            {activeTab === "customer-requests" ? "Review" : "View"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={activeTab === "customer-requests" ? 5 : 5}
+                        className="text-center py-12 text-muted-foreground"
+                      >
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <PackageOpen className="h-10 w-10 text-muted-foreground/50" />
+                          <h3 className="text-lg font-medium">No products found</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {activeTab === "our-products" && ourProducts.length === 0
+                              ? "Add your first product to get started."
+                              : activeTab === "customer-requests" && customerRequests.length === 0
+                              ? "No customer PIRs for your products yet."
+                              : "No products match your search criteria."}
+                          </p>
+                          {activeTab === "our-products" && ourProducts.length === 0 && (
+                            <Button
+                              onClick={handleAddProduct}
+                              className="mt-2"
+                              variant="outline"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Add Product
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
-                      {activeTab !== "customer-requests" && (
-                        <TableCell>
-                          {getCustomerRequestCount(product.id) > 0 ? (
-                            <span className="flex items-center gap-1">
-                              <Users className="h-3 w-3 text-muted-foreground" />
-                              {getCustomerRequestCount(product.id)}
-                            </span>
-                          ) : "0"}
-                        </TableCell>
-                      )}
-                      <TableCell className="text-right">
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleProductAction(product);
-                          }}
-                          variant="secondary"
-                          size="sm"
-                          className="bg-brand hover:bg-brand-700 text-white"
-                        >
-                          {activeTab === "customer-requests" ? "Review" : "View"}
-                        </Button>
-                      </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={activeTab === "customer-requests" ? 5 : 5}
-                      className="text-center py-12 text-muted-foreground"
-                    >
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <PackageOpen className="h-10 w-10 text-muted-foreground/50" />
-                        <h3 className="text-lg font-medium">No products found</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {activeTab === "our-products" && ourProducts.length === 0
-                            ? "Add your first product to get started."
-                            : activeTab === "customer-requests" && customerRequests.length === 0
-                            ? "No customer PIRs for your products yet."
-                            : "No products match your search criteria."}
-                        </p>
-                        {activeTab === "our-products" && ourProducts.length === 0 && (
-                          <Button
-                            onClick={handleAddProduct}
-                            className="mt-2"
-                            variant="outline"
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Product
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-      </Tabs>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 };
