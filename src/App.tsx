@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Suppliers from "./pages/Suppliers";
 import SupplierDetail from "./pages/SupplierDetail";
 import ProductSheets from "./pages/ProductSheets";
+import SupplierProducts from "./pages/SupplierProducts";
 import QuestionBank from "./pages/QuestionBank";
 import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
@@ -34,7 +35,7 @@ const App = () => (
                 <Route path="/suppliers/:id" element={<SupplierDetail />} />
                 <Route path="/customers" element={<NotFound />} />
                 <Route path="/product-sheets" element={<ProductSheets />} />
-                <Route path="/supplier-products" element={<NotFound />} />
+                <Route path="/supplier-products" element={<SupplierProducts />} />
                 <Route path="/our-products" element={<NotFound />} />
                 <Route path="/question-bank" element={<QuestionBank />} />
                 <Route path="/tags" element={<Tags />} />
