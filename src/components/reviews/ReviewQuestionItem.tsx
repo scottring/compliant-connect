@@ -15,6 +15,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import CommentsThread from "@/components/comments/CommentsThread";
 import { toast } from "sonner";
 
@@ -153,15 +159,26 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 Approve
               </Button>
               
-              <Button 
-                variant="outline" 
-                className="border-red-500 text-red-700 hover:bg-red-50"
-                onClick={handleSubmitFlag}
-                disabled={!note.trim()}
-              >
-                <Flag className="mr-2 h-4 w-4" />
-                Flag
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button 
+                        variant="outline" 
+                        className="border-red-500 text-red-700 hover:bg-red-50"
+                        onClick={handleSubmitFlag}
+                        disabled={!note.trim()}
+                      >
+                        <Flag className="mr-2 h-4 w-4" />
+                        Flag
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Please add a note before flagging</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         )}
