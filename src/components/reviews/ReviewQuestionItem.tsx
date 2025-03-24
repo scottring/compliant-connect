@@ -155,8 +155,9 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 Approve
               </Button>
               <Button 
+                type="button"
                 variant="outline" 
-                className="border-red-500 text-red-700 hover:bg-red-50"
+                className="border-red-500 text-red-700 hover:bg-red-50 cursor-pointer"
                 onClick={handleSubmitFlag}
                 disabled={!note.trim()}
               >
