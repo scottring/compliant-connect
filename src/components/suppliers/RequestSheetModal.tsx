@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Mail, Search, SendHorizontal } from "lucide-react";
+import { Mail, Plus, Search, SendHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import TagBadge from "@/components/tags/TagBadge";
 
@@ -59,6 +59,8 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [addingNewProduct, setAddingNewProduct] = useState(false);
+  const [newProductName, setNewProductName] = useState("");
 
   // Mock products (in a real app, these would come from an API or context)
   const mockProducts = [
@@ -111,6 +113,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   };
 
   const onSubmit = async (values: FormValues) => {
+    // Use the new product name if we're adding one, otherwise use the selected product
+    const finalProductName = addingNewProduct ? newProductName : values.productName;
+    
+    if (!finalProductName || finalProductName.trim() === "") {
+      toast.error("Please enter a valid product name");
+      return;
+    }
+    
     // Find questions that match the selected tags
     const relevantQuestions = questions.filter(question => 
       question.tags.some(tag => selectedTags.includes(tag.id))
@@ -118,7 +128,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     
     // Add the new product sheet request with selected tag IDs
     addProductSheet({
-      name: values.productName,
+      name: finalProductName,
       supplierId: supplierId,
       requestedById: "c1", // Assuming c1 is the current user's company ID
       status: "submitted",
@@ -132,7 +142,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     
     if (supplier && supplier.contactEmail) {
       // Send email notification
-      await sendEmailNotification(supplier.contactEmail, values.productName);
+      await sendEmailNotification(supplier.contactEmail, finalProductName);
     }
     
     // Show success message for the product sheet request
@@ -141,6 +151,8 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     // Reset form and close modal
     form.reset();
     setSelectedTags([]);
+    setAddingNewProduct(false);
+    setNewProductName("");
     onOpenChange(false);
   };
 
@@ -150,6 +162,13 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
         ? prev.filter(id => id !== tagId) 
         : [...prev, tagId]
     );
+  };
+
+  const toggleAddNewProduct = () => {
+    setAddingNewProduct(!addingNewProduct);
+    if (!addingNewProduct) {
+      form.setValue("productName", "");
+    }
   };
 
   return (
@@ -170,44 +189,74 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="productName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Product</FormLabel>
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search products..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
+            {!addingNewProduct ? (
+              <FormField
+                control={form.control}
+                name="productName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Existing Product</FormLabel>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search products..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a product" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {filteredProducts.map((product) => (
+                            <SelectItem key={product.id} value={product.name}>
+                              {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a product" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {filteredProducts.map((product) => (
-                          <SelectItem key={product.id} value={product.name}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormItem>
+                <FormLabel>Add New Product</FormLabel>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Enter new product name..."
+                    value={newProductName}
+                    onChange={(e) => setNewProductName(e.target.value)}
+                  />
+                </div>
+                {!newProductName && <p className="text-sm text-destructive">Product name is required</p>}
+              </FormItem>
+            )}
+
+            <div className="flex justify-end">
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={toggleAddNewProduct}
+                className="flex items-center gap-1"
+              >
+                {addingNewProduct ? (
+                  <>Back to Existing Products</>
+                ) : (
+                  <><Plus className="h-3 w-3" /> Add New Product</>
+                )}
+              </Button>
+            </div>
 
             <FormItem>
               <FormLabel>Information Categories (Tags)</FormLabel>
@@ -250,7 +299,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               <Button 
                 type="submit" 
                 className="bg-brand hover:bg-brand-700"
-                disabled={isSendingEmail}
+                disabled={isSendingEmail || (addingNewProduct && !newProductName.trim())}
               >
                 {isSendingEmail ? (
                   <>
