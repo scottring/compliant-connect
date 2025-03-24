@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -137,10 +136,9 @@ export function QuestionBuilderDialog({
 
   const handleCreateTag = () => {
     if (newTagName.trim()) {
-      const newTag: Omit<Tag, "id"> = {
+      const newTag = {
         name: newTagName.trim(),
         color: newTagColor,
-        count: 0,
       };
       
       addTag(newTag);

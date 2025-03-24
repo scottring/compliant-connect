@@ -12,11 +12,23 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const Tags = () => {
-  const { tags, questions } = useApp();
+  const { tags, questions, addTag, updateTag } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
+  const [isAddTagDialogOpen, setIsAddTagDialogOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3B82F6");
+  const [newTagDescription, setNewTagDescription] = useState("");
 
   const filteredTags = tags.filter((tag) =>
     tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -34,6 +46,29 @@ const Tags = () => {
     // In a real application, this would open a modal or navigate to the tag detail page
   };
 
+  const handleAddTag = () => {
+    if (newTagName.trim()) {
+      const newTag = {
+        name: newTagName.trim(),
+        color: newTagColor,
+        description: newTagDescription.trim() || undefined,
+      };
+
+      addTag(newTag);
+      resetTagForm();
+      setIsAddTagDialogOpen(false);
+      toast.success("Tag added successfully");
+    } else {
+      toast.error("Tag name is required");
+    }
+  };
+
+  const resetTagForm = () => {
+    setNewTagName("");
+    setNewTagColor("#3B82F6");
+    setNewTagDescription("");
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -42,7 +77,7 @@ const Tags = () => {
         actions={
           <PageHeaderAction
             label="Add Tag"
-            onClick={() => toast.info("Adding new tag...")}
+            onClick={() => setIsAddTagDialogOpen(true)}
             icon={
               <svg
                 className="h-4 w-4"
@@ -134,6 +169,70 @@ const Tags = () => {
           </div>
         )}
       </div>
+
+      {/* Add Tag Dialog */}
+      <Dialog open={isAddTagDialogOpen} onOpenChange={setIsAddTagDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create New Tag</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="tagName" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="tagName"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="Enter tag name"
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="tagColor" className="text-right">
+                Color
+              </Label>
+              <div className="col-span-3 flex space-x-2 items-center">
+                <Input
+                  id="tagColor"
+                  type="color"
+                  value={newTagColor}
+                  onChange={(e) => setNewTagColor(e.target.value)}
+                  className="w-12 h-8 p-1"
+                />
+                <span className="flex-1 py-1">{newTagColor}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="tagDescription" className="text-right">
+                Description
+              </Label>
+              <Input
+                id="tagDescription"
+                value={newTagDescription}
+                onChange={(e) => setNewTagDescription(e.target.value)}
+                placeholder="Enter tag description (optional)"
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                resetTagForm();
+                setIsAddTagDialogOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddTag} disabled={!newTagName.trim()}>
+              Create Tag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
