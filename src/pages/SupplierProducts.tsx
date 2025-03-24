@@ -79,7 +79,7 @@ const SupplierProducts = () => {
     });
   };
 
-  const handleUpdateRequest = (sheet: any, additionalTags: string[]) => {
+  const handleUpdateRequest = (sheet: any, additionalTags: string[], comments?: string) => {
     toast.success(`Update request sent to ${getCompanyName(sheet.supplierId)}`);
     // In a real app, this would send an email to the supplier
     setIsUpdateModalOpen(false);
