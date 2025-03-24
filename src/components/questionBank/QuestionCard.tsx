@@ -1,16 +1,34 @@
 
 import React from "react";
-import { Question } from "@/types";
+import { Question, Section, Subsection } from "@/types";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import TagBadge from "@/components/tags/TagBadge";
 import { Badge } from "@/components/ui/badge";
 
 interface QuestionCardProps {
   question: Question;
+  sections: Section[];
+  subsections: Subsection[];
   onClick?: () => void;
 }
 
-const QuestionCard: React.FC<QuestionCardProps> = ({ question, onClick }) => {
+const QuestionCard: React.FC<QuestionCardProps> = ({ question, sections, subsections, onClick }) => {
+  const getQuestionIdentifier = () => {
+    if (!question.sectionId) return "";
+    
+    const section = sections.find(s => s.id === question.sectionId);
+    if (!section) return "";
+    
+    if (!question.subsectionId) {
+      return `${section.order}.${question.order || ""}`;
+    }
+    
+    const subsection = subsections.find(s => s.id === question.subsectionId);
+    if (!subsection) return `${section.order}.${question.order || ""}`;
+    
+    return `${section.order}.${subsection.order}.${question.order || ""}`;
+  };
+
   return (
     <Card 
       className="w-full transition-all duration-200 hover:shadow-md overflow-hidden animate-fade-in"
@@ -18,7 +36,14 @@ const QuestionCard: React.FC<QuestionCardProps> = ({ question, onClick }) => {
     >
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-base font-semibold truncate">{question.text}</CardTitle>
+          <div className="flex items-center space-x-2">
+            {question.sectionId && (
+              <Badge variant="outline" className="bg-secondary text-xs">
+                {getQuestionIdentifier()}
+              </Badge>
+            )}
+            <CardTitle className="text-base font-semibold truncate">{question.text}</CardTitle>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pb-2">

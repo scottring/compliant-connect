@@ -42,6 +42,19 @@ export type TableColumn = {
   nestedColumns?: TableNestedColumn[];
 };
 
+export type Section = {
+  id: string;
+  name: string;
+  order: number;
+};
+
+export type Subsection = {
+  id: string;
+  sectionId: string;
+  name: string;
+  order: number;
+};
+
 export type Question = {
   id: string;
   text: string;
@@ -50,6 +63,9 @@ export type Question = {
   options?: string[];
   tableColumns?: TableColumn[];
   required: boolean;
+  sectionId?: string;
+  subsectionId?: string;
+  order?: number;
 };
 
 export type Answer = {

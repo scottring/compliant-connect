@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState } from "react";
-import { Company, ProductSheet, Question, Tag, User } from "../types";
+import { Company, ProductSheet, Question, Tag, User, Section, Subsection } from "../types";
 import { mockCompanies, mockProductSheets, mockQuestions, mockTags, mockUsers } from "../data/mockData";
 import { toast } from "sonner";
 
@@ -23,6 +23,14 @@ interface AppContextType {
   addTag: (tag: Omit<Tag, "id">) => void;
   updateTag: (tag: Tag) => void;
   deleteTag: (id: string) => void;
+  sections: Section[];
+  addSection: (section: Omit<Section, "id">) => void;
+  updateSection: (section: Section) => void;
+  deleteSection: (id: string) => void;
+  subsections: Subsection[];
+  addSubsection: (subsection: Omit<Subsection, "id">) => void;
+  updateSubsection: (subsection: Subsection) => void;
+  deleteSubsection: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -33,6 +41,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [productSheets, setProductSheets] = useState<ProductSheet[]>(mockProductSheets);
   const [questions, setQuestions] = useState<Question[]>(mockQuestions);
   const [tags, setTags] = useState<Tag[]>(mockTags);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [subsections, setSubsections] = useState<Subsection[]>([]);
 
   const addCompany = (company: Omit<Company, "id" | "progress">) => {
     const newCompany: Company = {
@@ -114,6 +124,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toast.success("Tag deleted successfully");
   };
 
+  // New methods for Sections and Subsections
+  const addSection = (section: Omit<Section, "id">) => {
+    const newSection: Section = {
+      ...section,
+      id: `section${sections.length + 1}`,
+    };
+    setSections([...sections, newSection]);
+    toast.success("Section added successfully");
+  };
+
+  const updateSection = (section: Section) => {
+    setSections(sections.map((s) => (s.id === section.id ? section : s)));
+    toast.success("Section updated successfully");
+  };
+
+  const deleteSection = (id: string) => {
+    // Delete all subsections within this section
+    const subsectionsToKeep = subsections.filter((s) => s.sectionId !== id);
+    setSubsections(subsectionsToKeep);
+    
+    // Delete all questions within this section or its subsections
+    const questionsToKeep = questions.filter((q) => q.sectionId !== id);
+    setQuestions(questionsToKeep);
+    
+    // Delete the section
+    setSections(sections.filter((s) => s.id !== id));
+    toast.success("Section and related items deleted successfully");
+  };
+
+  const addSubsection = (subsection: Omit<Subsection, "id">) => {
+    const newSubsection: Subsection = {
+      ...subsection,
+      id: `subsection${subsections.length + 1}`,
+    };
+    setSubsections([...subsections, newSubsection]);
+    toast.success("Subsection added successfully");
+  };
+
+  const updateSubsection = (subsection: Subsection) => {
+    setSubsections(subsections.map((s) => (s.id === subsection.id ? subsection : s)));
+    toast.success("Subsection updated successfully");
+  };
+
+  const deleteSubsection = (id: string) => {
+    // Delete all questions within this subsection
+    const questionsToKeep = questions.filter((q) => q.subsectionId !== id);
+    setQuestions(questionsToKeep);
+    
+    // Delete the subsection
+    setSubsections(subsections.filter((s) => s.id !== id));
+    toast.success("Subsection and related questions deleted successfully");
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -135,6 +198,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTag,
         updateTag,
         deleteTag,
+        sections,
+        addSection,
+        updateSection,
+        deleteSection,
+        subsections,
+        addSubsection,
+        updateSubsection,
+        deleteSubsection,
       }}
     >
       {children}

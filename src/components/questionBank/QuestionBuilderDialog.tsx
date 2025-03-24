@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useApp } from "@/context/AppContext";
-import { Question, Tag } from "@/types";
+import { Question, Tag, Section, Subsection } from "@/types";
 import { X, Plus, Trash } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import TagBadge from "@/components/tags/TagBadge";
+import { SectionSelector } from "./SectionSelector";
 import {
   TableBuilder,
   NestedTableColumns
@@ -57,9 +58,25 @@ export function QuestionBuilderDialog({
   questionId,
   onClose,
 }: QuestionBuilderDialogProps) {
-  const { questions, tags, addQuestion, updateQuestion } = useApp();
+  const { 
+    questions, 
+    tags, 
+    sections, 
+    subsections, 
+    addQuestion, 
+    updateQuestion, 
+    addSection, 
+    addSubsection, 
+    updateSection, 
+    updateSubsection, 
+    deleteSection, 
+    deleteSubsection 
+  } = useApp();
+  
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [newOption, setNewOption] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>(undefined);
+  const [selectedSubsectionId, setSelectedSubsectionId] = useState<string | undefined>(undefined);
 
   const editingQuestion = questionId
     ? questions.find((q) => q.id === questionId)
@@ -86,9 +103,11 @@ export function QuestionBuilderDialog({
         required: editingQuestion.required,
         type: editingQuestion.type,
         options: editingQuestion.options || [],
-        // We would need to add tableColumns initialization if it exists in your Question type
+        tableColumns: editingQuestion.tableColumns || [],
       });
       setSelectedTags(editingQuestion.tags);
+      setSelectedSectionId(editingQuestion.sectionId);
+      setSelectedSubsectionId(editingQuestion.subsectionId);
     } else {
       form.reset({
         text: "",
@@ -98,6 +117,8 @@ export function QuestionBuilderDialog({
         tableColumns: [],
       });
       setSelectedTags([]);
+      setSelectedSectionId(undefined);
+      setSelectedSubsectionId(undefined);
     }
   }, [editingQuestion, form]);
 
@@ -125,21 +146,59 @@ export function QuestionBuilderDialog({
     );
   };
 
+  const handleSectionChange = (sectionId: string) => {
+    setSelectedSectionId(sectionId);
+    setSelectedSubsectionId(undefined); // Reset subsection when section changes
+  };
+
+  const handleSubsectionChange = (subsectionId: string) => {
+    setSelectedSubsectionId(subsectionId);
+  };
+
+  const calculateQuestionOrder = () => {
+    if (!selectedSubsectionId) return 1;
+    
+    const questionsInSubsection = questions.filter(
+      q => q.subsectionId === selectedSubsectionId
+    );
+    
+    return questionsInSubsection.length + 1;
+  };
+
+  const getQuestionIdentifier = () => {
+    if (!selectedSectionId) return "";
+    
+    const section = sections.find(s => s.id === selectedSectionId);
+    if (!section) return "";
+    
+    if (!selectedSubsectionId) {
+      return `${section.order}.`;
+    }
+    
+    const subsection = subsections.find(s => s.id === selectedSubsectionId);
+    if (!subsection) return `${section.order}.`;
+    
+    const order = calculateQuestionOrder();
+    return `${section.order}.${subsection.order}.${order}`;
+  };
+
   const onSubmit = (values: FormValues) => {
     const questionData: Omit<Question, "id"> = {
       text: values.text,
       required: values.required,
       type: values.type,
       tags: selectedTags,
+      sectionId: selectedSectionId,
+      subsectionId: selectedSubsectionId,
+      order: calculateQuestionOrder(),
     };
 
     if (values.type === "select" || values.type === "multi-select") {
       questionData.options = values.options;
     }
 
-    if (values.type === "table") {
-      // Handle table data (this would need additional types in your Question model)
-      // questionData.tableColumns = values.tableColumns;
+    if (values.type === "table" && values.tableColumns) {
+      questionData.tableColumns = values.tableColumns;
     }
 
     if (editingQuestion) {
@@ -162,6 +221,29 @@ export function QuestionBuilderDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <SectionSelector
+              sections={sections}
+              subsections={subsections}
+              selectedSectionId={selectedSectionId}
+              selectedSubsectionId={selectedSubsectionId}
+              onSectionChange={handleSectionChange}
+              onSubsectionChange={handleSubsectionChange}
+              onAddSection={addSection}
+              onAddSubsection={addSubsection}
+              onUpdateSection={updateSection}
+              onUpdateSubsection={updateSubsection}
+              onDeleteSection={deleteSection}
+              onDeleteSubsection={deleteSubsection}
+            />
+
+            {selectedSectionId && (
+              <div className="mb-4">
+                <Label className="text-sm text-muted-foreground">
+                  Question Identifier: <span className="font-bold">{getQuestionIdentifier()}</span>
+                </Label>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="text"

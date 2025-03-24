@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import TagBadge from "@/components/tags/TagBadge";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { 
   Table, 
   TableBody, 
@@ -25,9 +24,11 @@ import {
 import { QuestionBuilderDialog } from "@/components/questionBank/QuestionBuilderDialog";
 
 const QuestionBank = () => {
-  const { questions, tags, deleteQuestion } = useApp();
+  const { questions, tags, sections, subsections, deleteQuestion } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [selectedSubsection, setSelectedSubsection] = useState<string | null>(null);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
 
@@ -49,8 +50,15 @@ const QuestionBank = () => {
     const matchesTags =
       selectedTags.length === 0 ||
       question.tags.some((tag) => selectedTags.includes(tag.id));
+      
+    // Filter by section/subsection
+    const matchesSection = 
+      !selectedSection || question.sectionId === selectedSection;
+      
+    const matchesSubsection = 
+      !selectedSubsection || question.subsectionId === selectedSubsection;
 
-    return matchesSearch && matchesTags;
+    return matchesSearch && matchesTags && matchesSection && matchesSubsection;
   });
 
   const handleOpenBuilder = (questionId?: string) => {
@@ -69,6 +77,43 @@ const QuestionBank = () => {
       deleteQuestion(questionId);
     }
   };
+
+  const getQuestionIdentifier = (question) => {
+    if (!question.sectionId) return "";
+    
+    const section = sections.find(s => s.id === question.sectionId);
+    if (!section) return "";
+    
+    if (!question.subsectionId) {
+      return `${section.order}.${question.order || ""}`;
+    }
+    
+    const subsection = subsections.find(s => s.id === question.subsectionId);
+    if (!subsection) return `${section.order}.${question.order || ""}`;
+    
+    return `${section.order}.${subsection.order}.${question.order || ""}`;
+  };
+
+  const sortedQuestions = [...filteredQuestions].sort((a, b) => {
+    // Sort by section first
+    const sectionA = sections.find(s => s.id === a.sectionId)?.order || 0;
+    const sectionB = sections.find(s => s.id === b.sectionId)?.order || 0;
+    
+    if (sectionA !== sectionB) {
+      return sectionA - sectionB;
+    }
+    
+    // Then by subsection
+    const subsectionA = subsections.find(s => s.id === a.subsectionId)?.order || 0;
+    const subsectionB = subsections.find(s => s.id === b.subsectionId)?.order || 0;
+    
+    if (subsectionA !== subsectionB) {
+      return subsectionA - subsectionB;
+    }
+    
+    // Finally by question order
+    return (a.order || 0) - (b.order || 0);
+  });
 
   return (
     <div className="space-y-6">
@@ -134,10 +179,72 @@ const QuestionBank = () => {
         )}
       </div>
 
+      {sections.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center pb-4">
+          <span className="text-sm font-medium mr-2">Filter by section:</span>
+          <Button 
+            variant={selectedSection === null ? "secondary" : "outline"}
+            size="sm" 
+            onClick={() => {
+              setSelectedSection(null);
+              setSelectedSubsection(null);
+            }}
+            className="h-7 text-xs"
+          >
+            All
+          </Button>
+          {sections.map((section) => (
+            <Button
+              key={section.id}
+              variant={selectedSection === section.id ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setSelectedSection(section.id);
+                setSelectedSubsection(null);
+              }}
+              className="h-7 text-xs"
+            >
+              {`${section.order}. ${section.name}`}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {selectedSection && (
+        <div className="flex flex-wrap gap-2 items-center pb-4">
+          <span className="text-sm font-medium mr-2">Filter by subsection:</span>
+          <Button 
+            variant={selectedSubsection === null ? "secondary" : "outline"}
+            size="sm" 
+            onClick={() => setSelectedSubsection(null)}
+            className="h-7 text-xs"
+          >
+            All
+          </Button>
+          {subsections
+            .filter(subsection => subsection.sectionId === selectedSection)
+            .map((subsection) => {
+              const section = sections.find(s => s.id === subsection.sectionId);
+              return (
+                <Button
+                  key={subsection.id}
+                  variant={selectedSubsection === subsection.id ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedSubsection(subsection.id)}
+                  className="h-7 text-xs"
+                >
+                  {`${section?.order}.${subsection.order} ${subsection.name}`}
+                </Button>
+              );
+            })}
+        </div>
+      )}
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[150px]">ID</TableHead>
               <TableHead className="w-[50%]">Question</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Required</TableHead>
@@ -146,9 +253,12 @@ const QuestionBank = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredQuestions.length > 0 ? (
-              filteredQuestions.map((question) => (
+            {sortedQuestions.length > 0 ? (
+              sortedQuestions.map((question) => (
                 <TableRow key={question.id}>
+                  <TableCell className="font-mono text-sm">
+                    {getQuestionIdentifier(question)}
+                  </TableCell>
                   <TableCell className="font-medium">{question.text}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="bg-secondary capitalize">
@@ -196,7 +306,7 @@ const QuestionBank = () => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   <p className="text-muted-foreground">No questions found</p>
                 </TableCell>
               </TableRow>
