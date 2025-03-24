@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import PageHeader from "@/components/PageHeader";
@@ -12,13 +12,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import TagBadge from "@/components/tags/TagBadge";
-import { mockTags } from "@/data/mockData";
 import RequestSheetModal from "@/components/suppliers/RequestSheetModal";
+import { ProductSheet } from "@/types";
 
 const SupplierDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { companies } = useApp();
+  const { companies, productSheets, tags } = useApp();
   const [comment, setComment] = useState("");
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
@@ -26,6 +26,11 @@ const SupplierDetail = () => {
   const supplier = companies.find(
     (company) => company.id === id && (company.role === "supplier" || company.role === "both")
   );
+
+  // Filter product sheets for this supplier
+  const supplierProductSheets = useMemo(() => {
+    return productSheets.filter(sheet => sheet.supplierId === id);
+  }, [productSheets, id]);
 
   if (!supplier) {
     return (
@@ -35,17 +40,6 @@ const SupplierDetail = () => {
       </div>
     );
   }
-
-  // Mock product sheets data
-  const mockProductSheets = [
-    { id: "001", name: "Product 1", tags: ["REACH", "TSCA"], status: "Requested", date: "2023-09-15" },
-    { id: "002", name: "Product 2", tags: ["REACH"], status: "In Review", date: "2023-09-15" },
-    { id: "003", name: "Chemical Product 1", tags: ["RoHS"], status: "Compliant", date: "2023-09-15" },
-    { id: "004", name: "Chemical Product 2", tags: ["REACH", "TSCA", "RoHS"], status: "Compliant", date: "2023-09-15" },
-    { id: "005", name: "Product 3", tags: ["TSCA"], status: "Compliant", date: "2023-09-15" },
-    { id: "006", name: "Product 4", tags: ["REACH", "RoHS"], status: "Compliant", date: "2023-09-15" },
-    { id: "007", name: "Product 5", tags: ["REACH"], status: "Compliant", date: "2023-09-15" },
-  ];
 
   // Mock tasks data
   const mockTasks = [
@@ -75,12 +69,47 @@ const SupplierDetail = () => {
     setIsRequestModalOpen(true);
   };
 
-  const getTagBadge = (tagName: string) => {
-    const tag = mockTags.find(t => t.name === tagName);
+  const getStatusStyle = (status: string) => {
+    const statusColors = {
+      submitted: { bg: "bg-red-100", text: "text-red-800" },
+      reviewing: { bg: "bg-amber-100", text: "text-amber-800" },
+      approved: { bg: "bg-green-100", text: "text-green-800" },
+      rejected: { bg: "bg-red-100", text: "text-red-800" },
+      draft: { bg: "bg-gray-100", text: "text-gray-800" },
+    };
+    
+    return statusColors[status as keyof typeof statusColors] || { bg: "bg-blue-100", text: "text-blue-800" };
+  };
+
+  const getStatusLabel = (sheet: ProductSheet) => {
+    if (sheet.status === "submitted") {
+      return "New Request";
+    } else if (sheet.status === "reviewing") {
+      return "In Review";
+    } else if (sheet.status === "approved") {
+      return "Compliant";
+    } else if (sheet.status === "rejected") {
+      return "Rejected";
+    } else if (sheet.status === "draft") {
+      return "Draft";
+    }
+    return sheet.status.charAt(0).toUpperCase() + sheet.status.slice(1);
+  };
+
+  const getTagBadge = (tagId: string) => {
+    const tag = tags.find(t => t.id === tagId);
     if (tag) {
       return <TagBadge key={tag.id} tag={tag} />;
     }
-    return <Badge variant="outline">{tagName}</Badge>;
+    return null;
+  };
+
+  const formattedDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   return (
@@ -157,34 +186,52 @@ const SupplierDetail = () => {
                 <TableHead>Product ID</TableHead>
                 <TableHead>Product Name</TableHead>
                 <TableHead>Info Categories</TableHead>
-                <TableHead>Compliance Status</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockProductSheets.map((sheet) => (
-                <TableRow key={sheet.id}>
-                  <TableCell>{sheet.id}</TableCell>
-                  <TableCell>{sheet.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {sheet.tags.map((tag) => getTagBadge(tag))}
-                    </div>
-                  </TableCell>
-                  <TableCell>{sheet.status}</TableCell>
-                  <TableCell>{sheet.date}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="bg-brand hover:bg-brand-700 text-white"
-                    >
-                      Actions
-                    </Button>
+              {supplierProductSheets.length > 0 ? (
+                supplierProductSheets.map((sheet) => (
+                  <TableRow 
+                    key={sheet.id}
+                    className={sheet.status === "submitted" ? "bg-red-50" : ""}
+                  >
+                    <TableCell>{sheet.id}</TableCell>
+                    <TableCell>{sheet.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {sheet.tags.map((tagId) => getTagBadge(tagId))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        className={`${getStatusStyle(sheet.status).bg} ${getStatusStyle(sheet.status).text} border-none`}
+                      >
+                        {getStatusLabel(sheet)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formattedDate(sheet.updatedAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="bg-brand hover:bg-brand-700 text-white"
+                        onClick={() => navigate(`/product-sheets/${sheet.id}`)}
+                      >
+                        View Details
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                    No product sheets available for this supplier
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </div>

@@ -124,6 +124,12 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
         return;
       }
       
+      // Validate that at least one tag is selected
+      if (selectedTags.length === 0) {
+        toast.error("Please select at least one information category");
+        return;
+      }
+      
       // Find questions that match the selected tags
       const relevantQuestions = questions.filter(question => 
         question.tags.some(tag => selectedTags.includes(tag.id))
@@ -144,7 +150,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
         requestedById: "c1", // Assuming c1 is the current user's company ID
         status: "submitted",
         tags: selectedTags, // Just use the tag IDs directly
-        questions: relevantQuestions, // Add questions that match selected tags
+        questions: relevantQuestions.length > 0 ? relevantQuestions : [], // Add questions that match selected tags
         description: values.note || ""
       });
       
@@ -274,7 +280,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
             </div>
 
             <FormItem>
-              <FormLabel>Information Categories (Tags)</FormLabel>
+              <FormLabel>Information Categories (Tags) <span className="text-destructive">*</span></FormLabel>
               <div className="flex flex-wrap gap-2 p-4 border rounded-md">
                 {tags.map((tag) => (
                   <TagBadge 
@@ -288,6 +294,9 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                   <div className="text-sm text-muted-foreground italic">No information categories available</div>
                 )}
               </div>
+              {selectedTags.length === 0 && (
+                <p className="text-sm text-destructive mt-1">At least one information category is required</p>
+              )}
             </FormItem>
 
             <FormField
@@ -314,7 +323,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               <Button 
                 type="submit" 
                 className="bg-brand hover:bg-brand-700"
-                disabled={isSendingEmail || (addingNewProduct && !newProductName.trim())}
+                disabled={isSendingEmail || (addingNewProduct && !newProductName.trim()) || selectedTags.length === 0}
               >
                 {isSendingEmail ? (
                   <>
