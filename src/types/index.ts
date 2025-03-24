@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   name: string;
@@ -28,17 +29,20 @@ export interface Question {
   id: string;
   text: string;
   tags: Tag[];
-  type: "text" | "number" | "boolean" | "select" | "multi-select";
+  type: "text" | "number" | "boolean" | "select" | "multi-select" | "table" | "file";
   options?: string[];
   required: boolean;
   sectionId?: string;
   subsectionId?: string;
+  order?: number;
+  tableColumns?: TableColumn[];
 }
 
 export interface Section {
   id: string;
   name: string;
   description?: string;
+  order: number;
 }
 
 export interface Subsection {
@@ -46,6 +50,7 @@ export interface Subsection {
   name: string;
   description?: string;
   sectionId: string;
+  order: number;
 }
 
 export interface ProductSheet {
@@ -67,6 +72,7 @@ export interface Answer {
   questionId: string;
   value: string | number | boolean | string[];
   comments: Comment[];
+  flags?: Flag[];
 }
 
 export interface Comment {
@@ -78,9 +84,21 @@ export interface Comment {
   createdAt: Date;
 }
 
+export interface Flag {
+  id: string;
+  answerId: string;
+  comment: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: Date;
+}
+
 export interface SupplierResponse {
+  id: string;
   questionId: string;
   value: string | number | boolean | string[];
+  comments?: Comment[];
+  flags?: Flag[];
 }
 
 export interface PIR {
@@ -88,4 +106,20 @@ export interface PIR {
   name: string;
   description: string;
   sections: Section[];
+}
+
+export type ColumnType = "text" | "number" | "boolean" | "select" | "multi-select";
+
+export interface NestedTableColumns {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+}
+
+export interface TableColumn {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+  nested?: boolean;
+  nestedColumns?: NestedTableColumns[];
 }
