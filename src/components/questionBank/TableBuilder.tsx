@@ -1,0 +1,455 @@
+
+import React, { useState } from "react";
+import { UseFormReturn } from "react-hook-form";
+import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
+import { FormLabel, FormDescription } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export type ColumnType = "text" | "number" | "boolean" | "select";
+
+export interface TableColumn {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+  nested?: boolean;
+  nestedColumns?: NestedTableColumns[];
+}
+
+export interface NestedTableColumns {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+}
+
+interface TableBuilderProps {
+  form: UseFormReturn<any>;
+}
+
+export function TableBuilder({ form }: TableBuilderProps) {
+  const [newColumnOption, setNewColumnOption] = useState("");
+  const [expandedNested, setExpandedNested] = useState<number | null>(null);
+
+  const tableColumns = form.watch("tableColumns") || [];
+
+  const addTableColumn = () => {
+    const currentColumns = form.getValues("tableColumns") || [];
+    form.setValue("tableColumns", [
+      ...currentColumns,
+      { name: "", type: "text", nested: false },
+    ]);
+  };
+
+  const removeTableColumn = (index: number) => {
+    const currentColumns = form.getValues("tableColumns") || [];
+    form.setValue(
+      "tableColumns",
+      currentColumns.filter((_, i) => i !== index)
+    );
+  };
+
+  const updateColumnField = (
+    index: number,
+    field: keyof TableColumn,
+    value: any
+  ) => {
+    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    currentColumns[index] = {
+      ...currentColumns[index],
+      [field]: value,
+    };
+    form.setValue("tableColumns", currentColumns);
+  };
+
+  const toggleNested = (index: number) => {
+    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const isNested = currentColumns[index]?.nested || false;
+    
+    currentColumns[index] = {
+      ...currentColumns[index],
+      nested: !isNested,
+      nestedColumns: !isNested ? [] : currentColumns[index].nestedColumns,
+    };
+    
+    form.setValue("tableColumns", currentColumns);
+    
+    // Toggle expanded state
+    setExpandedNested(expandedNested === index ? null : index);
+  };
+
+  const addNestedColumn = (columnIndex: number) => {
+    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentNestedColumns = currentColumns[columnIndex].nestedColumns || [];
+    
+    currentColumns[columnIndex] = {
+      ...currentColumns[columnIndex],
+      nestedColumns: [
+        ...currentNestedColumns,
+        { name: "", type: "text" },
+      ],
+    };
+    
+    form.setValue("tableColumns", currentColumns);
+  };
+
+  const removeNestedColumn = (columnIndex: number, nestedIndex: number) => {
+    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
+    
+    currentColumns[columnIndex] = {
+      ...currentColumns[columnIndex],
+      nestedColumns: currentNestedColumns.filter((_, i) => i !== nestedIndex),
+    };
+    
+    form.setValue("tableColumns", currentColumns);
+  };
+
+  const updateNestedColumnField = (
+    columnIndex: number,
+    nestedIndex: number,
+    field: keyof NestedTableColumns,
+    value: any
+  ) => {
+    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
+    
+    currentNestedColumns[nestedIndex] = {
+      ...currentNestedColumns[nestedIndex],
+      [field]: value,
+    };
+    
+    currentColumns[columnIndex] = {
+      ...currentColumns[columnIndex],
+      nestedColumns: currentNestedColumns,
+    };
+    
+    form.setValue("tableColumns", currentColumns);
+  };
+
+  const addColumnOption = (columnIndex: number, isNested = false, nestedIndex?: number) => {
+    if (newColumnOption.trim()) {
+      const currentColumns = [...(form.getValues("tableColumns") || [])];
+      
+      if (isNested && nestedIndex !== undefined) {
+        const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
+        const currentOptions = currentNestedColumns[nestedIndex].options || [];
+        
+        currentNestedColumns[nestedIndex] = {
+          ...currentNestedColumns[nestedIndex],
+          options: [...currentOptions, newColumnOption.trim()],
+        };
+        
+        currentColumns[columnIndex] = {
+          ...currentColumns[columnIndex],
+          nestedColumns: currentNestedColumns,
+        };
+      } else {
+        const currentOptions = currentColumns[columnIndex].options || [];
+        
+        currentColumns[columnIndex] = {
+          ...currentColumns[columnIndex],
+          options: [...currentOptions, newColumnOption.trim()],
+        };
+      }
+      
+      form.setValue("tableColumns", currentColumns);
+      setNewColumnOption("");
+    }
+  };
+
+  const removeColumnOption = (
+    columnIndex: number, 
+    optionIndex: number, 
+    isNested = false, 
+    nestedIndex?: number
+  ) => {
+    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    
+    if (isNested && nestedIndex !== undefined) {
+      const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
+      const currentOptions = [...(currentNestedColumns[nestedIndex].options || [])];
+      
+      currentNestedColumns[nestedIndex] = {
+        ...currentNestedColumns[nestedIndex],
+        options: currentOptions.filter((_, i) => i !== optionIndex),
+      };
+      
+      currentColumns[columnIndex] = {
+        ...currentColumns[columnIndex],
+        nestedColumns: currentNestedColumns,
+      };
+    } else {
+      const currentOptions = [...(currentColumns[columnIndex].options || [])];
+      
+      currentColumns[columnIndex] = {
+        ...currentColumns[columnIndex],
+        options: currentOptions.filter((_, i) => i !== optionIndex),
+      };
+    }
+    
+    form.setValue("tableColumns", currentColumns);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <FormLabel>Table Columns</FormLabel>
+        <Button type="button" onClick={addTableColumn} variant="outline" size="sm">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Column
+        </Button>
+      </div>
+      
+      <FormDescription>
+        Configure the columns for this table. You can add nested tables by checking the "Has Nested Data" option.
+      </FormDescription>
+
+      {tableColumns.length > 0 ? (
+        <div className="space-y-4">
+          {tableColumns.map((column: TableColumn, index: number) => (
+            <Card key={index} className="overflow-hidden">
+              <CardHeader className="bg-muted/50 py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-medium">{column.name || `Column ${index + 1}`}</CardTitle>
+                  <Button 
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    onClick={() => removeTableColumn(index)}
+                    className="h-8 w-8 text-destructive"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="py-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <FormLabel className="text-sm" htmlFor={`column-${index}-name`}>Column Name</FormLabel>
+                    <Input
+                      id={`column-${index}-name`}
+                      placeholder="e.g., Product Name"
+                      value={column.name}
+                      onChange={(e) => updateColumnField(index, "name", e.target.value)}
+                    />
+                  </div>
+                  
+                  <div>
+                    <FormLabel className="text-sm" htmlFor={`column-${index}-type`}>Data Type</FormLabel>
+                    <Select
+                      value={column.type}
+                      onValueChange={(value) => updateColumnField(index, "type", value)}
+                    >
+                      <SelectTrigger id={`column-${index}-type`}>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="boolean">Yes/No</SelectItem>
+                        <SelectItem value="select">Dropdown</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {column.type === "select" && (
+                  <div className="space-y-2">
+                    <FormLabel className="text-sm">Options</FormLabel>
+                    <div className="flex space-x-2">
+                      <Input
+                        placeholder="Add an option"
+                        value={newColumnOption}
+                        onChange={(e) => setNewColumnOption(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => addColumnOption(index)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    
+                    <div className="mt-2 space-y-1">
+                      {(column.options || []).map((option, optionIndex) => (
+                        <div
+                          key={optionIndex}
+                          className="flex items-center justify-between p-2 border rounded-md bg-background"
+                        >
+                          <span className="text-sm">{option}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeColumnOption(index, optionIndex)}
+                          >
+                            <Trash className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id={`column-${index}-nested`}
+                    checked={column.nested}
+                    onCheckedChange={() => toggleNested(index)}
+                  />
+                  <label 
+                    htmlFor={`column-${index}-nested`}
+                    className="text-sm font-medium leading-none cursor-pointer"
+                  >
+                    Has Nested Data (BOM-like table)
+                  </label>
+                </div>
+                
+                {column.nested && (
+                  <div className="pl-4 border-l-2 border-primary/20 mt-2 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="text-sm">Nested Columns</FormLabel>
+                      <Button 
+                        type="button" 
+                        onClick={() => addNestedColumn(index)} 
+                        variant="outline" 
+                        size="sm"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Nested Column
+                      </Button>
+                    </div>
+                    
+                    {(column.nestedColumns || []).length > 0 ? (
+                      <div className="space-y-3">
+                        {(column.nestedColumns || []).map((nestedColumn, nestedIndex) => (
+                          <Card key={nestedIndex} className="border-dashed">
+                            <CardContent className="pt-4 pb-2 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-medium">
+                                  {nestedColumn.name || `Nested Column ${nestedIndex + 1}`}
+                                </div>
+                                <Button 
+                                  variant="ghost"
+                                  size="icon"
+                                  type="button"
+                                  onClick={() => removeNestedColumn(index, nestedIndex)}
+                                  className="h-7 w-7 text-destructive"
+                                >
+                                  <Trash className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <FormLabel className="text-xs" htmlFor={`nested-${index}-${nestedIndex}-name`}>Column Name</FormLabel>
+                                  <Input
+                                    id={`nested-${index}-${nestedIndex}-name`}
+                                    placeholder="e.g., Material Name"
+                                    value={nestedColumn.name}
+                                    onChange={(e) => updateNestedColumnField(index, nestedIndex, "name", e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <FormLabel className="text-xs" htmlFor={`nested-${index}-${nestedIndex}-type`}>Data Type</FormLabel>
+                                  <Select
+                                    value={nestedColumn.type}
+                                    onValueChange={(value) => updateNestedColumnField(index, nestedIndex, "type", value)}
+                                  >
+                                    <SelectTrigger id={`nested-${index}-${nestedIndex}-type`} className="h-8 text-sm">
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="text">Text</SelectItem>
+                                      <SelectItem value="number">Number</SelectItem>
+                                      <SelectItem value="boolean">Yes/No</SelectItem>
+                                      <SelectItem value="select">Dropdown</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              
+                              {nestedColumn.type === "select" && (
+                                <div className="space-y-2">
+                                  <FormLabel className="text-xs">Options</FormLabel>
+                                  <div className="flex space-x-2">
+                                    <Input
+                                      placeholder="Add an option"
+                                      value={newColumnOption}
+                                      onChange={(e) => setNewColumnOption(e.target.value)}
+                                      className="flex-1 h-8 text-sm"
+                                    />
+                                    <Button
+                                      type="button"
+                                      onClick={() => addColumnOption(index, true, nestedIndex)}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                    >
+                                      Add
+                                    </Button>
+                                  </div>
+                                  
+                                  <div className="mt-2 space-y-1">
+                                    {(nestedColumn.options || []).map((option, optionIndex) => (
+                                      <div
+                                        key={optionIndex}
+                                        className="flex items-center justify-between p-1.5 border rounded-md bg-background"
+                                      >
+                                        <span className="text-xs">{option}</span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6"
+                                          onClick={() => removeColumnOption(index, optionIndex, true, nestedIndex)}
+                                        >
+                                          <Trash className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        No nested columns added yet. Click "Add Nested Column" to create one.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="border rounded-md p-6 text-center text-muted-foreground">
+          <p>No columns added yet</p>
+          <Button 
+            type="button" 
+            onClick={addTableColumn} 
+            variant="outline" 
+            size="sm"
+            className="mt-2"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add First Column
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

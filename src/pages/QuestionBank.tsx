@@ -4,14 +4,32 @@ import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import QuestionCard from "@/components/questionBank/QuestionCard";
 import TagBadge from "@/components/tags/TagBadge";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { 
+  List, 
+  Plus,
+  Edit,
+  Trash,
+  ChevronDown
+} from "lucide-react";
+import { QuestionBuilderDialog } from "@/components/questionBank/QuestionBuilderDialog";
 
 const QuestionBank = () => {
-  const { questions, tags } = useApp();
+  const { questions, tags, deleteQuestion } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
 
   const toggleTag = (tagId: string) => {
     if (selectedTags.includes(tagId)) {
@@ -35,9 +53,21 @@ const QuestionBank = () => {
     return matchesSearch && matchesTags;
   });
 
-  const handleQuestionClick = (questionId: string) => {
-    toast.info(`Viewing question ${questionId}`);
-    // In a real application, this would open a modal or navigate to the question detail page
+  const handleOpenBuilder = (questionId?: string) => {
+    setEditingQuestion(questionId || null);
+    setIsBuilderOpen(true);
+  };
+
+  const handleCloseBuilder = () => {
+    setIsBuilderOpen(false);
+    setEditingQuestion(null);
+  };
+
+  const handleDeleteQuestion = (questionId: string) => {
+    // Show confirmation before deleting
+    if (window.confirm("Are you sure you want to delete this question?")) {
+      deleteQuestion(questionId);
+    }
   };
 
   return (
@@ -48,21 +78,8 @@ const QuestionBank = () => {
         actions={
           <PageHeaderAction
             label="Add Question"
-            onClick={() => toast.info("Adding new question...")}
-            icon={
-              <svg
-                className="h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            }
+            onClick={() => handleOpenBuilder()}
+            icon={<Plus className="h-4 w-4" />}
           />
         }
       />
@@ -90,21 +107,8 @@ const QuestionBank = () => {
           </svg>
         </div>
         <Button variant="outline">
-          <svg
-            className="h-5 w-5 mr-2"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 6h18" />
-            <path d="M7 12h10" />
-            <path d="M10 18h4" />
-          </svg>
-          Filter
+          <List className="h-5 w-5 mr-2" />
+          List View
         </Button>
       </div>
 
@@ -130,21 +134,83 @@ const QuestionBank = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredQuestions.length > 0 ? (
-          filteredQuestions.map((question) => (
-            <QuestionCard
-              key={question.id}
-              question={question}
-              onClick={() => handleQuestionClick(question.id)}
-            />
-          ))
-        ) : (
-          <div className="col-span-full flex justify-center items-center p-8">
-            <p className="text-muted-foreground">No questions found</p>
-          </div>
-        )}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[50%]">Question</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Required</TableHead>
+              <TableHead>Tags</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredQuestions.length > 0 ? (
+              filteredQuestions.map((question) => (
+                <TableRow key={question.id}>
+                  <TableCell className="font-medium">{question.text}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="bg-secondary capitalize">
+                      {question.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {question.required ? (
+                      <Badge className="bg-red-100 text-red-800 border-red-200">
+                        Required
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-gray-100">
+                        Optional
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {question.tags.map((tag) => (
+                        <TagBadge key={tag.id} tag={tag} size="sm" />
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleOpenBuilder(question.id)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleDeleteQuestion(question.id)}
+                        className="text-destructive"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} className="h-24 text-center">
+                  <p className="text-muted-foreground">No questions found</p>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
+
+      <QuestionBuilderDialog 
+        open={isBuilderOpen} 
+        onOpenChange={setIsBuilderOpen}
+        questionId={editingQuestion}
+        onClose={handleCloseBuilder}
+      />
     </div>
   );
 };

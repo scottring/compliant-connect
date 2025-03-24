@@ -26,12 +26,29 @@ export type Tag = {
   description?: string;
 };
 
+export type ColumnType = 'text' | 'number' | 'boolean' | 'select' | 'multi-select';
+
+export type TableNestedColumn = {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+};
+
+export type TableColumn = {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+  nested?: boolean;
+  nestedColumns?: TableNestedColumn[];
+};
+
 export type Question = {
   id: string;
   text: string;
   tags: Tag[];
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multi-select';
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multi-select' | 'table';
   options?: string[];
+  tableColumns?: TableColumn[];
   required: boolean;
 };
 
