@@ -2,78 +2,100 @@
 import React from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 import { ProductSheet } from "@/types";
-import TagBadge from "@/components/tags/TagBadge";
 import { useApp } from "@/context/AppContext";
+import TagBadge from "@/components/tags/TagBadge";
 
 interface ProductSheetCardProps {
   productSheet: ProductSheet;
   onClick?: () => void;
 }
 
-const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ productSheet, onClick }) => {
-  const { companies } = useApp();
+const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ 
+  productSheet, 
+  onClick 
+}) => {
+  const { companies, tags } = useApp();
+  const navigate = useNavigate();
   
-  const supplier = companies.find(c => c.id === productSheet.supplierId);
-  const requestedBy = companies.find(c => c.id === productSheet.requestedById);
-  
-  const statusColors = {
-    draft: { bg: "bg-gray-100", text: "text-gray-800" },
-    submitted: { bg: "bg-blue-100", text: "text-blue-800" },
-    reviewing: { bg: "bg-amber-100", text: "text-amber-800" },
-    approved: { bg: "bg-green-100", text: "text-green-800" },
-    rejected: { bg: "bg-red-100", text: "text-red-800" },
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      navigate(`/product-sheet/${productSheet.id}`);
+    }
   };
   
-  const formattedDate = new Date(productSheet.updatedAt).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "draft":
+        return "bg-gray-200 text-gray-800";
+      case "submitted":
+        return "bg-yellow-100 text-yellow-800";
+      case "reviewing":
+        return "bg-blue-100 text-blue-800";
+      case "approved":
+        return "bg-green-100 text-green-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // Find the supplier
+  const supplier = companies.find(company => company.id === productSheet.supplierId);
   
+  // Get formatted dates
+  const createdDate = productSheet.createdAt ? new Date(productSheet.createdAt).toLocaleDateString() : "Unknown";
+  const updatedDate = productSheet.updatedAt ? new Date(productSheet.updatedAt).toLocaleDateString() : "Unknown";
+
+  // Get tag objects from tag IDs
+  const productTags = Array.isArray(productSheet.tags) 
+    ? typeof productSheet.tags[0] === 'string' 
+      ? (productSheet.tags as string[]).map(tagId => tags.find(t => t.id === tagId)).filter(Boolean) 
+      : productSheet.tags as unknown as typeof tags
+    : [];
+
   return (
     <Card 
-      className="w-full h-full transition-all duration-200 hover:shadow-md cursor-pointer animate-fade-in"
-      onClick={onClick}
+      className="h-full overflow-hidden hover:border-primary/50 transition-all cursor-pointer"
+      onClick={handleClick}
     >
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-base font-semibold truncate">{productSheet.name}</CardTitle>
-          <Badge 
-            className={`${statusColors[productSheet.status].bg} ${statusColors[productSheet.status].text} border-none`}
-          >
+          <CardTitle className="text-lg line-clamp-1" title={productSheet.name}>
+            {productSheet.name}
+          </CardTitle>
+          <Badge className={`${getStatusColor(productSheet.status)}`}>
             {productSheet.status.charAt(0).toUpperCase() + productSheet.status.slice(1)}
           </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {productSheet.description || "No description provided"}
-        </p>
       </CardHeader>
-      <CardContent className="pb-0">
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <p className="text-muted-foreground">Supplier:</p>
-            <p className="font-medium truncate">{supplier?.name || "Unknown"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Requested by:</p>
-            <p className="font-medium truncate">{requestedBy?.name || "Unknown"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Last updated:</p>
-            <p className="font-medium">{formattedDate}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Questions:</p>
-            <p className="font-medium">{productSheet.questions.length}</p>
-          </div>
+      
+      <CardContent className="pb-2">
+        <div className="text-sm text-muted-foreground mb-3">
+          Supplier: {supplier?.name || "Unknown"}
         </div>
-      </CardContent>
-      <CardFooter className="pt-4">
-        <div className="flex flex-wrap gap-1.5">
-          {productSheet.tags.map((tag) => (
-            <TagBadge key={tag.id} tag={tag} size="sm" />
+        
+        <div className="flex flex-wrap gap-1 mb-2">
+          {productTags.map(tag => (
+            tag && <TagBadge key={tag.id} tag={tag} size="sm" />
           ))}
+        </div>
+        
+        {productSheet.description && (
+          <p className="text-sm line-clamp-2 text-muted-foreground">
+            {productSheet.description}
+          </p>
+        )}
+      </CardContent>
+      
+      <CardFooter className="text-xs text-muted-foreground pt-0">
+        <div className="w-full flex justify-between">
+          <span>Created: {createdDate}</span>
+          <span>Updated: {updatedDate}</span>
         </div>
       </CardFooter>
     </Card>

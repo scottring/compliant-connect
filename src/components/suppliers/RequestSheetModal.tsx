@@ -118,6 +118,9 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       status: "submitted" as "draft" | "submitted" | "reviewing" | "approved" | "rejected", // Fixed type error
       tags: selectedTags,
       note: values.note,
+      requestedById: "u1", // Adding the current user ID
+      questions: [], // Initialize with empty questions array
+      description: values.note // Use note as description
     });
     
     // Find supplier email

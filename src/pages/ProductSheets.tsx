@@ -1,5 +1,5 @@
-
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import ProductSheetCard from "@/components/productSheets/ProductSheetCard";
@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { Search, Filter, Tag, Plus } from "lucide-react";
 
 const ProductSheets = () => {
   const { productSheets } = useApp();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredProductSheets = productSheets.filter((sheet) =>
@@ -24,8 +26,12 @@ const ProductSheets = () => {
   const rejected = filteredProductSheets.filter((sheet) => sheet.status === "rejected");
 
   const handleProductSheetClick = (productSheetId: string) => {
-    toast.info(`Viewing product sheet ${productSheetId}`);
-    // In a real application, this would navigate to the product sheet detail page
+    navigate(`/product-sheet/${productSheetId}`);
+  };
+
+  const handleCreateProductSheet = () => {
+    toast.info("Creating new product sheet...");
+    // In a real app, this would navigate to a product sheet creation page
   };
 
   return (
@@ -36,77 +42,28 @@ const ProductSheets = () => {
         actions={
           <PageHeaderAction
             label="New Product Sheet"
-            onClick={() => toast.info("Creating new product sheet...")}
-            icon={
-              <svg
-                className="h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            }
+            onClick={handleCreateProductSheet}
+            icon={<Plus className="h-4 w-4" />}
           />
         }
       />
 
       <div className="flex items-center space-x-2">
         <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             placeholder="Search product sheets..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
         </div>
         <Button variant="outline">
-          <svg
-            className="h-5 w-5 mr-2"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 6h18" />
-            <path d="M7 12h10" />
-            <path d="M10 18h4" />
-          </svg>
+          <Filter className="h-5 w-5 mr-2" />
           Filter
         </Button>
         <Button variant="outline">
-          <svg
-            className="h-5 w-5 mr-2"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <Tag className="h-5 w-5 mr-2" />
           View Tags
         </Button>
       </div>
@@ -128,7 +85,7 @@ const ProductSheets = () => {
                 <ProductSheetCard
                   key={sheet.id}
                   productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id as string)}
                 />
               ))
             ) : (
@@ -146,7 +103,7 @@ const ProductSheets = () => {
                 <ProductSheetCard
                   key={sheet.id}
                   productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id as string)}
                 />
               ))
             ) : (
@@ -164,7 +121,7 @@ const ProductSheets = () => {
                 <ProductSheetCard
                   key={sheet.id}
                   productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id as string)}
                 />
               ))
             ) : (
@@ -182,7 +139,7 @@ const ProductSheets = () => {
                 <ProductSheetCard
                   key={sheet.id}
                   productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id as string)}
                 />
               ))
             ) : (
@@ -200,7 +157,7 @@ const ProductSheets = () => {
                 <ProductSheetCard
                   key={sheet.id}
                   productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id as string)}
                 />
               ))
             ) : (
@@ -218,7 +175,7 @@ const ProductSheets = () => {
                 <ProductSheetCard
                   key={sheet.id}
                   productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id as string)}
                 />
               ))
             ) : (
