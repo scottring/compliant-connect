@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   supplierId,
   supplierName,
 }) => {
-  const { productSheets, addProductSheet, tags, companies } = useApp();
+  const { productSheets, addProductSheet, tags, companies, questions } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -110,6 +111,11 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   };
 
   const onSubmit = async (values: FormValues) => {
+    // Find questions that match the selected tags
+    const relevantQuestions = questions.filter(question => 
+      question.tags.some(tag => selectedTags.includes(tag.id))
+    );
+    
     // Add the new product sheet request with selected tag IDs
     addProductSheet({
       name: values.productName,
@@ -117,7 +123,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       requestedById: "c1", // Assuming c1 is the current user's company ID
       status: "submitted",
       tags: selectedTags, // Just use the tag IDs directly
-      questions: [], // Add empty questions array
+      questions: relevantQuestions, // Add questions that match selected tags
       description: values.note || ""
     });
     
