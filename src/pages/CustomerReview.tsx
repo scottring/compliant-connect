@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -12,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { toast } from "sonner";
-import { Question, SupplierResponse, ProductSheet } from "@/types";
+import { Question, SupplierResponse, ProductSheet, Flag as FlagType } from "@/types";
 import TagBadge from "@/components/tags/TagBadge";
 
 const CustomerReview = () => {
@@ -31,20 +30,16 @@ const CustomerReview = () => {
   const [reviewStatus, setReviewStatus] = useState<Record<string, "approved" | "flagged" | "pending">>({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   
-  // Find the current product sheet
   const productSheet = productSheets.find(sheet => sheet.id === id);
   
   useEffect(() => {
     if (productSheet) {
-      // Initialize review status for all answers
       const initialStatus: Record<string, "approved" | "flagged" | "pending"> = {};
       const initialNotes: Record<string, string> = {};
       
       productSheet.answers.forEach(answer => {
-        // If the answer has flags, mark it as flagged, otherwise pending
         if (answer.flags && answer.flags.length > 0) {
           initialStatus[answer.id] = "flagged";
-          // Get the latest flag comment
           initialNotes[answer.id] = answer.flags[answer.flags.length - 1].comment;
         } else {
           initialStatus[answer.id] = "pending";
@@ -55,7 +50,6 @@ const CustomerReview = () => {
       setReviewStatus(initialStatus);
       setReviewNotes(initialNotes);
       
-      // Expand all sections by default
       const sections: Record<string, boolean> = {};
       questions.forEach(question => {
         if (question.sectionId) {
@@ -75,10 +69,8 @@ const CustomerReview = () => {
     );
   }
   
-  // Find supplier company
   const supplier = companies.find(c => c.id === productSheet.supplierId);
   
-  // Group questions by section
   const questionsBySections = questions
     .filter(q => productSheet.questions.some(pq => pq.id === q.id))
     .reduce((acc, question) => {
@@ -90,13 +82,11 @@ const CustomerReview = () => {
       return acc;
     }, {} as Record<string, Question[]>);
   
-  // Get answers map for quick lookup
   const answersMap = productSheet.answers.reduce((acc, answer) => {
     acc[answer.questionId] = answer;
     return acc;
   }, {} as Record<string, SupplierResponse>);
   
-  // Filter questions based on active tab
   const getFilteredQuestions = (sectionQuestions: Question[]) => {
     if (activeTab === "all") {
       return sectionQuestions;
@@ -132,7 +122,6 @@ const CustomerReview = () => {
       [answerId]: "approved"
     }));
     
-    // Clear any notes when approving
     setReviewNotes(prev => ({
       ...prev,
       [answerId]: ""
@@ -152,25 +141,25 @@ const CustomerReview = () => {
   };
   
   const handleSubmitReview = () => {
-    // Create updated product sheet with review status
     const updatedAnswers = productSheet.answers.map(answer => {
       const status = reviewStatus[answer.id];
       const note = reviewNotes[answer.id];
       
-      // If the answer is flagged and there's a note, add a flag
       if (status === "flagged" && note) {
+        const newFlag: FlagType = {
+          id: `flag-${Date.now()}`,
+          answerId: answer.id,
+          comment: note,
+          createdBy: "current-user",
+          createdByName: "Current User",
+          createdAt: new Date()
+        };
+        
         return {
           ...answer,
           flags: [
             ...(answer.flags || []),
-            {
-              id: `flag-${Date.now()}`,
-              answerId: answer.id,
-              comment: note,
-              createdBy: "current-user", // This should be the actual user ID
-              createdAt: new Date(),
-              resolved: false
-            }
+            newFlag
           ]
         };
       }
@@ -178,24 +167,21 @@ const CustomerReview = () => {
       return answer;
     });
     
-    // Make sure we use the correct status type from the ProductSheet union
     const updatedStatus: ProductSheet['status'] = "reviewing";
     
     const updatedSheet: ProductSheet = {
       ...productSheet,
       answers: updatedAnswers,
-      status: updatedStatus, // Use the properly typed status
+      status: updatedStatus,
       updatedAt: new Date()
     };
     
     updateProductSheet(updatedSheet);
     toast.success("Review submitted successfully");
     
-    // Navigate back to product sheets or show a confirmation
     navigate("/product-sheets");
   };
   
-  // Calculate statistics
   const totalQuestions = productSheet.questions.length;
   const approvedCount = Object.values(reviewStatus).filter(status => status === "approved").length;
   const flaggedCount = Object.values(reviewStatus).filter(status => status === "flagged").length;
@@ -267,12 +253,10 @@ const CustomerReview = () => {
           {Object.entries(questionsBySections).map(([sectionId, sectionQuestions]) => {
             const filteredQuestions = getFilteredQuestions(sectionQuestions);
             
-            // Skip empty sections after filtering
             if (filteredQuestions.length === 0) {
               return null;
             }
             
-            // Find section name
             const sectionName = sectionId === "unsectioned" 
               ? "General Questions" 
               : questions.find(q => q.sectionId === sectionId)?.sectionId || "Section";
