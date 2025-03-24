@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -26,12 +27,13 @@ const CustomerReview = () => {
     user
   } = useApp();
   
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState("flagged");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [reviewStatus, setReviewStatus] = useState<Record<string, "approved" | "flagged" | "pending">>({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   
   const productSheet = productSheets.find(sheet => sheet.id === id);
+  const isPreviouslyReviewed = productSheet?.status === "reviewing";
   
   useEffect(() => {
     if (productSheet) {
@@ -39,9 +41,10 @@ const CustomerReview = () => {
       const initialNotes: Record<string, string> = {};
       
       productSheet.answers.forEach(answer => {
+        // For previously reviewed sheets, set status based on flags
         if (answer.flags && answer.flags.length > 0) {
           initialStatus[answer.id] = "flagged";
-          initialNotes[answer.id] = answer.flags[answer.flags.length - 1].comment;
+          initialNotes[answer.id] = "";
         } else {
           initialStatus[answer.id] = "pending";
           initialNotes[answer.id] = "";
@@ -88,8 +91,15 @@ const CustomerReview = () => {
     return acc;
   }, {} as Record<string, SupplierResponse>);
   
+  // Filter questions based on review status and whether we're in an iterative review
   const getFilteredQuestions = (sectionQuestions: Question[]) => {
-    if (activeTab === "all") {
+    if (isPreviouslyReviewed && activeTab === "flagged") {
+      // In iterative review, show only flagged questions with unresolved flags
+      return sectionQuestions.filter(q => {
+        const answer = answersMap[q.id];
+        return answer && answer.flags && answer.flags.length > 0;
+      });
+    } else if (activeTab === "all") {
       return sectionQuestions;
     } else if (activeTab === "flagged") {
       return sectionQuestions.filter(q => {
@@ -133,7 +143,7 @@ const CustomerReview = () => {
   };
   
   const handleFlag = (answerId: string, note: string) => {
-    console.log("FLAG BUTTON CLICKED - Flagging answer:", answerId, "with note:", note);
+    console.log("Flagging answer:", answerId, "with note:", note);
     
     if (!note || !note.trim()) {
       toast.error("Please add a note before flagging");
@@ -165,6 +175,7 @@ const CustomerReview = () => {
       const status = reviewStatus[answer.id];
       const note = reviewNotes[answer.id];
       
+      // Only add a new flag if the status is "flagged" and there's a note
       if (status === "flagged" && note) {
         const newFlag: FlagType = {
           id: `flag-${Date.now()}-${Math.random().toString(36).substring(2)}`,
@@ -181,6 +192,12 @@ const CustomerReview = () => {
             ...(answer.flags || []),
             newFlag
           ]
+        };
+      } else if (status === "approved") {
+        // If approved, clear all flags for this answer
+        return {
+          ...answer,
+          flags: []
         };
       }
       
@@ -203,15 +220,30 @@ const CustomerReview = () => {
     navigate("/product-sheets");
   };
   
+  // Count questions by status
+  const flaggedAnswers = productSheet.answers.filter(answer => 
+    answer.flags && answer.flags.length > 0
+  );
+  const flaggedCount = isPreviouslyReviewed 
+    ? flaggedAnswers.length
+    : Object.values(reviewStatus).filter(status => status === "flagged").length;
+  
   const totalQuestions = productSheet.questions.length;
   const approvedCount = Object.values(reviewStatus).filter(status => status === "approved").length;
-  const flaggedCount = Object.values(reviewStatus).filter(status => status === "flagged").length;
   const pendingCount = Object.values(reviewStatus).filter(status => status === "pending").length;
+  
+  // Set default tab to "flagged" if there are previous flags
+  useEffect(() => {
+    if (isPreviouslyReviewed && flaggedCount > 0) {
+      setActiveTab("flagged");
+    }
+  }, [isPreviouslyReviewed, flaggedCount]);
   
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader 
         title={`Review - ${productSheet.name}`}
+        subtitle={isPreviouslyReviewed ? "Reviewing flagged issues" : "Initial review"}
         actions={
           <Button 
             className="bg-brand hover:bg-brand/90"
@@ -241,11 +273,13 @@ const CustomerReview = () => {
                 </Badge>
                 <Badge className="bg-red-100 text-red-800">
                   <Flag className="mr-1 h-3 w-3" /> 
-                  {flaggedCount} Flagged
+                  {flaggedCount} {isPreviouslyReviewed ? "Open Issues" : "Flagged"}
                 </Badge>
-                <Badge className="bg-gray-100 text-gray-800">
-                  {pendingCount} Pending
-                </Badge>
+                {!isPreviouslyReviewed && (
+                  <Badge className="bg-gray-100 text-gray-800">
+                    {pendingCount} Pending
+                  </Badge>
+                )}
               </div>
               
               <div className="flex flex-wrap gap-1">
@@ -262,12 +296,16 @@ const CustomerReview = () => {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+      <Tabs defaultValue={isPreviouslyReviewed ? "flagged" : "all"} value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="all">All Questions ({totalQuestions})</TabsTrigger>
-          <TabsTrigger value="flagged">Flagged ({flaggedCount})</TabsTrigger>
+          <TabsTrigger value="flagged">
+            {isPreviouslyReviewed ? `Open Issues (${flaggedCount})` : `Flagged (${flaggedCount})`}
+          </TabsTrigger>
           <TabsTrigger value="approved">Approved ({approvedCount})</TabsTrigger>
-          <TabsTrigger value="pending">Pending ({pendingCount})</TabsTrigger>
+          {!isPreviouslyReviewed && (
+            <TabsTrigger value="pending">Pending ({pendingCount})</TabsTrigger>
+          )}
         </TabsList>
         
         <TabsContent value={activeTab} className="space-y-4 mt-4">
@@ -305,14 +343,17 @@ const CustomerReview = () => {
                         return null;
                       }
                       
-                      console.log("Rendering question:", question.id, "answerId:", answer.id, "status:", reviewStatus[answer.id] || "pending");
+                      const hasFlags = answer.flags && answer.flags.length > 0;
+                      const status = reviewStatus[answer.id] || "pending";
+                      
+                      console.log("Rendering question:", question.id, "answerId:", answer.id, "status:", status);
                       
                       return (
                         <div key={question.id}>
                           <ReviewQuestionItem 
                             question={question}
                             answer={answer}
-                            status={reviewStatus[answer.id] || "pending"}
+                            status={status}
                             note={reviewNotes[answer.id] || ""}
                             onApprove={() => handleApprove(answer.id)}
                             onFlag={(note) => handleFlag(answer.id, note)}
@@ -322,6 +363,7 @@ const CustomerReview = () => {
                                 [answer.id]: note
                               }));
                             }}
+                            isPreviouslyFlagged={hasFlags}
                           />
                           {index < filteredQuestions.length - 1 && <Separator />}
                         </div>
@@ -332,6 +374,12 @@ const CustomerReview = () => {
               </Card>
             );
           })}
+          
+          {getFilteredQuestions(Object.values(questionsBySections).flat()).length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No questions match the current filter</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

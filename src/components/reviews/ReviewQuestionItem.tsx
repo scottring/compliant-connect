@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Flag,
   MessageCircle,
+  Clock,
 } from "lucide-react";
 import {
   Collapsible,
@@ -32,6 +33,7 @@ interface ReviewQuestionItemProps {
   onApprove: () => void;
   onFlag: (note: string) => void;
   onUpdateNote: (note: string) => void;
+  isPreviouslyFlagged?: boolean;
 }
 
 const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
@@ -42,8 +44,10 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onApprove,
   onFlag,
   onUpdateNote,
+  isPreviouslyFlagged = false,
 }) => {
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [flagHistoryOpen, setFlagHistoryOpen] = useState(false);
   
   const formatAnswerValue = () => {
     if (answer.value === undefined || answer.value === null) {
@@ -84,6 +88,14 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
     onFlag(note);
   };
   
+  // Sort flags by creation date (newest first)
+  const sortedFlags = answer.flags ? 
+    [...answer.flags].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    ) : [];
+  
+  const latestFlag = sortedFlags.length > 0 ? sortedFlags[0] : null;
+  
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-start justify-between">
@@ -103,6 +115,18 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             {question.type}
           </span>
           
+          {isPreviouslyFlagged && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              className="text-amber-500" 
+              onClick={() => setFlagHistoryOpen(!flagHistoryOpen)}
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              {sortedFlags.length}
+            </Button>
+          )}
+          
           <Button 
             variant="ghost" 
             size="sm"
@@ -119,8 +143,36 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
         {formatAnswerValue()}
       </div>
       
+      {/* Flag history section */}
+      {isPreviouslyFlagged && (
+        <Collapsible open={flagHistoryOpen} onOpenChange={setFlagHistoryOpen}>
+          <CollapsibleTrigger className="flex items-center space-x-2 text-sm font-medium text-amber-600 hover:text-amber-800 transition-colors">
+            <Flag className="h-4 w-4" />
+            <span>Previous Flag Issues {flagHistoryOpen ? 'Hide' : 'Show'}</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2">
+            <div className="space-y-2">
+              {sortedFlags.map((flag) => (
+                <div 
+                  key={flag.id} 
+                  className="bg-amber-50 border border-amber-200 rounded p-3"
+                >
+                  <p className="text-sm font-medium">
+                    <span className="text-amber-800">{flag.createdByName}</span> 
+                    <span className="text-gray-500 ml-2">
+                      {new Date(flag.createdAt).toLocaleDateString()}
+                    </span>
+                  </p>
+                  <p className="text-amber-700 mt-1">{flag.comment}</p>
+                </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+      
       <div className="flex flex-col space-y-2">
-        {status === "flagged" && (
+        {status === "flagged" && !isPreviouslyFlagged && (
           <div className="bg-red-50 border border-red-200 rounded p-3">
             <div className="flex items-start">
               <Flag className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
@@ -143,7 +195,11 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
           <div className="flex space-x-2">
             <div className="flex-1">
               <Textarea 
-                placeholder="Add a review note or flag explanation..."
+                placeholder={
+                  isPreviouslyFlagged 
+                    ? "Add feedback on the revised answer..." 
+                    : "Add a review note or flag explanation..."
+                }
                 value={note}
                 onChange={(e) => onUpdateNote(e.target.value)}
                 className="min-h-[80px]"
@@ -156,7 +212,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 onClick={onApprove}
               >
                 <CheckCircle className="mr-2 h-4 w-4" />
-                Approve
+                {isPreviouslyFlagged ? "Resolve" : "Approve"}
               </Button>
               
               <TooltipProvider>
@@ -170,7 +226,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                         disabled={!note.trim()}
                       >
                         <Flag className="mr-2 h-4 w-4" />
-                        Flag
+                        {isPreviouslyFlagged ? "Flag Again" : "Flag"}
                       </Button>
                     </span>
                   </TooltipTrigger>
