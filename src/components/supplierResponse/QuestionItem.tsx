@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Question, SupplierResponse, Comment } from "@/types";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,6 +47,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   onAddComment
 }) => {
   const [commentsOpen, setCommentsOpen] = React.useState(false);
+  const [debouncedValue, setDebouncedValue] = useState<any>(answer?.value);
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   
   const getSchema = () => {
     switch (question.type) {
@@ -81,6 +83,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   useEffect(() => {
     if (answer?.value !== undefined) {
       form.setValue("answer", answer.value);
+      setDebouncedValue(answer.value);
     }
   }, [answer, form]);
   
@@ -92,8 +95,31 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   
   const handleValueChange = (value: any) => {
     form.setValue("answer", value);
-    onAnswerUpdate(value);
+    
+    // Clear any existing timeout
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    
+    // Set a new timeout to save after 800ms of no typing
+    const timeout = setTimeout(() => {
+      if (debouncedValue !== value) {
+        setDebouncedValue(value);
+        onAnswerUpdate(value);
+      }
+    }, 800);
+    
+    setSaveTimeout(timeout);
   };
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+    };
+  }, [saveTimeout]);
 
   // Check if this answer has been flagged
   const hasFlags = answer?.flags && answer.flags.length > 0;

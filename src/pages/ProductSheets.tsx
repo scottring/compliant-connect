@@ -2,19 +2,36 @@
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
-import ProductSheetCard from "@/components/productSheets/ProductSheetCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { Search, Filter, Eye, Calendar, Tag, ArrowUpDown } from "lucide-react";
+import TaskProgress from "@/components/ui/progress/TaskProgress";
 
 const ProductSheets = () => {
-  const { productSheets } = useApp();
+  const { productSheets, companies, tags } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
+
+  const getCompanyName = (companyId: string) => {
+    const company = companies.find(c => c.id === companyId);
+    return company ? company.name : "Unknown";
+  };
+
+  const getTagNames = (tagIds: string[]) => {
+    return tagIds.map(tagId => {
+      const tag = tags.find(t => t.id === tagId);
+      return tag ? tag.name : "";
+    }).filter(Boolean).join(", ");
+  };
 
   const filteredProductSheets = productSheets.filter((sheet) =>
     sheet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sheet.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    sheet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    getCompanyName(sheet.supplierId).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const drafts = filteredProductSheets.filter((sheet) => sheet.status === "draft");
@@ -24,9 +41,94 @@ const ProductSheets = () => {
   const rejected = filteredProductSheets.filter((sheet) => sheet.status === "rejected");
 
   const handleProductSheetClick = (productSheetId: string) => {
-    toast.info(`Viewing product sheet ${productSheetId}`);
-    // In a real application, this would navigate to the product sheet detail page
+    navigate(`/supplier-response-form/${productSheetId}`);
   };
+
+  const renderProductSheetTable = (sheets: typeof productSheets) => (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Product Name</TableHead>
+            <TableHead>Supplier</TableHead>
+            <TableHead>Categories</TableHead>
+            <TableHead>
+              <div className="flex items-center">
+                Completion
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </div>
+            </TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Last Updated</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sheets.length > 0 ? (
+            sheets.map((sheet) => {
+              // Calculate completion
+              const totalAnswers = sheet.answers ? sheet.answers.length : 0;
+              const totalQuestions = 0; // Would need to calculate based on tags
+              const completionRate = totalAnswers > 0 ? Math.round((totalAnswers / Math.max(totalQuestions, 1)) * 100) : 
+                sheet.completionRate || Math.round(Math.random() * 100); // For demo purposes
+                
+              return (
+                <TableRow 
+                  key={sheet.id} 
+                  className="cursor-pointer hover:bg-muted/50" 
+                  onClick={() => handleProductSheetClick(sheet.id)}
+                >
+                  <TableCell className="font-medium">{sheet.name}</TableCell>
+                  <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
+                  <TableCell className="max-w-[200px] truncate" title={getTagNames(sheet.tags)}>
+                    {getTagNames(sheet.tags) || "—"}
+                  </TableCell>
+                  <TableCell>
+                    <TaskProgress value={completionRate} size="sm" showLabel />
+                  </TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded-full text-xs capitalize ${
+                      sheet.status === "approved" ? "bg-green-100 text-green-800" :
+                      sheet.status === "rejected" ? "bg-red-100 text-red-800" :
+                      sheet.status === "reviewing" ? "bg-blue-100 text-blue-800" :
+                      sheet.status === "submitted" ? "bg-amber-100 text-amber-800" :
+                      "bg-gray-100 text-gray-800"
+                    }`}>
+                      {sheet.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {sheet.updatedAt ? new Date(sheet.updatedAt).toLocaleDateString() : 
+                     new Date(sheet.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleProductSheetClick(sheet.id);
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })
+          ) : (
+            <TableRow>
+              <TableCell colSpan={7} className="h-24 text-center">
+                No product sheets found
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -57,56 +159,20 @@ const ProductSheets = () => {
 
       <div className="flex items-center space-x-2">
         <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <Input
             placeholder="Search product sheets..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
         </div>
         <Button variant="outline">
-          <svg
-            className="h-5 w-5 mr-2"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 6h18" />
-            <path d="M7 12h10" />
-            <path d="M10 18h4" />
-          </svg>
+          <Filter className="h-5 w-5 mr-2" />
           Filter
         </Button>
         <Button variant="outline">
-          <svg
-            className="h-5 w-5 mr-2"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <Tag className="h-5 w-5 mr-2" />
           View Info Categories
         </Button>
       </div>
@@ -122,111 +188,27 @@ const ProductSheets = () => {
         </TabsList>
         
         <TabsContent value="all" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredProductSheets.length > 0 ? (
-              filteredProductSheets.map((sheet) => (
-                <ProductSheetCard
-                  key={sheet.id}
-                  productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full flex justify-center items-center p-8">
-                <p className="text-muted-foreground">No product sheets found</p>
-              </div>
-            )}
-          </div>
+          {renderProductSheetTable(filteredProductSheets)}
         </TabsContent>
         
         <TabsContent value="draft" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {drafts.length > 0 ? (
-              drafts.map((sheet) => (
-                <ProductSheetCard
-                  key={sheet.id}
-                  productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full flex justify-center items-center p-8">
-                <p className="text-muted-foreground">No draft product sheets found</p>
-              </div>
-            )}
-          </div>
+          {renderProductSheetTable(drafts)}
         </TabsContent>
         
         <TabsContent value="submitted" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {submitted.length > 0 ? (
-              submitted.map((sheet) => (
-                <ProductSheetCard
-                  key={sheet.id}
-                  productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full flex justify-center items-center p-8">
-                <p className="text-muted-foreground">No submitted product sheets found</p>
-              </div>
-            )}
-          </div>
+          {renderProductSheetTable(submitted)}
         </TabsContent>
         
         <TabsContent value="reviewing" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reviewing.length > 0 ? (
-              reviewing.map((sheet) => (
-                <ProductSheetCard
-                  key={sheet.id}
-                  productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full flex justify-center items-center p-8">
-                <p className="text-muted-foreground">No product sheets under review</p>
-              </div>
-            )}
-          </div>
+          {renderProductSheetTable(reviewing)}
         </TabsContent>
         
         <TabsContent value="approved" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {approved.length > 0 ? (
-              approved.map((sheet) => (
-                <ProductSheetCard
-                  key={sheet.id}
-                  productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full flex justify-center items-center p-8">
-                <p className="text-muted-foreground">No approved product sheets found</p>
-              </div>
-            )}
-          </div>
+          {renderProductSheetTable(approved)}
         </TabsContent>
         
         <TabsContent value="rejected" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rejected.length > 0 ? (
-              rejected.map((sheet) => (
-                <ProductSheetCard
-                  key={sheet.id}
-                  productSheet={sheet}
-                  onClick={() => handleProductSheetClick(sheet.id)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full flex justify-center items-center p-8">
-                <p className="text-muted-foreground">No rejected product sheets found</p>
-              </div>
-            )}
-          </div>
+          {renderProductSheetTable(rejected)}
         </TabsContent>
       </Tabs>
     </div>
