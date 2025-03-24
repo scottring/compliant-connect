@@ -30,8 +30,9 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Search } from "lucide-react";
+import { Search, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import TagBadge from "@/components/tags/TagBadge";
 
 interface RequestSheetModalProps {
   open: boolean;
@@ -43,6 +44,7 @@ interface RequestSheetModalProps {
 const formSchema = z.object({
   productName: z.string().min(1, "Product is required"),
   note: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -53,8 +55,9 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   supplierId,
   supplierName,
 }) => {
-  const { productSheets, addProductSheet } = useApp();
+  const { productSheets, addProductSheet, tags } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Mock products (in a real app, these would come from an API or context)
   const mockProducts = [
@@ -77,6 +80,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     defaultValues: {
       productName: "",
       note: "",
+      tags: [],
     },
   });
 
@@ -85,8 +89,8 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     addProductSheet({
       name: values.productName,
       supplierId: supplierId,
-      status: "Requested",
-      tags: [],
+      status: "submitted" as "draft" | "submitted" | "reviewing" | "approved" | "rejected", // Fixed type error
+      tags: selectedTags,
       note: values.note,
     });
     
@@ -95,7 +99,16 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     
     // Reset form and close modal
     form.reset();
+    setSelectedTags([]);
     onOpenChange(false);
+  };
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId) 
+        : [...prev, tagId]
+    );
   };
 
   return (
@@ -148,6 +161,23 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                 </FormItem>
               )}
             />
+
+            <FormItem>
+              <FormLabel>Tags</FormLabel>
+              <div className="flex flex-wrap gap-2 p-4 border rounded-md">
+                {tags.map((tag) => (
+                  <TagBadge 
+                    key={tag.id}
+                    tag={tag}
+                    selected={selectedTags.includes(tag.id)}
+                    onClick={() => toggleTag(tag.id)}
+                  />
+                ))}
+                {tags.length === 0 && (
+                  <div className="text-sm text-muted-foreground italic">No tags available</div>
+                )}
+              </div>
+            </FormItem>
 
             <FormField
               control={form.control}
