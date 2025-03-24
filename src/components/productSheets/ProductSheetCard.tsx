@@ -2,7 +2,7 @@
 import React from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ProductSheet } from "@/types";
+import { ProductSheet, Tag } from "@/types";
 import TagBadge from "@/components/tags/TagBadge";
 import { useApp } from "@/context/AppContext";
 

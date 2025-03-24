@@ -1,3 +1,4 @@
+
 export type User = {
   id: string;
   name: string;
@@ -105,7 +106,7 @@ export type ProductSheet = {
   answers: SupplierResponse[];
   createdAt: Date;
   updatedAt: Date;
-  tags: string[];
+  tags: Tag[];
 };
 
 export type RequestStatus = 'pending' | 'submitted' | 'reviewing' | 'approved' | 'rejected';

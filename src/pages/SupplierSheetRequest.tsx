@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -24,16 +23,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import TagBadge from "@/components/tags/TagBadge";
-import { Question, Answer, ProductSheet, Tag } from "@/types";
+import { Question, Answer, ProductSheet, Tag, SupplierResponse } from "@/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import CommentsThread from "@/components/comments/CommentsThread";
 
 const SupplierSheetRequest = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { productSheets, companies, questions, tags, sections, subsections, updateProductSheet, updateAnswer, addComment } = useApp();
+  const { productSheets, companies, questions, tags, sections, subsections, updateProductSheet, addComment } = useApp();
   
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [answers, setAnswers] = useState<SupplierResponse[]>([]);
   
   // Find the product sheet
   const productSheet = productSheets.find((sheet) => sheet.id === id);
@@ -70,7 +70,7 @@ const SupplierSheetRequest = () => {
   // Get all questions that match the product sheet tags
   const sheetQuestions = questions.filter((question) =>
     question.tags.some((tag) => 
-      productSheet.tags.some(tagId => tagId === tag.id)
+      productSheet.tags.some(sheetTag => sheetTag.id === tag.id)
     )
   ).sort((a, b) => {
     // Sort by section, subsection, and order
@@ -104,7 +104,7 @@ const SupplierSheetRequest = () => {
   });
 
   // Find answer for a question
-  const findAnswer = (questionId: string): Answer | undefined => {
+  const findAnswer = (questionId: string): SupplierResponse | undefined => {
     return productSheet.answers.find((answer) => answer.questionId === questionId);
   };
 
@@ -118,7 +118,36 @@ const SupplierSheetRequest = () => {
 
   // Handle answer changes
   const handleAnswerChange = (questionId: string, value: any) => {
-    updateAnswer(productSheet.id, questionId, value);
+    // Check if answer already exists
+    const existingAnswerIndex = productSheet.answers.findIndex(
+      (answer) => answer.questionId === questionId
+    );
+    
+    const updatedAnswers = [...productSheet.answers];
+    
+    if (existingAnswerIndex >= 0) {
+      // Update existing answer
+      updatedAnswers[existingAnswerIndex] = {
+        ...updatedAnswers[existingAnswerIndex],
+        value
+      };
+    } else {
+      // Create new answer
+      updatedAnswers.push({
+        id: `answer-${Date.now()}`,
+        questionId,
+        value,
+        comments: [],
+      });
+    }
+    
+    // Update product sheet with new answers
+    const updatedSheet = {
+      ...productSheet,
+      answers: updatedAnswers,
+    };
+    
+    updateProductSheet(updatedSheet);
   };
 
   // Handle form submission

@@ -5,6 +5,11 @@ import { useApp } from "@/context/AppContext";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+interface SidebarProps {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}
+
 interface SidebarLinkProps {
   to: string;
   icon: React.ReactNode;
@@ -68,7 +73,7 @@ const SidebarNavGroup: React.FC<SidebarNavGroupProps> = ({ title, icon, children
   );
 };
 
-const Sidebar: React.FC = () => {
+const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
   const { user } = useApp();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -124,7 +129,6 @@ const Sidebar: React.FC = () => {
           collapsed={collapsed}
         />
         
-        {/* Companies Section with Sub-Navigation */}
         <SidebarNavGroup 
           title="Companies" 
           icon={
@@ -190,7 +194,6 @@ const Sidebar: React.FC = () => {
           />
         </SidebarNavGroup>
         
-        {/* Product Sheets Section with Sub-Navigation */}
         <SidebarNavGroup
           title="Product Sheets"
           icon={

@@ -25,7 +25,7 @@ import {
 const formSchema = z.object({
   text: z.string().min(1, "Question text is required"),
   required: z.boolean().default(true),
-  type: z.enum(["text", "number", "boolean", "select", "multi-select", "table"]),
+  type: z.enum(["text", "number", "boolean", "select", "multi-select", "table", "file"]),
   options: z.array(z.string()).optional(),
   tableColumns: z.array(
     z.object({
@@ -385,6 +385,7 @@ export function QuestionBuilderDialog({
                       <SelectItem value="select">Single Choice</SelectItem>
                       <SelectItem value="multi-select">Multiple Choice</SelectItem>
                       <SelectItem value="table">Table</SelectItem>
+                      <SelectItem value="file">File</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

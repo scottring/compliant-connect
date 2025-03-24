@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/button";
@@ -111,13 +110,17 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   };
 
   const onSubmit = async (values: FormValues) => {
+    // Convert selectedTags IDs to actual Tag objects
+    const selectedTagObjects = tags.filter(tag => selectedTags.includes(tag.id));
+    
     // Add the new product sheet request
     addProductSheet({
       name: values.productName,
       supplierId: supplierId,
       requestedById: "c1", // Assuming c1 is the current user's company ID
       status: "submitted",
-      tags: selectedTags,
+      tags: selectedTagObjects,
+      questions: [], // Add empty questions array to match ProductSheet type
       description: values.note,
     });
     

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -37,7 +36,6 @@ const SupplierPIRResponse = () => {
   
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   
-  // Find the product sheet by ID
   const productSheet = productSheets.find((ps) => ps.id === id);
   
   if (!productSheet) {
@@ -49,7 +47,6 @@ const SupplierPIRResponse = () => {
     );
   }
   
-  // Find the supplier company
   const supplier = companies.find((c) => c.id === productSheet.supplierId);
   
   if (!supplier) {
@@ -61,7 +58,6 @@ const SupplierPIRResponse = () => {
     );
   }
   
-  // Get a dictionary of answers by question ID
   const answersByQuestionId = productSheet.answers.reduce(
     (acc, answer) => {
       acc[answer.questionId] = answer;
@@ -70,13 +66,11 @@ const SupplierPIRResponse = () => {
     {} as Record<string, SupplierResponse>
   );
   
-  // Get all questions that match the product sheet tags
   const sheetQuestions = questions.filter((question) =>
     question.tags.some((tag) => 
       productSheet.tags.some(tagId => tagId === tag.id)
     )
   ).sort((a, b) => {
-    // Sort by section, subsection, and order
     const sectionOrderA = sections.find(s => s.id === a.sectionId)?.order || 0;
     const sectionOrderB = sections.find(s => s.id === b.sectionId)?.order || 0;
     
@@ -94,7 +88,6 @@ const SupplierPIRResponse = () => {
     return (a.order || 0) - (b.order || 0);
   });
   
-  // Group questions by section
   const questionsBySection = sheetQuestions.reduce(
     (acc, question) => {
       const sectionId = question.sectionId || "unsectioned";
@@ -107,7 +100,6 @@ const SupplierPIRResponse = () => {
     {} as Record<string, Question[]>
   );
   
-  // Handle form submission
   const handleSubmit = () => {
     updateProductSheet({
       ...productSheet,
@@ -256,7 +248,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   onAnswerUpdate,
   onAddComment
 }) => {
-  // Generate form schema based on question type
   const getSchema = () => {
     switch (question.type) {
       case "text":
@@ -299,7 +290,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   
   const handleValueChange = (value: any) => {
     form.setValue("answer", value);
-    // Submit the form automatically when a value changes
     onAnswerUpdate(value);
   };
   
@@ -417,7 +407,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       
       {answer && (
         <CommentsThread 
-          comments={answer.comments || []}
+          comments={answer.comments || []} 
+          answerId={answer.id}
           onAddComment={onAddComment}
         />
       )}
