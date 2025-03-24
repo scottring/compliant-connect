@@ -17,6 +17,7 @@ import QuestionBank from "./pages/QuestionBank";
 import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
 import CustomerReview from "./pages/CustomerReview";
+import Customers from "./pages/Customers";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
 import UserSwitcher from "./components/UserSwitcher";
@@ -45,7 +46,7 @@ const App = () => {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/suppliers" element={<Suppliers />} />
                   <Route path="/suppliers/:id" element={<SupplierDetail />} />
-                  <Route path="/customers" element={<NotFound />} />
+                  <Route path="/customers" element={<Customers />} />
                   <Route path="/product-sheets" element={<ProductSheets />} />
                   <Route path="/supplier-products" element={<SupplierProducts />} />
                   <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
