@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -18,7 +17,7 @@ import RequestSheetModal from "@/components/suppliers/RequestSheetModal";
 const SupplierDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { companies, productSheets } = useApp();
+  const { companies } = useApp();
   const [comment, setComment] = useState("");
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
@@ -36,8 +35,16 @@ const SupplierDetail = () => {
     );
   }
 
-  // Filter product sheets for this supplier
-  const supplierProductSheets = productSheets.filter(sheet => sheet.supplierId === supplier.id);
+  // Mock product sheets data
+  const mockProductSheets = [
+    { id: "001", name: "Product 1", tags: ["REACH", "TSCA"], status: "Requested", date: "2023-09-15" },
+    { id: "002", name: "Product 2", tags: ["REACH"], status: "In Review", date: "2023-09-15" },
+    { id: "003", name: "Chemical Product 1", tags: ["RoHS"], status: "Compliant", date: "2023-09-15" },
+    { id: "004", name: "Chemical Product 2", tags: ["REACH", "TSCA", "RoHS"], status: "Compliant", date: "2023-09-15" },
+    { id: "005", name: "Product 3", tags: ["TSCA"], status: "Compliant", date: "2023-09-15" },
+    { id: "006", name: "Product 4", tags: ["REACH", "RoHS"], status: "Compliant", date: "2023-09-15" },
+    { id: "007", name: "Product 5", tags: ["REACH"], status: "Compliant", date: "2023-09-15" },
+  ];
 
   // Mock tasks data
   const mockTasks = [
@@ -155,48 +162,28 @@ const SupplierDetail = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {supplierProductSheets.length > 0 ? (
-                supplierProductSheets.map((sheet) => (
-                  <TableRow key={sheet.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/product-sheet/${sheet.id}`)}>
-                    <TableCell>{sheet.id}</TableCell>
-                    <TableCell>{sheet.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {Array.isArray(sheet.tags) && typeof sheet.tags[0] === 'string' 
-                          ? (sheet.tags as string[]).map(tagId => {
-                              const tag = mockTags.find(t => t.id === tagId);
-                              return tag ? <TagBadge key={tag.id} tag={tag} /> : null;
-                            })
-                          : (sheet.tags as unknown as typeof mockTags).map(tag => 
-                              <TagBadge key={tag.id} tag={tag} />
-                            )
-                        }
-                      </div>
-                    </TableCell>
-                    <TableCell>{sheet.status}</TableCell>
-                    <TableCell>{sheet.updatedAt ? new Date(sheet.updatedAt).toLocaleDateString() : "Unknown"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="bg-brand hover:bg-brand-700 text-white"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/product-sheet/${sheet.id}`);
-                        }}
-                      >
-                        View
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-4">
-                    No product sheets available for this supplier
+              {mockProductSheets.map((sheet) => (
+                <TableRow key={sheet.id}>
+                  <TableCell>{sheet.id}</TableCell>
+                  <TableCell>{sheet.name}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {sheet.tags.map((tag) => getTagBadge(tag))}
+                    </div>
+                  </TableCell>
+                  <TableCell>{sheet.status}</TableCell>
+                  <TableCell>{sheet.date}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-brand hover:bg-brand-700 text-white"
+                    >
+                      Actions
+                    </Button>
                   </TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </div>

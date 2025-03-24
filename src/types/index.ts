@@ -68,22 +68,11 @@ export type Question = {
   order?: number;
 };
 
-export type Comment = {
-  id: string;
-  answerId: string;
-  content: string;
-  authorId: string;
-  authorName: string;
-  createdAt: Date;
-  isResolved: boolean;
-};
-
 export type Answer = {
   id: string;
   questionId: string;
   value: string | number | boolean | string[];
   flags?: Flag[];
-  comments?: Comment[];
 };
 
 export type Flag = {
@@ -97,7 +86,7 @@ export type Flag = {
 };
 
 export type ProductSheet = {
-  id?: string;
+  id: string;
   name: string;
   description?: string;
   supplierId: string;
@@ -105,10 +94,9 @@ export type ProductSheet = {
   status: 'draft' | 'submitted' | 'reviewing' | 'approved' | 'rejected';
   questions: Question[];
   answers: Answer[];
-  createdAt?: Date;
-  updatedAt?: Date;
-  tags: string[] | Tag[];
-  note?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  tags: Tag[];
 };
 
 export type RequestStatus = 'pending' | 'submitted' | 'reviewing' | 'approved' | 'rejected';
