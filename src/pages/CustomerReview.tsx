@@ -118,6 +118,7 @@ const CustomerReview = () => {
   };
   
   const handleApprove = (answerId: string) => {
+    console.log("Approving answer:", answerId);
     setReviewStatus(prev => ({
       ...prev,
       [answerId]: "approved"
@@ -143,6 +144,8 @@ const CustomerReview = () => {
       ...prev,
       [answerId]: note
     }));
+    
+    toast.success(`Question flagged with note: ${note.substring(0, 20)}${note.length > 20 ? '...' : ''}`);
   };
   
   const handleSubmitReview = () => {
@@ -150,6 +153,8 @@ const CustomerReview = () => {
       toast.error("You must be logged in to submit a review");
       return;
     }
+    
+    console.log("Submitting review with statuses:", reviewStatus);
     
     const updatedAnswers = productSheet.answers.map(answer => {
       const status = reviewStatus[answer.id];

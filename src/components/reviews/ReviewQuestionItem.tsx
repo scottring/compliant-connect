@@ -75,6 +75,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       return;
     }
     
+    console.log("Flagging question with note:", note);
     // Call the onFlag callback with the note
     onFlag(note);
     toast.success("Question flagged for revision");
@@ -155,10 +156,12 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 Approve
               </Button>
               <Button 
-                type="button"
                 variant="outline" 
-                className="border-red-500 text-red-700 hover:bg-red-50 cursor-pointer"
-                onClick={handleSubmitFlag}
+                className="border-red-500 text-red-700 hover:bg-red-50"
+                onClick={() => {
+                  console.log("Flag button clicked");
+                  handleSubmitFlag();
+                }}
                 disabled={!note.trim()}
               >
                 <Flag className="mr-2 h-4 w-4" />
