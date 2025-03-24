@@ -113,47 +113,62 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   };
 
   const onSubmit = async (values: FormValues) => {
-    // Use the new product name if we're adding one, otherwise use the selected product
-    const finalProductName = addingNewProduct ? newProductName : values.productName;
-    
-    if (!finalProductName || finalProductName.trim() === "") {
-      toast.error("Please enter a valid product name");
-      return;
+    try {
+      console.log("Form submitted", values);
+      
+      // Use the new product name if we're adding one, otherwise use the selected product
+      const finalProductName = addingNewProduct ? newProductName : values.productName;
+      
+      if (!finalProductName || finalProductName.trim() === "") {
+        toast.error("Please enter a valid product name");
+        return;
+      }
+      
+      // Find questions that match the selected tags
+      const relevantQuestions = questions.filter(question => 
+        question.tags.some(tag => selectedTags.includes(tag.id))
+      );
+      
+      console.log("Adding product sheet with:", {
+        name: finalProductName,
+        supplierId,
+        selectedTags,
+        questions: relevantQuestions,
+        note: values.note
+      });
+      
+      // Add the new product sheet request with selected tag IDs
+      addProductSheet({
+        name: finalProductName,
+        supplierId: supplierId,
+        requestedById: "c1", // Assuming c1 is the current user's company ID
+        status: "submitted",
+        tags: selectedTags, // Just use the tag IDs directly
+        questions: relevantQuestions, // Add questions that match selected tags
+        description: values.note || ""
+      });
+      
+      // Find supplier email
+      const supplier = companies.find(company => company.id === supplierId);
+      
+      if (supplier && supplier.contactEmail) {
+        // Send email notification
+        await sendEmailNotification(supplier.contactEmail, finalProductName);
+      }
+      
+      // Show success message for the product sheet request
+      toast.success(`Product Information Request (PIR) sent to ${supplierName}`);
+      
+      // Reset form and close modal
+      form.reset();
+      setSelectedTags([]);
+      setAddingNewProduct(false);
+      setNewProductName("");
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      toast.error("An error occurred while submitting the form. Please try again.");
     }
-    
-    // Find questions that match the selected tags
-    const relevantQuestions = questions.filter(question => 
-      question.tags.some(tag => selectedTags.includes(tag.id))
-    );
-    
-    // Add the new product sheet request with selected tag IDs
-    addProductSheet({
-      name: finalProductName,
-      supplierId: supplierId,
-      requestedById: "c1", // Assuming c1 is the current user's company ID
-      status: "submitted",
-      tags: selectedTags, // Just use the tag IDs directly
-      questions: relevantQuestions, // Add questions that match selected tags
-      description: values.note || ""
-    });
-    
-    // Find supplier email
-    const supplier = companies.find(company => company.id === supplierId);
-    
-    if (supplier && supplier.contactEmail) {
-      // Send email notification
-      await sendEmailNotification(supplier.contactEmail, finalProductName);
-    }
-    
-    // Show success message for the product sheet request
-    toast.success(`Product Information Request (PIR) sent to ${supplierName}`);
-    
-    // Reset form and close modal
-    form.reset();
-    setSelectedTags([]);
-    setAddingNewProduct(false);
-    setNewProductName("");
-    onOpenChange(false);
   };
 
   const toggleTag = (tagId: string) => {
