@@ -34,9 +34,10 @@ const OurProducts = () => {
   });
 
   // Filter product sheets to find customer PIRs for our products
+  // These are sheets where our company is the supplier and there's a requestedById
   const customerRequests = productSheets.filter((sheet) => {
-    // Find if our company is listed as the requested company
-    return user && sheet.requestedById === user.companyId;
+    // Check if the current user's company is the supplier AND there's a customer requesting it
+    return user && sheet.supplierId === user.companyId && sheet.requestedById;
   });
 
   // Filter based on search term and active tab
