@@ -42,7 +42,7 @@ interface RequestSheetModalProps {
 }
 
 const formSchema = z.object({
-  productName: z.string().min(1, "Product is required"),
+  productName: z.string().optional(),
   note: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
