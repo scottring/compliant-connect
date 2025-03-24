@@ -5,6 +5,7 @@ import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -20,6 +21,7 @@ import { Search, Filter } from "lucide-react";
 const SupplierProducts = () => {
   const { productSheets, companies } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
   
   // Filter product sheets to only show supplier products
   const filteredSheets = productSheets.filter((sheet) => {
@@ -38,8 +40,7 @@ const SupplierProducts = () => {
   };
 
   const handleAction = (sheetId: string) => {
-    toast.info(`Opening product sheet ${sheetId}`);
-    // In a real app, this would navigate to the product sheet detail page
+    navigate(`/supplier-sheet-request/${sheetId}`);
   };
 
   // Calculate a completion rate if one doesn't exist
@@ -116,7 +117,7 @@ const SupplierProducts = () => {
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
                     size="sm"
                   >
-                    Action
+                    View & Edit
                   </Button>
                 </TableCell>
               </TableRow>

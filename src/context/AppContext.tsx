@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState } from "react";
-import { Company, ProductSheet, Question, Tag, User, Section, Subsection } from "../types";
+import { Company, ProductSheet, Question, Tag, User, Section, Subsection, Comment } from "../types";
 import { mockCompanies, mockProductSheets, mockQuestions, mockTags, mockUsers } from "../data/mockData";
 import { toast } from "sonner";
 
@@ -31,6 +30,8 @@ interface AppContextType {
   addSubsection: (subsection: Omit<Subsection, "id">) => void;
   updateSubsection: (subsection: Subsection) => void;
   deleteSubsection: (id: string) => void;
+  addComment: (answerId: string, text: string) => void;
+  updateAnswer: (sheetId: string, questionId: string, value: string | number | boolean | string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -124,7 +125,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toast.success("Tag deleted successfully");
   };
 
-  // New methods for Sections and Subsections
   const addSection = (section: Omit<Section, "id">) => {
     const newSection: Section = {
       ...section,
@@ -140,15 +140,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteSection = (id: string) => {
-    // Delete all subsections within this section
     const subsectionsToKeep = subsections.filter((s) => s.sectionId !== id);
     setSubsections(subsectionsToKeep);
     
-    // Delete all questions within this section or its subsections
     const questionsToKeep = questions.filter((q) => q.sectionId !== id);
     setQuestions(questionsToKeep);
     
-    // Delete the section
     setSections(sections.filter((s) => s.id !== id));
     toast.success("Section and related items deleted successfully");
   };
@@ -168,13 +165,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteSubsection = (id: string) => {
-    // Delete all questions within this subsection
     const questionsToKeep = questions.filter((q) => q.subsectionId !== id);
     setQuestions(questionsToKeep);
     
-    // Delete the subsection
     setSubsections(subsections.filter((s) => s.id !== id));
     toast.success("Subsection and related questions deleted successfully");
+  };
+
+  const addComment = (answerId: string, text: string) => {
+    if (!user) {
+      toast.error("You need to be logged in to add comments");
+      return;
+    }
+
+    const newComment: Comment = {
+      id: `comment${Date.now()}`,
+      answerId,
+      text,
+      createdBy: user.id,
+      createdByName: user.name,
+      createdAt: new Date(),
+    };
+
+    setProductSheets(
+      productSheets.map((sheet) => ({
+        ...sheet,
+        answers: sheet.answers.map((answer) =>
+          answer.id === answerId
+            ? {
+                ...answer,
+                comments: [...(answer.comments || []), newComment],
+              }
+            : answer
+        ),
+      }))
+    );
+
+    toast.success("Comment added successfully");
+  };
+
+  const updateAnswer = (sheetId: string, questionId: string, value: string | number | boolean | string[]) => {
+    setProductSheets(
+      productSheets.map((sheet) => {
+        if (sheet.id !== sheetId) return sheet;
+
+        const existingAnswerIndex = sheet.answers.findIndex(
+          (a) => a.questionId === questionId
+        );
+
+        const answers = [...sheet.answers];
+
+        if (existingAnswerIndex >= 0) {
+          answers[existingAnswerIndex] = {
+            ...answers[existingAnswerIndex],
+            value,
+          };
+        } else {
+          answers.push({
+            id: `answer-${Date.now()}`,
+            questionId,
+            value,
+            comments: [],
+          });
+        }
+
+        return {
+          ...sheet,
+          answers,
+          updatedAt: new Date(),
+        };
+      })
+    );
+
+    toast.success("Answer saved successfully");
   };
 
   return (
@@ -206,6 +269,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addSubsection,
         updateSubsection,
         deleteSubsection,
+        addComment,
+        updateAnswer,
       }}
     >
       {children}

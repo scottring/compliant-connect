@@ -59,7 +59,7 @@ export type Question = {
   id: string;
   text: string;
   tags: Tag[];
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multi-select' | 'table';
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multi-select' | 'table' | 'file';
   options?: string[];
   tableColumns?: TableColumn[];
   required: boolean;
@@ -73,6 +73,7 @@ export type Answer = {
   questionId: string;
   value: string | number | boolean | string[];
   flags?: Flag[];
+  comments?: Comment[];
 };
 
 export type Flag = {
@@ -83,6 +84,15 @@ export type Flag = {
   createdAt: Date;
   resolved: boolean;
   resolvedAt?: Date;
+};
+
+export type Comment = {
+  id: string;
+  answerId: string;
+  text: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: Date;
 };
 
 export type ProductSheet = {
