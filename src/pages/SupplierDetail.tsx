@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -13,12 +12,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import TagBadge from "@/components/tags/TagBadge";
 import { mockTags } from "@/data/mockData";
+import RequestSheetModal from "@/components/suppliers/RequestSheetModal";
 
 const SupplierDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { companies } = useApp();
   const [comment, setComment] = useState("");
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
   // Find the supplier by ID
   const supplier = companies.find(
@@ -70,7 +71,7 @@ const SupplierDetail = () => {
   };
 
   const handleRequestSheet = () => {
-    toast.success("Product sheet request sent to " + supplier.name);
+    setIsRequestModalOpen(true);
   };
 
   const getTagBadge = (tagName: string) => {
@@ -187,6 +188,14 @@ const SupplierDetail = () => {
           </Table>
         </div>
       </div>
+
+      {/* Request Sheet Modal */}
+      <RequestSheetModal 
+        open={isRequestModalOpen} 
+        onOpenChange={setIsRequestModalOpen} 
+        supplierId={supplier.id} 
+        supplierName={supplier.name}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Compliance Documents */}
