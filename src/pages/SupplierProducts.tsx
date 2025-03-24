@@ -1,5 +1,6 @@
 
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
@@ -16,10 +17,16 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { Search, Filter } from "lucide-react";
+import TagBadge from "@/components/tags/TagBadge";
+import { mockTags } from "@/data/mockData";
+import RequestUpdateModal from "@/components/productSheets/RequestUpdateModal";
 
 const SupplierProducts = () => {
   const { productSheets, companies } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [selectedSheet, setSelectedSheet] = useState<any>(null);
   
   // Filter product sheets to only show supplier products
   const filteredSheets = productSheets.filter((sheet) => {
@@ -37,9 +44,19 @@ const SupplierProducts = () => {
     return company ? company.name : "Unknown";
   };
 
-  const handleAction = (sheetId: string) => {
-    toast.info(`Opening product sheet ${sheetId}`);
-    // In a real app, this would navigate to the product sheet detail page
+  const handleRowClick = (sheet: any) => {
+    navigate(`/product-sheets/${sheet.id}`);
+  };
+
+  const handleAction = (e: React.MouseEvent, sheet: any, action: string) => {
+    e.stopPropagation(); // Prevent row click event
+    
+    if (action === "view") {
+      navigate(`/product-sheets/${sheet.id}`);
+    } else if (action === "request-update") {
+      setSelectedSheet(sheet);
+      setIsUpdateModalOpen(true);
+    }
   };
 
   // Calculate a completion rate if one doesn't exist
@@ -49,6 +66,23 @@ const SupplierProducts = () => {
     // Calculate from the progress property if available
     const company = companies.find(c => c.id === sheet.supplierId);
     return company ? company.progress : 0;
+  };
+
+  // Get tags for a product sheet
+  const getSheetTags = (sheet: any) => {
+    if (!sheet.tags || !Array.isArray(sheet.tags)) return [];
+    
+    return sheet.tags.map((tagId: string) => {
+      // For demo purposes, we'll use the mockTags
+      // In a real app, this would fetch from the actual tags in the sheet
+      return mockTags.find(t => t.id === tagId) || { id: tagId, name: tagId, color: "#888888" };
+    });
+  };
+
+  const handleUpdateRequest = (sheet: any, additionalTags: string[]) => {
+    toast.success(`Update request sent to ${getCompanyName(sheet.supplierId)}`);
+    // In a real app, this would send an email to the supplier
+    setIsUpdateModalOpen(false);
   };
 
   return (
@@ -92,6 +126,7 @@ const SupplierProducts = () => {
             <TableRow>
               <TableHead>Product Name</TableHead>
               <TableHead>Supplier Name</TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead>Task Progress</TableHead>
               <TableHead>Last Updated</TableHead>
               <TableHead>Actions</TableHead>
@@ -99,9 +134,23 @@ const SupplierProducts = () => {
           </TableHeader>
           <TableBody>
             {filteredSheets.map((sheet) => (
-              <TableRow key={sheet.id}>
+              <TableRow 
+                key={sheet.id} 
+                className="cursor-pointer hover:bg-muted/60"
+                onClick={() => handleRowClick(sheet)}
+              >
                 <TableCell className="font-medium">{sheet.name}</TableCell>
                 <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {getSheetTags(sheet).map((tag: any) => (
+                      <TagBadge key={tag.id} tag={tag} size="sm" />
+                    ))}
+                    {(!sheet.tags || sheet.tags.length === 0) && (
+                      <span className="text-muted-foreground text-xs">No tags</span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Progress value={getCompletionRate(sheet)} className="h-2 w-[100px]" />
                 </TableCell>
@@ -111,19 +160,28 @@ const SupplierProducts = () => {
                     : "N/A"}
                 </TableCell>
                 <TableCell>
-                  <Button 
-                    onClick={() => handleAction(sheet.id)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    size="sm"
-                  >
-                    Action
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={(e) => handleAction(e, sheet, "view")}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      size="sm"
+                    >
+                      View
+                    </Button>
+                    <Button 
+                      onClick={(e) => handleAction(e, sheet, "request-update")}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Request Update
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
             {filteredSheets.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
                   No product sheets found
                 </TableCell>
               </TableRow>
@@ -131,6 +189,16 @@ const SupplierProducts = () => {
           </TableBody>
         </Table>
       </div>
+
+      {selectedSheet && (
+        <RequestUpdateModal
+          isOpen={isUpdateModalOpen}
+          onClose={() => setIsUpdateModalOpen(false)}
+          sheet={selectedSheet}
+          supplierName={getCompanyName(selectedSheet.supplierId)}
+          onSubmit={handleUpdateRequest}
+        />
+      )}
     </div>
   );
 };
