@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -29,7 +30,7 @@ import { Question, SupplierResponse, ProductSheet, Tag } from "@/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import CommentsThread from "@/components/comments/CommentsThread";
 
-const SupplierPIRResponse = () => {
+const SupplierResponseForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { productSheets, companies, questions, tags, sections, subsections, updateProductSheet, updateSupplierResponse, addComment } = useApp();
@@ -132,7 +133,7 @@ const SupplierPIRResponse = () => {
   return (
     <div className="space-y-6 pb-10">
       <PageHeader 
-        title={`Product Information Request: ${productSheet.name}`}
+        title={`Supplier Response Form: ${productSheet.name}`}
         description={`Supplier: ${supplier.name}`}
         actions={
           <div className="flex gap-2">
@@ -140,7 +141,7 @@ const SupplierPIRResponse = () => {
               Save as Draft
             </Button>
             <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit}>
-              Submit PIR Response
+              Submit Response
             </Button>
           </div>
         }
@@ -416,4 +417,4 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   );
 };
 
-export default SupplierPIRResponse;
+export default SupplierResponseForm;

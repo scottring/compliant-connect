@@ -12,7 +12,7 @@ interface ProductSheetCardProps {
 }
 
 const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ productSheet, onClick }) => {
-  const { companies } = useApp();
+  const { companies, tags } = useApp();
   
   const supplier = companies.find(c => c.id === productSheet.supplierId);
   const requestedBy = companies.find(c => c.id === productSheet.requestedById);
@@ -71,9 +71,10 @@ const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ productSheet, onCli
       </CardContent>
       <CardFooter className="pt-4">
         <div className="flex flex-wrap gap-1.5">
-          {productSheet.tags.map((tag) => (
-            <TagBadge key={tag.id} tag={tag} size="sm" />
-          ))}
+          {productSheet.tags.map((tagId) => {
+            const tag = tags.find(t => t.id === tagId);
+            return tag ? <TagBadge key={tagId} tag={tag} size="sm" /> : null;
+          })}
         </div>
       </CardFooter>
     </Card>
