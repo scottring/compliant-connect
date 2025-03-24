@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
@@ -73,7 +74,8 @@ const OurProducts = () => {
 
   const handleProductAction = (product: ProductSheet) => {
     if (activeTab === "customer-requests") {
-      navigate(`/customer-review/${product.id}`);
+      // IMPORTANT CHANGE: Navigate to supplier response form instead of customer review
+      navigate(`/supplier-response-form/${product.id}`);
     } else {
       toast.info(`Viewing product ${product.name}`);
       // This would navigate to a product detail page in a real implementation
