@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/context/AppContext";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SidebarLinkProps {
@@ -31,6 +31,41 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon, label, collapsed })
       <span className="flex items-center justify-center w-8 h-8">{icon}</span>
       {!collapsed && <span className="ml-2 font-medium">{label}</span>}
     </NavLink>
+  );
+};
+
+interface SidebarNavGroupProps {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  collapsed: boolean;
+}
+
+const SidebarNavGroup: React.FC<SidebarNavGroupProps> = ({ title, icon, children, collapsed }) => {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "flex w-full items-center px-3 py-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          collapsed ? "justify-center" : "justify-between"
+        )}
+      >
+        <div className="flex items-center">
+          <span className="flex items-center justify-center w-8 h-8">{icon}</span>
+          {!collapsed && <span className="ml-2 font-medium">{title}</span>}
+        </div>
+        {!collapsed && (
+          <span className="text-sidebar-foreground">
+            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </span>
+        )}
+      </button>
+      
+      {isOpen && !collapsed && <div className="pl-4 mt-1">{children}</div>}
+    </div>
   );
 };
 
@@ -90,8 +125,10 @@ const Sidebar: React.FC = () => {
           label="Dashboard"
           collapsed={collapsed}
         />
-        <SidebarLink
-          to="/suppliers"
+        
+        {/* Companies Section with Sub-Navigation */}
+        <SidebarNavGroup 
+          title="Companies" 
           icon={
             <svg
               className="w-5 h-5"
@@ -103,17 +140,61 @@ const Sidebar: React.FC = () => {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           }
-          label="Our Suppliers"
           collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/product-sheets"
+        >
+          <SidebarLink
+            to="/suppliers"
+            icon={
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            }
+            label="Our Suppliers"
+            collapsed={collapsed}
+          />
+          <SidebarLink
+            to="/customers"
+            icon={
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            }
+            label="Our Customers"
+            collapsed={collapsed}
+          />
+        </SidebarNavGroup>
+        
+        {/* Product Sheets Section with Sub-Navigation */}
+        <SidebarNavGroup
+          title="Product Sheets"
           icon={
             <svg
               className="w-5 h-5"
@@ -132,9 +213,53 @@ const Sidebar: React.FC = () => {
               <line x1="10" y1="9" x2="8" y2="9" />
             </svg>
           }
-          label="Product Sheets"
           collapsed={collapsed}
-        />
+        >
+          <SidebarLink
+            to="/supplier-products"
+            icon={
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.29 7 12 12 20.71 7" />
+                <line x1="12" y1="22" x2="12" y2="12" />
+              </svg>
+            }
+            label="Suppliers Products"
+            collapsed={collapsed}
+          />
+          <SidebarLink
+            to="/our-products"
+            icon={
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m7.5 4.27 9 5.15" />
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                <path d="m3.3 7 8.7 5 8.7-5" />
+                <path d="M12 22V12" />
+              </svg>
+            }
+            label="Our Products"
+            collapsed={collapsed}
+          />
+        </SidebarNavGroup>
+        
         <SidebarLink
           to="/question-bank"
           icon={
@@ -156,6 +281,7 @@ const Sidebar: React.FC = () => {
           label="Question Bank"
           collapsed={collapsed}
         />
+        
         <SidebarLink
           to="/tags"
           icon={
