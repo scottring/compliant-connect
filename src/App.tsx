@@ -14,18 +14,21 @@ import Tags from "./pages/Tags";
 import { Toaster } from "sonner";
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import Sidebar from "./components/Sidebar";
-import useMobile from "./hooks/use-mobile";
+import { useIsMobile } from "./hooks/use-mobile";
 import "./App.css";
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
 
   return (
     <AppProvider>
       <Router>
         <div className="flex h-screen overflow-hidden">
-          <Sidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
+          <Sidebar 
+            isOpen={sidebarOpen} 
+            setIsOpen={setSidebarOpen} 
+          />
           <div className="flex-1 flex flex-col overflow-hidden">
             <main
               className={`flex-1 overflow-y-auto bg-background p-4 md:p-6 ${

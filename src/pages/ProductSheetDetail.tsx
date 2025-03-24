@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import PageHeader from "@/components/PageHeader";
@@ -17,8 +16,9 @@ import { MessageCircle, Send, FileText, CheckCircle, AlertCircle, Clock } from "
 const ProductSheetDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { productSheets, companies, questions, user } = useApp();
+  const { productSheets, companies, questions, user, allTags } = useApp();
   const [activeTab, setActiveTab] = useState("overview");
+  const [sheetTags, setSheetTags] = useState<Tag[]>([]);
 
   // Find the product sheet by ID
   const productSheet = productSheets.find(ps => ps.id === id);
@@ -81,6 +81,21 @@ const ProductSheetDetail = () => {
     )
   );
 
+  useEffect(() => {
+    if (productSheet) {
+      // Convert string tags to Tag objects if needed
+      const formattedTags = productSheet.tags.map(tag => {
+        if (typeof tag === 'string') {
+          const foundTag = allTags.find(t => t.id === tag);
+          return foundTag || { id: tag, name: tag, color: 'gray' };
+        }
+        return tag;
+      });
+      
+      setSheetTags(formattedTags as Tag[]);
+    }
+  }, [productSheet, allTags]);
+
   const handleUpdateStatus = (newStatus: "draft" | "submitted" | "reviewing" | "approved" | "rejected") => {
     toast.success(`Product sheet status updated to ${newStatus}`);
     // In a real app, this would update the product sheet status
@@ -125,9 +140,8 @@ const ProductSheetDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2 mb-4">
-                {productSheet.tags.map(tagId => {
-                  const tag = useApp().tags.find(t => t.id === tagId);
-                  return tag ? <TagBadge key={tag.id} tag={tag} /> : null;
+                {sheetTags.map(tag => {
+                  return <TagBadge key={tag.id} tag={tag} />;
                 })}
               </div>
               
