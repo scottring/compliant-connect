@@ -25,17 +25,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const SupplierProducts = () => {
-  const { productSheets, companies } = useApp();
+  const { productSheets, companies, user } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   
-  // Filter product sheets to only show supplier products
+  // Filter product sheets based on user role
   const filteredSheets = productSheets.filter((sheet) => {
-    // Check if sheet.name exists before calling toLowerCase()
+    // Always show all sheets for demo purposes
     const matchesSearch = 
       (sheet.name && sheet.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (sheet.supplierId && sheet.supplierId.toLowerCase().includes(searchTerm.toLowerCase()));
+      (sheet.supplierId && getCompanyName(sheet.supplierId).toLowerCase().includes(searchTerm.toLowerCase()));
     
+    // In a real app with auth, we'd filter by user's company role
     return matchesSearch;
   });
 
@@ -62,6 +63,11 @@ const SupplierProducts = () => {
     return company ? company.progress : 0;
   };
 
+  // Determine if the current user can edit or review based on user role
+  // In a real app, this would check user permissions more thoroughly
+  const canEdit = true; // For demo purposes
+  const canReview = true; // For demo purposes
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -80,6 +86,15 @@ const SupplierProducts = () => {
           </>
         }
       />
+
+      {user && (
+        <div className="bg-muted p-4 rounded-md mb-4">
+          <p className="text-sm">You are currently signed in as: <strong>{user.name}</strong> ({user.email})</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Use the user switcher in the top-right corner to test different user roles
+          </p>
+        </div>
+      )}
 
       <div className="flex justify-between items-center space-x-4">
         <div className="relative flex-1 max-w-sm">
@@ -132,14 +147,18 @@ const SupplierProducts = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        View & Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
-                        <ClipboardCheck className="h-4 w-4 mr-2" />
-                        Review
-                      </DropdownMenuItem>
+                      {canEdit && (
+                        <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View & Edit
+                        </DropdownMenuItem>
+                      )}
+                      {canReview && (
+                        <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
+                          <ClipboardCheck className="h-4 w-4 mr-2" />
+                          Review
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

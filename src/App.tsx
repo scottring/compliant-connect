@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import CustomerReview from "./pages/CustomerReview";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
+import UserSwitcher from "./components/UserSwitcher";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,9 @@ const App = () => {
             <div className="flex h-screen w-full overflow-hidden">
               <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
               <main className="flex-1 overflow-auto p-8">
+                <div className="flex justify-end mb-4">
+                  <UserSwitcher />
+                </div>
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/dashboard" element={<Dashboard />} />
