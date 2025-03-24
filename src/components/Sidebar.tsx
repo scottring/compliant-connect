@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -86,9 +85,8 @@ const Sidebar: React.FC = () => {
             <img
               src="/lovable-uploads/c2472b5a-b16b-4f53-9ea4-eb27391a2e5b.png"
               alt="StacksData"
-              className="h-8 w-auto mr-2"
+              className="h-8 w-auto"
             />
-            <span className="text-lg font-semibold text-brand-600">StacksData</span>
           </div>
         )}
         {collapsed && (
