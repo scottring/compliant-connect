@@ -1,10 +1,11 @@
+
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useApp } from "@/context/AppContext";
 import { Question, Tag, Section, Subsection, ColumnType, TableColumn } from "@/types";
-import { X, Plus, Trash } from "lucide-react";
+import { X, Plus, Trash, Tag as TagIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TagBadge from "@/components/tags/TagBadge";
 import { SectionSelector } from "./SectionSelector";
 import {
@@ -70,13 +72,17 @@ export function QuestionBuilderDialog({
     updateSection, 
     updateSubsection, 
     deleteSection, 
-    deleteSubsection 
+    deleteSubsection,
+    addTag
   } = useApp();
   
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [newOption, setNewOption] = useState("");
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>(undefined);
   const [selectedSubsectionId, setSelectedSubsectionId] = useState<string | undefined>(undefined);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3B82F6"); // Default blue color
+  const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
 
   const editingQuestion = questionId
     ? questions.find((q) => q.id === questionId)
@@ -126,6 +132,20 @@ export function QuestionBuilderDialog({
       setSelectedTags(selectedTags.filter((t) => t.id !== tag.id));
     } else {
       setSelectedTags([...selectedTags, tag]);
+    }
+  };
+
+  const handleCreateTag = () => {
+    if (newTagName.trim()) {
+      const newTag: Omit<Tag, "id"> = {
+        name: newTagName.trim(),
+        color: newTagColor,
+        count: 0,
+      };
+      
+      addTag(newTag);
+      setNewTagName("");
+      setIsTagPopoverOpen(false);
     }
   };
 
@@ -283,7 +303,51 @@ export function QuestionBuilderDialog({
             />
 
             <div className="space-y-2">
-              <FormLabel>Tags</FormLabel>
+              <div className="flex justify-between items-center">
+                <FormLabel>Tags</FormLabel>
+                <Popover open={isTagPopoverOpen} onOpenChange={setIsTagPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <TagIcon className="h-4 w-4 mr-2" />
+                      Add Tag
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-4">
+                      <h4 className="font-medium leading-none">Create New Tag</h4>
+                      <div className="space-y-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="tagName">Tag Name</Label>
+                          <Input 
+                            id="tagName"
+                            value={newTagName} 
+                            onChange={(e) => setNewTagName(e.target.value)}
+                            placeholder="Enter tag name"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="tagColor">Tag Color</Label>
+                          <div className="flex space-x-2">
+                            <Input 
+                              id="tagColor"
+                              type="color" 
+                              value={newTagColor} 
+                              onChange={(e) => setNewTagColor(e.target.value)}
+                              className="w-12 h-8 p-1"
+                            />
+                            <span className="flex-1 py-1">{newTagColor}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <Button onClick={handleCreateTag} disabled={!newTagName.trim()}>
+                          Create Tag
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="flex flex-wrap gap-2 p-4 border rounded-md">
                 {tags.map((tag) => (
                   <TagBadge
@@ -295,7 +359,7 @@ export function QuestionBuilderDialog({
                 ))}
                 {tags.length === 0 && (
                   <div className="text-sm text-muted-foreground">
-                    No tags available. Create tags in the Tags section.
+                    No tags available. Use the "Add Tag" button to create tags.
                   </div>
                 )}
               </div>
