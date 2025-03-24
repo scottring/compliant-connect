@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useApp } from "@/context/AppContext";
-import { Question, Tag, Section, Subsection } from "@/types";
+import { Question, Tag, Section, Subsection, ColumnType, TableColumn } from "@/types";
 import { X, Plus, Trash } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import TagBadge from "@/components/tags/TagBadge";
 import { SectionSelector } from "./SectionSelector";
 import {
@@ -29,13 +29,13 @@ const formSchema = z.object({
   tableColumns: z.array(
     z.object({
       name: z.string(),
-      type: z.enum(["text", "number", "boolean", "select"]),
+      type: z.enum(["text", "number", "boolean", "select", "multi-select"]),
       options: z.array(z.string()).optional(),
       nested: z.boolean().default(false),
       nestedColumns: z.array(
         z.object({
           name: z.string(),
-          type: z.enum(["text", "number", "boolean", "select"]),
+          type: z.enum(["text", "number", "boolean", "select", "multi-select"]),
           options: z.array(z.string()).optional(),
         })
       ).optional(),
@@ -95,7 +95,6 @@ export function QuestionBuilderDialog({
 
   const questionType = form.watch("type");
 
-  // Initialize form with question data when editing
   useEffect(() => {
     if (editingQuestion) {
       form.reset({
@@ -156,7 +155,7 @@ export function QuestionBuilderDialog({
   };
 
   const calculateQuestionOrder = () => {
-    if (!selectedSubsectionId) return 1;
+    if (!selectedSectionId) return 1;
     
     const questionsInSubsection = questions.filter(
       q => q.subsectionId === selectedSubsectionId
@@ -198,7 +197,7 @@ export function QuestionBuilderDialog({
     }
 
     if (values.type === "table" && values.tableColumns) {
-      questionData.tableColumns = values.tableColumns;
+      questionData.tableColumns = values.tableColumns as TableColumn[];
     }
 
     if (editingQuestion) {
