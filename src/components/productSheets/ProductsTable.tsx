@@ -57,7 +57,7 @@ const ProductsTable: React.FC<ProductsTableProps> = ({
                 <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {getSheetTags(sheet).map((tag: any) => (
+                    {getSheetTags(sheet).map((tag: Tag) => (
                       <TagBadge key={tag.id} tag={tag} size="sm" />
                     ))}
                     {(!sheet.tags || sheet.tags.length === 0) && (
