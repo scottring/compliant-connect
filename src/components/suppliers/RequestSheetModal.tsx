@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Search, Tag } from "lucide-react";
+import { Mail, Search, SendHorizontal, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import TagBadge from "@/components/tags/TagBadge";
 
@@ -55,9 +55,10 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   supplierId,
   supplierName,
 }) => {
-  const { productSheets, addProductSheet, tags } = useApp();
+  const { productSheets, addProductSheet, tags, companies } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // Mock products (in a real app, these would come from an API or context)
   const mockProducts = [
@@ -84,7 +85,32 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     },
   });
 
-  const onSubmit = (values: FormValues) => {
+  const sendEmailNotification = async (supplierEmail: string, productName: string) => {
+    // This is a mock implementation - in a real app, you would call an API endpoint
+    setIsSendingEmail(true);
+    
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Find supplier email from companies
+    const supplier = companies.find(company => company.id === supplierId);
+    
+    if (!supplier || !supplier.contactEmail) {
+      toast.error("Could not find supplier email address");
+      setIsSendingEmail(false);
+      return false;
+    }
+    
+    console.log(`Sending email notification to ${supplier.contactEmail} about product: ${productName}`);
+    
+    // In a real application, you would call your backend API here
+    // For now, we'll just simulate a successful email
+    toast.success(`Email notification sent to ${supplier.contactEmail}`);
+    setIsSendingEmail(false);
+    return true;
+  };
+
+  const onSubmit = async (values: FormValues) => {
     // Add the new product sheet request
     addProductSheet({
       name: values.productName,
@@ -94,7 +120,15 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       note: values.note,
     });
     
-    // Show success message
+    // Find supplier email
+    const supplier = companies.find(company => company.id === supplierId);
+    
+    if (supplier && supplier.contactEmail) {
+      // Send email notification
+      await sendEmailNotification(supplier.contactEmail, values.productName);
+    }
+    
+    // Show success message for the product sheet request
     toast.success(`Product sheet requested from ${supplierName}`);
     
     // Reset form and close modal
@@ -118,6 +152,12 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
           <DialogTitle>Request Product Sheet</DialogTitle>
           <DialogDescription>
             Request a new product sheet from {supplierName}.
+            {companies.find(c => c.id === supplierId)?.contactEmail && (
+              <div className="flex items-center mt-2 text-xs text-muted-foreground">
+                <Mail className="h-3 w-3 mr-1" />
+                <span>An email notification will be sent to the supplier.</span>
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -200,8 +240,19 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-brand hover:bg-brand-700">
-                Submit Request
+              <Button 
+                type="submit" 
+                className="bg-brand hover:bg-brand-700"
+                disabled={isSendingEmail}
+              >
+                {isSendingEmail ? (
+                  <>
+                    <SendHorizontal className="mr-2 h-4 w-4 animate-pulse" />
+                    Sending...
+                  </>
+                ) : (
+                  <>Submit Request</>
+                )}
               </Button>
             </DialogFooter>
           </form>
