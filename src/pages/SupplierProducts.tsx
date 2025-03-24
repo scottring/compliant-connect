@@ -23,22 +23,32 @@ const SupplierProducts = () => {
   
   // Filter product sheets to only show supplier products
   const filteredSheets = productSheets.filter((sheet) => {
+    // Check if sheet.name exists before calling toLowerCase()
     const matchesSearch = 
-      sheet.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sheet.companyId.toLowerCase().includes(searchTerm.toLowerCase());
+      (sheet.name && sheet.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (sheet.supplierId && sheet.supplierId.toLowerCase().includes(searchTerm.toLowerCase()));
     
     return matchesSearch;
   });
 
   // Find company name by ID
-  const getCompanyName = (companyId: string) => {
-    const company = companies.find(c => c.id === companyId);
+  const getCompanyName = (supplierId: string) => {
+    const company = companies.find(c => c.id === supplierId);
     return company ? company.name : "Unknown";
   };
 
   const handleAction = (sheetId: string) => {
     toast.info(`Opening product sheet ${sheetId}`);
     // In a real app, this would navigate to the product sheet detail page
+  };
+
+  // Calculate a completion rate if one doesn't exist
+  const getCompletionRate = (sheet: any) => {
+    if (sheet.completionRate !== undefined) return sheet.completionRate;
+    
+    // Calculate from the progress property if available
+    const company = companies.find(c => c.id === sheet.supplierId);
+    return company ? company.progress : 0;
   };
 
   return (
@@ -64,7 +74,7 @@ const SupplierProducts = () => {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Type Something"
+            placeholder="Search by product or supplier"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -84,22 +94,16 @@ const SupplierProducts = () => {
               <TableHead>Supplier Name</TableHead>
               <TableHead>Task Progress</TableHead>
               <TableHead>Last Updated</TableHead>
-              <TableHead>Last Updated</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredSheets.map((sheet) => (
               <TableRow key={sheet.id}>
-                <TableCell className="font-medium">{sheet.productName}</TableCell>
-                <TableCell>{getCompanyName(sheet.companyId)}</TableCell>
+                <TableCell className="font-medium">{sheet.name}</TableCell>
+                <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
                 <TableCell>
-                  <Progress value={sheet.completionRate || 0} className="h-2 w-[100px]" />
-                </TableCell>
-                <TableCell>
-                  {sheet.updatedAt 
-                    ? format(new Date(sheet.updatedAt), "yyyy-MM-dd") 
-                    : "N/A"}
+                  <Progress value={getCompletionRate(sheet)} className="h-2 w-[100px]" />
                 </TableCell>
                 <TableCell>
                   {sheet.updatedAt 
@@ -119,7 +123,7 @@ const SupplierProducts = () => {
             ))}
             {filteredSheets.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                   No product sheets found
                 </TableCell>
               </TableRow>
