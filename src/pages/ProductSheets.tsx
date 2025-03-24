@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
@@ -66,11 +65,12 @@ const ProductSheets = () => {
         <TableBody>
           {sheets.length > 0 ? (
             sheets.map((sheet) => {
-              // Calculate completion
+              // Calculate completion based on answers
               const totalAnswers = sheet.answers ? sheet.answers.length : 0;
-              const totalQuestions = 0; // Would need to calculate based on tags
-              const completionRate = totalAnswers > 0 ? Math.round((totalAnswers / Math.max(totalQuestions, 1)) * 100) : 
-                sheet.completionRate || Math.round(Math.random() * 100); // For demo purposes
+              const totalQuestions = sheet.questions.length;
+              const completionRate = totalQuestions > 0 
+                ? Math.round((totalAnswers / totalQuestions) * 100) 
+                : Math.round(Math.random() * 100); // Fallback for demo purposes
                 
               return (
                 <TableRow 
