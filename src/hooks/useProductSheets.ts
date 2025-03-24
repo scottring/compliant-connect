@@ -58,9 +58,14 @@ export const useProductSheets = () => {
     if (!sheet.tags || !Array.isArray(sheet.tags)) return [];
     
     return sheet.tags.map((tagId: string) => {
-      // For demo purposes, we'll use the mockTags
-      // In a real app, this would fetch from the actual tags in the sheet
-      return mockTags.find(t => t.id === tagId) || { id: tagId, name: tagId, color: "#888888" };
+      // Find the tag from mockTags
+      const tag = mockTags.find(t => t.id === tagId);
+      // Return the found tag or create a fallback tag object
+      return tag || { 
+        id: tagId, 
+        name: tagId, 
+        color: "#888888" 
+      };
     });
   };
 
