@@ -1,3 +1,4 @@
+
 export type User = {
   id: string;
   name: string;
@@ -83,6 +84,8 @@ export type Flag = {
   createdAt: Date;
   resolved: boolean;
   resolvedAt?: Date;
+  resolvedBy?: string;
+  round?: number;
 };
 
 export type Comment = {

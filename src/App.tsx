@@ -16,6 +16,7 @@ import SupplierResponseForm from "./pages/SupplierResponseForm";
 import QuestionBank from "./pages/QuestionBank";
 import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
+import CustomerReview from "./pages/CustomerReview";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
 
@@ -44,6 +45,7 @@ const App = () => {
                   <Route path="/product-sheets" element={<ProductSheets />} />
                   <Route path="/supplier-products" element={<SupplierProducts />} />
                   <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
+                  <Route path="/customer-review/:id" element={<CustomerReview />} />
                   <Route path="/our-products" element={<NotFound />} />
                   <Route path="/question-bank" element={<QuestionBank />} />
                   <Route path="/tags" element={<Tags />} />

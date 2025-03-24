@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, Eye, ClipboardCheck } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SupplierProducts = () => {
   const { productSheets, companies } = useApp();
@@ -39,8 +45,12 @@ const SupplierProducts = () => {
     return company ? company.name : "Unknown";
   };
 
-  const handleAction = (sheetId: string) => {
-    navigate(`/supplier-sheet-request/${sheetId}`);
+  const handleAction = (sheetId: string, action: string) => {
+    if (action === "edit") {
+      navigate(`/supplier-response-form/${sheetId}`);
+    } else if (action === "review") {
+      navigate(`/customer-review/${sheetId}`);
+    }
   };
 
   // Calculate a completion rate if one doesn't exist
@@ -112,13 +122,26 @@ const SupplierProducts = () => {
                     : "N/A"}
                 </TableCell>
                 <TableCell>
-                  <Button 
-                    onClick={() => handleAction(sheet.id)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    size="sm"
-                  >
-                    View & Edit
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        size="sm"
+                      >
+                        Actions
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        View & Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
+                        <ClipboardCheck className="h-4 w-4 mr-2" />
+                        Review
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))}

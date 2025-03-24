@@ -23,12 +23,13 @@ import {
 import TagBadge from "@/components/tags/TagBadge";
 import CommentsThread from "@/components/comments/CommentsThread";
 import { Button } from "@/components/ui/button";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Flag, AlertCircle } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface QuestionItemProps {
   question: Question;
@@ -93,6 +94,16 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
     form.setValue("answer", value);
     onAnswerUpdate(value);
   };
+
+  // Check if this answer has been flagged
+  const hasFlags = answer?.flags && answer.flags.length > 0;
+  
+  // Get the most recent flag
+  const latestFlag = hasFlags 
+    ? answer?.flags?.reduce((latest, current) => 
+        latest.createdAt > current.createdAt ? latest : current
+      ) 
+    : null;
   
   return (
     <div className="space-y-4">
@@ -113,6 +124,17 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             {question.type}
           </span>
           
+          {hasFlags && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              className="text-red-500" 
+            >
+              <Flag className="h-4 w-4 mr-1" />
+              {answer?.flags?.length}
+            </Button>
+          )}
+          
           <Button 
             variant="ghost" 
             size="sm"
@@ -124,6 +146,16 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           </Button>
         </div>
       </div>
+      
+      {hasFlags && latestFlag && (
+        <Alert variant="destructive" className="bg-red-50 text-red-800 border-red-200">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>This answer has been flagged for revision</AlertTitle>
+          <AlertDescription>
+            {latestFlag.comment}
+          </AlertDescription>
+        </Alert>
+      )}
       
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
