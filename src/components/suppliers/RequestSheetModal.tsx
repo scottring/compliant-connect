@@ -118,8 +118,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       status: "submitted",
       tags: selectedTags, // Just use the tag IDs directly
       questions: [], // Add empty questions array
-      description: values.note || "",
-      answers: [] // Add empty answers array
+      description: values.note || ""
     });
     
     // Find supplier email

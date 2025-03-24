@@ -208,7 +208,7 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-10-15"),
     updatedAt: new Date("2023-10-20"),
-    tags: [mockTags[0], mockTags[4]],
+    tags: ["tag1", "tag5"], // Using tag IDs instead of Tag objects
   },
   {
     id: "ps2",
@@ -221,7 +221,7 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-09-05"),
     updatedAt: new Date("2023-09-25"),
-    tags: [mockTags[2]],
+    tags: ["tag3"], // Using tag IDs instead of Tag objects
   },
   {
     id: "ps3",
@@ -234,7 +234,7 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-08-12"),
     updatedAt: new Date("2023-08-30"),
-    tags: [mockTags[0], mockTags[1], mockTags[4]],
+    tags: ["tag1", "tag2", "tag5"], // Using tag IDs instead of Tag objects
   },
   {
     id: "ps4",
@@ -247,6 +247,6 @@ export const mockProductSheets: ProductSheet[] = [
     answers: [],
     createdAt: new Date("2023-11-01"),
     updatedAt: new Date("2023-11-01"),
-    tags: [mockTags[2]],
+    tags: ["tag3"], // Using tag IDs instead of Tag objects
   },
 ];
