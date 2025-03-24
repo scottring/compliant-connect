@@ -133,9 +133,9 @@ const CustomerReview = () => {
   };
   
   const handleFlag = (answerId: string, note: string) => {
-    console.log("Flagging answer:", answerId, "with note:", note);
+    console.log("FLAG BUTTON CLICKED - Flagging answer:", answerId, "with note:", note);
     
-    if (!note.trim()) {
+    if (!note || !note.trim()) {
       toast.error("Please add a note before flagging");
       return;
     }
@@ -150,7 +150,7 @@ const CustomerReview = () => {
       [answerId]: note
     }));
     
-    toast.success(`Question flagged with note: ${note.substring(0, 20)}${note.length > 20 ? '...' : ''}`);
+    toast.success("Question flagged for revision");
   };
   
   const handleSubmitReview = () => {

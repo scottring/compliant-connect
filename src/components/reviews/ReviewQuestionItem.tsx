@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Question, SupplierResponse } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,6 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
     
     console.log("Flagging question with note:", note);
     onFlag(note);
-    toast.success("Question flagged for revision");
   };
   
   return (
@@ -152,11 +152,11 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 <CheckCircle className="mr-2 h-4 w-4" />
                 Approve
               </Button>
+              
               <Button 
-                type="button"
                 variant="outline" 
-                className="border-red-500 text-red-700 hover:bg-red-50 cursor-pointer"
-                onClick={() => handleSubmitFlag()}
+                className="border-red-500 text-red-700 hover:bg-red-50"
+                onClick={handleSubmitFlag}
                 disabled={!note.trim()}
               >
                 <Flag className="mr-2 h-4 w-4" />
