@@ -9,6 +9,275 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      answers: {
+        Row: {
+          created_at: string
+          id: string
+          product_sheet_id: string
+          question_id: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_sheet_id: string
+          question_id: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_sheet_id?: string
+          question_id?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "answers_product_sheet_id_fkey"
+            columns: ["product_sheet_id"]
+            isOneToOne: false
+            referencedRelation: "product_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          answer_id: string
+          created_at: string
+          created_by: string
+          created_by_name: string
+          id: string
+          text: string
+        }
+        Insert: {
+          answer_id: string
+          created_at?: string
+          created_by: string
+          created_by_name: string
+          id?: string
+          text: string
+        }
+        Update: {
+          answer_id?: string
+          created_at?: string
+          created_by?: string
+          created_by_name?: string
+          id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_answer_id_fkey"
+            columns: ["answer_id"]
+            isOneToOne: false
+            referencedRelation: "answers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          address: string | null
+          city: string | null
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          country: string | null
+          created_at: string
+          id: string
+          name: string
+          progress: number
+          role: string
+          state: string | null
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          country?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          progress?: number
+          role: string
+          state?: string | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          contact_email?: string
+          contact_name?: string
+          contact_phone?: string
+          country?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          progress?: number
+          role?: string
+          state?: string | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
+      company_users: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flags: {
+        Row: {
+          answer_id: string
+          comment: string
+          created_at: string
+          created_by: string
+          created_by_name: string
+          id: string
+        }
+        Insert: {
+          answer_id: string
+          comment: string
+          created_at?: string
+          created_by: string
+          created_by_name: string
+          id?: string
+        }
+        Update: {
+          answer_id?: string
+          comment?: string
+          created_at?: string
+          created_by?: string
+          created_by_name?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flags_answer_id_fkey"
+            columns: ["answer_id"]
+            isOneToOne: false
+            referencedRelation: "answers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_sheet_tags: {
+        Row: {
+          product_sheet_id: string
+          tag_id: string
+        }
+        Insert: {
+          product_sheet_id: string
+          tag_id: string
+        }
+        Update: {
+          product_sheet_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_sheet_tags_product_sheet_id_fkey"
+            columns: ["product_sheet_id"]
+            isOneToOne: false
+            referencedRelation: "product_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sheet_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_sheets: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          requested_by_id: string | null
+          status: string
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          requested_by_id?: string | null
+          status: string
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          requested_by_id?: string | null
+          status?: string
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_sheets_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -36,6 +305,185 @@ export type Database = {
         }
         Relationships: []
       }
+      question_tags: {
+        Row: {
+          question_id: string
+          tag_id: string
+        }
+        Insert: {
+          question_id: string
+          tag_id: string
+        }
+        Update: {
+          question_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_tags_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questions: {
+        Row: {
+          created_at: string
+          id: string
+          options: Json | null
+          order_index: number | null
+          required: boolean
+          section_id: string | null
+          subsection_id: string | null
+          table_columns: Json | null
+          text: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          options?: Json | null
+          order_index?: number | null
+          required?: boolean
+          section_id?: string | null
+          subsection_id?: string | null
+          table_columns?: Json | null
+          text: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          options?: Json | null
+          order_index?: number | null
+          required?: boolean
+          section_id?: string | null
+          subsection_id?: string | null
+          table_columns?: Json | null
+          text?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_subsection_id_fkey"
+            columns: ["subsection_id"]
+            isOneToOne: false
+            referencedRelation: "subsections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sections: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          order_index: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          order_index: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subsections: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          order_index: number
+          section_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          order_index: number
+          section_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          section_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subsections_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -51,6 +499,10 @@ export type Database = {
         Args: {
           permission_name: string
         }
+        Returns: boolean
+      }
+      user_is_admin: {
+        Args: Record<PropertyKey, never>
         Returns: boolean
       }
     }
