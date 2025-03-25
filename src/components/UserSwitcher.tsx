@@ -42,6 +42,7 @@ const UserSwitcher = () => {
     const newCompanyId = `c${Date.now()}`;
     
     addCompany({
+      id: newCompanyId,
       name: companyName,
       contactName: "Test Contact",
       contactEmail: "contact@example.com",
@@ -52,6 +53,7 @@ const UserSwitcher = () => {
       state: "TS",
       zipCode: "12345",
       country: "Testland",
+      progress: 0,
     });
     
     // Create and switch to a new user for this company
