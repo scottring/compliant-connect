@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
@@ -19,9 +18,11 @@ import {
   Plus,
   Edit,
   Trash,
+  Eye,
   ChevronDown
 } from "lucide-react";
 import { QuestionBuilderDialog } from "@/components/questionBank/QuestionBuilderDialog";
+import { QuestionPreviewDialog } from "@/components/questionBank/QuestionPreviewDialog";
 
 const QuestionBank = () => {
   const { questions, tags, sections, subsections, deleteQuestion } = useApp();
@@ -31,6 +32,8 @@ const QuestionBank = () => {
   const [selectedSubsection, setSelectedSubsection] = useState<string | null>(null);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
+  const [previewQuestion, setPreviewQuestion] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const toggleTag = (tagId: string) => {
     if (selectedTags.includes(tagId)) {
@@ -41,17 +44,14 @@ const QuestionBank = () => {
   };
 
   const filteredQuestions = questions.filter((question) => {
-    // Filter by search term
     const matchesSearch =
       searchTerm === "" ||
       question.text.toLowerCase().includes(searchTerm.toLowerCase());
 
-    // Filter by selected tags
     const matchesTags =
       selectedTags.length === 0 ||
       question.tags.some((tag) => selectedTags.includes(tag.id));
       
-    // Filter by section/subsection
     const matchesSection = 
       !selectedSection || question.sectionId === selectedSection;
       
@@ -71,8 +71,12 @@ const QuestionBank = () => {
     setEditingQuestion(null);
   };
 
+  const handlePreviewQuestion = (questionId: string) => {
+    setPreviewQuestion(questionId);
+    setIsPreviewOpen(true);
+  };
+
   const handleDeleteQuestion = (questionId: string) => {
-    // Show confirmation before deleting
     if (window.confirm("Are you sure you want to delete this question?")) {
       deleteQuestion(questionId);
     }
@@ -95,7 +99,6 @@ const QuestionBank = () => {
   };
 
   const sortedQuestions = [...filteredQuestions].sort((a, b) => {
-    // Sort by section first
     const sectionA = sections.find(s => s.id === a.sectionId)?.order || 0;
     const sectionB = sections.find(s => s.id === b.sectionId)?.order || 0;
     
@@ -103,7 +106,6 @@ const QuestionBank = () => {
       return sectionA - sectionB;
     }
     
-    // Then by subsection
     const subsectionA = subsections.find(s => s.id === a.subsectionId)?.order || 0;
     const subsectionB = subsections.find(s => s.id === b.subsectionId)?.order || 0;
     
@@ -111,7 +113,6 @@ const QuestionBank = () => {
       return subsectionA - subsectionB;
     }
     
-    // Finally by question order
     return (a.order || 0) - (b.order || 0);
   });
 
@@ -288,7 +289,16 @@ const QuestionBank = () => {
                       <Button 
                         variant="ghost" 
                         size="icon"
+                        onClick={() => handlePreviewQuestion(question.id)}
+                        title="Preview Question"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
                         onClick={() => handleOpenBuilder(question.id)}
+                        title="Edit Question"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -297,6 +307,7 @@ const QuestionBank = () => {
                         size="icon"
                         onClick={() => handleDeleteQuestion(question.id)}
                         className="text-destructive"
+                        title="Delete Question"
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
@@ -320,6 +331,12 @@ const QuestionBank = () => {
         onOpenChange={setIsBuilderOpen}
         questionId={editingQuestion}
         onClose={handleCloseBuilder}
+      />
+
+      <QuestionPreviewDialog
+        open={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+        question={previewQuestion ? questions.find(q => q.id === previewQuestion) || null : null}
       />
     </div>
   );
