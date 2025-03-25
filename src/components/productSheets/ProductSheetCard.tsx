@@ -25,11 +25,11 @@ const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ productSheet, onCli
     rejected: { bg: "bg-red-100", text: "text-red-800" },
   };
   
-  const formattedDate = new Date(productSheet.updatedAt).toLocaleDateString("en-US", {
+  const formattedDate = productSheet.updatedAt ? new Date(productSheet.updatedAt).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  }) : "Not updated";
   
   return (
     <Card 
@@ -40,7 +40,9 @@ const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ productSheet, onCli
         <div className="flex justify-between items-start">
           <CardTitle className="text-base font-semibold truncate">{productSheet.name}</CardTitle>
           <Badge 
-            className={`${statusColors[productSheet.status].bg} ${statusColors[productSheet.status].text} border-none`}
+            className={`${statusColors[productSheet.status as keyof typeof statusColors]?.bg || statusColors.draft.bg} 
+                       ${statusColors[productSheet.status as keyof typeof statusColors]?.text || statusColors.draft.text} 
+                       border-none`}
           >
             {productSheet.status.charAt(0).toUpperCase() + productSheet.status.slice(1)}
           </Badge>
@@ -65,16 +67,19 @@ const ProductSheetCard: React.FC<ProductSheetCardProps> = ({ productSheet, onCli
           </div>
           <div>
             <p className="text-muted-foreground">Questions:</p>
-            <p className="font-medium">{productSheet.questions.length}</p>
+            <p className="font-medium">{productSheet.questions?.length || 0}</p>
           </div>
         </div>
       </CardContent>
       <CardFooter className="pt-4">
         <div className="flex flex-wrap gap-1.5">
-          {productSheet.tags.map((tagId) => {
+          {productSheet.tags?.map((tagId) => {
             const tag = tags.find(t => t.id === tagId);
             return tag ? <TagBadge key={tagId} tag={tag} size="sm" /> : null;
           })}
+          {(!productSheet.tags || productSheet.tags.length === 0) && (
+            <span className="text-xs text-muted-foreground">No categories</span>
+          )}
         </div>
       </CardFooter>
     </Card>

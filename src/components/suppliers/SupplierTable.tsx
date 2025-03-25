@@ -93,33 +93,41 @@ const SupplierTable: React.FC<SupplierTableProps> = ({ suppliers, onAction }) =>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredSuppliers.map((supplier) => (
-              <TableRow 
-                key={supplier.id} 
-                className="transition-colors hover:bg-muted/50 cursor-pointer"
-                onClick={() => handleRowClick(supplier)}
-              >
-                <TableCell className="font-medium">{supplier.id.padStart(3, '0')}</TableCell>
-                <TableCell>{supplier.name}</TableCell>
-                <TableCell className="max-w-[200px]">
-                  <TaskProgress value={supplier.progress} />
-                </TableCell>
-                <TableCell>{supplier.contactName}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAction(supplier);
-                    }}
-                    variant="secondary"
-                    size="sm"
-                    className="bg-brand hover:bg-brand-700 text-white"
-                  >
-                    Action
-                  </Button>
+            {filteredSuppliers.length > 0 ? (
+              filteredSuppliers.map((supplier) => (
+                <TableRow 
+                  key={supplier.id} 
+                  className="transition-colors hover:bg-muted/50 cursor-pointer"
+                  onClick={() => handleRowClick(supplier)}
+                >
+                  <TableCell className="font-medium">{supplier.id}</TableCell>
+                  <TableCell>{supplier.name}</TableCell>
+                  <TableCell className="max-w-[200px]">
+                    <TaskProgress value={supplier.progress} />
+                  </TableCell>
+                  <TableCell>{supplier.contactName}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAction(supplier);
+                      }}
+                      variant="secondary"
+                      size="sm"
+                      className="bg-brand hover:bg-brand-700 text-white"
+                    >
+                      Action
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )) 
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  No suppliers found. Add your first supplier to get started.
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </div>

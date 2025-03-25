@@ -55,21 +55,20 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   supplierId,
   supplierName,
 }) => {
-  const { productSheets, addProductSheet, tags, companies, questions } = useApp();
+  const { productSheets, addProductSheet, tags, companies, questions, user } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [addingNewProduct, setAddingNewProduct] = useState(false);
+  const [addingNewProduct, setAddingNewProduct] = useState(true);
   const [newProductName, setNewProductName] = useState("");
 
-  // Define supplier-specific products
-  const supplierProducts = [
-    // Filter products based on the supplier ID
-    { id: `${supplierId}-p1`, name: `${supplierName} Product 1` },
-    { id: `${supplierId}-p2`, name: `${supplierName} Product 2` },
-    { id: `${supplierId}-p3`, name: `${supplierName} Chemical Product` },
-    { id: `${supplierId}-p4`, name: `${supplierName} Raw Material` },
-  ];
+  // Get products from this supplier - in the real app, these would come from an API
+  const supplierProducts = productSheets
+    .filter(sheet => sheet.supplierId === supplierId)
+    .map(sheet => ({
+      id: sheet.id,
+      name: sheet.name
+    }));
 
   // Filter products based on search term
   const filteredProducts = supplierProducts.filter(product => 
@@ -104,7 +103,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     console.log(`Sending email notification to ${supplier.contactEmail} about product: ${productName}`);
     
     // In a real application, you would call your backend API here
-    // For now, we'll just simulate a successful email
     toast.success(`Email notification sent to ${supplier.contactEmail}`);
     setIsSendingEmail(false);
     return true;
@@ -141,14 +139,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
         note: values.note
       });
       
-      // Add the new product sheet request with selected tag IDs
+      // Add the new product sheet request
       addProductSheet({
         name: finalProductName,
         supplierId: supplierId,
-        requestedById: "c1", // Assuming c1 is the current user's company ID
+        requestedById: user?.companyId || null,
         status: "submitted",
-        tags: selectedTags, // Just use the tag IDs directly
-        questions: relevantQuestions.length > 0 ? relevantQuestions : [], // Add questions that match selected tags
+        tags: selectedTags,
+        questions: relevantQuestions.length > 0 ? relevantQuestions : [],
         description: values.note || ""
       });
       
@@ -166,7 +164,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       // Reset form and close modal
       form.reset();
       setSelectedTags([]);
-      setAddingNewProduct(false);
+      setAddingNewProduct(true);
       setNewProductName("");
       onOpenChange(false);
     } catch (error) {
@@ -208,7 +206,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {!addingNewProduct ? (
+            {!addingNewProduct && filteredProducts.length > 0 ? (
               <FormField
                 control={form.control}
                 name="productName"
@@ -255,7 +253,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               />
             ) : (
               <FormItem>
-                <FormLabel>Add New {supplierName} Product</FormLabel>
+                <FormLabel>Add New Product</FormLabel>
                 <div className="space-y-2">
                   <Input
                     placeholder="Enter new product name..."
@@ -267,21 +265,23 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               </FormItem>
             )}
 
-            <div className="flex justify-end">
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm"
-                onClick={toggleAddNewProduct}
-                className="flex items-center gap-1"
-              >
-                {addingNewProduct ? (
-                  <>Back to Existing Products</>
-                ) : (
-                  <><Plus className="h-3 w-3" /> Add New Product</>
-                )}
-              </Button>
-            </div>
+            {filteredProducts.length > 0 && (
+              <div className="flex justify-end">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={toggleAddNewProduct}
+                  className="flex items-center gap-1"
+                >
+                  {addingNewProduct ? (
+                    <>Use Existing Product</>
+                  ) : (
+                    <><Plus className="h-3 w-3" /> Add New Product</>
+                  )}
+                </Button>
+              </div>
+            )}
 
             <FormItem>
               <FormLabel>Information Categories (Tags) <span className="text-destructive">*</span></FormLabel>

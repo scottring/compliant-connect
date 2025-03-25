@@ -48,7 +48,6 @@ const SupplierProducts = () => {
       sheetsToShow = productSheets.filter(sheet => sheet.supplierId === userCompany.id);
     } else if (userCompany.role === "customer" || userCompany.role === "both") {
       // Customers should see sheets they requested or from their suppliers
-      // In a real app, this would be based on relationships
       sheetsToShow = productSheets.filter(sheet => sheet.requestedById === userCompany.id);
     }
     
