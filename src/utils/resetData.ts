@@ -31,26 +31,26 @@ export const resetAllData = async () => {
     if (isAuthenticated) {
       // Clear Supabase data tables in the correct order to avoid foreign key constraints
       // Comments and flags must be deleted before answers
-      await supabase.from('comments').delete().is('id', 'not', null);
-      await supabase.from('flags').delete().is('id', 'not', null);
+      await supabase.from('comments').delete().neq('id', null);
+      await supabase.from('flags').delete().neq('id', null);
       
       // Clear junction tables first
-      await supabase.from('question_tags').delete().is('question_id', 'not', null);
-      await supabase.from('product_sheet_tags').delete().is('product_sheet_id', 'not', null);
+      await supabase.from('question_tags').delete().neq('question_id', null);
+      await supabase.from('product_sheet_tags').delete().neq('product_sheet_id', null);
       
       // Clear answers before product sheets
-      await supabase.from('answers').delete().is('id', 'not', null);
+      await supabase.from('answers').delete().neq('id', null);
       
       // Clear questions before sections
-      await supabase.from('questions').delete().is('id', 'not', null);
+      await supabase.from('questions').delete().neq('id', null);
       
       // Clear subsections before sections
-      await supabase.from('subsections').delete().is('id', 'not', null);
+      await supabase.from('subsections').delete().neq('id', null);
       
       // Clear main tables
-      await supabase.from('product_sheets').delete().is('id', 'not', null);
-      await supabase.from('sections').delete().is('id', 'not', null);
-      await supabase.from('tags').delete().is('id', 'not', null);
+      await supabase.from('product_sheets').delete().neq('id', null);
+      await supabase.from('sections').delete().neq('id', null);
+      await supabase.from('tags').delete().neq('id', null);
       
       // Don't delete company_users as it might break user access
       // Don't delete companies as it might break user relationships
