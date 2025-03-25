@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Mail, Plus, Search, SendHorizontal } from "lucide-react";
+import { Mail, Plus, Package, SendHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import TagBadge from "@/components/tags/TagBadge";
 
@@ -62,19 +62,17 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [addingNewProduct, setAddingNewProduct] = useState(false);
   const [newProductName, setNewProductName] = useState("");
 
-  // Mock products (in a real app, these would come from an API or context)
-  const mockProducts = [
-    { id: "p1", name: "Product 1" },
-    { id: "p2", name: "Product 2" },
-    { id: "p3", name: "Chemical Product 1" },
-    { id: "p4", name: "Chemical Product 2" },
-    { id: "p5", name: "Product 3" },
-    { id: "p6", name: "Product 4" },
-    { id: "p7", name: "Product 5" },
+  // Define supplier-specific products
+  const supplierProducts = [
+    // Filter products based on the supplier ID
+    { id: `${supplierId}-p1`, name: `${supplierName} Product 1` },
+    { id: `${supplierId}-p2`, name: `${supplierName} Product 2` },
+    { id: `${supplierId}-p3`, name: `${supplierName} Chemical Product` },
+    { id: `${supplierId}-p4`, name: `${supplierName} Raw Material` },
   ];
 
   // Filter products based on search term
-  const filteredProducts = mockProducts.filter(product => 
+  const filteredProducts = supplierProducts.filter(product => 
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -216,10 +214,10 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                 name="productName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Select Existing Product</FormLabel>
+                    <FormLabel>Select {supplierName} Product</FormLabel>
                     <div className="space-y-2">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                           placeholder="Search products..."
                           value={searchTerm}
@@ -237,11 +235,17 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {filteredProducts.map((product) => (
-                            <SelectItem key={product.id} value={product.name}>
-                              {product.name}
-                            </SelectItem>
-                          ))}
+                          {filteredProducts.length > 0 ? (
+                            filteredProducts.map((product) => (
+                              <SelectItem key={product.id} value={product.name}>
+                                {product.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-center text-sm text-muted-foreground">
+                              No products found
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -251,7 +255,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               />
             ) : (
               <FormItem>
-                <FormLabel>Add New Product</FormLabel>
+                <FormLabel>Add New {supplierName} Product</FormLabel>
                 <div className="space-y-2">
                   <Input
                     placeholder="Enter new product name..."
