@@ -61,6 +61,27 @@ const Customers = () => {
     setInviteModalOpen(true);
   };
 
+  // If there's no user selected yet, show a message
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Our Customers"
+          subtitle="Please select a user to continue"
+        />
+        <div className="border rounded-md p-8 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold">No user selected</h3>
+            <p className="text-muted-foreground mb-4">
+              Please use the user switcher in the top right to select a user first.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
