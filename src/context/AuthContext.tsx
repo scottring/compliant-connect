@@ -82,8 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // We'll skip the manual profile creation since it's handled by the database trigger
-      // This eliminates the TypeScript error with the profiles table
       toast.success("Account created successfully!");
     } catch (error: any) {
       console.error("Sign up error:", error);
