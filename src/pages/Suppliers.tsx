@@ -7,8 +7,20 @@ import InviteSupplierModal from "@/components/suppliers/InviteSupplierModal";
 import { Company } from "@/types";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { Plus, UserPlus } from "lucide-react";
+import { Plus, UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { resetAllData } from "@/utils/resetData";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  AlertDialogCancel,
+  AlertDialogAction
+} from "@/components/ui/alert-dialog";
 
 const Suppliers = () => {
   const { companies, addCompany, user } = useApp();
@@ -68,11 +80,37 @@ const Suppliers = () => {
         subtitle={user?.companyId ? `Viewing as ${user.name} (${companies.find(c => c.id === user.companyId)?.name || 'Unknown Company'})` : 'Admin View'}
         actions={
           <>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <PageHeaderAction
+                  label="Reset All Data"
+                  variant="destructive"
+                  icon={<Trash2 className="h-4 w-4" />}
+                />
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset all application data?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will delete all suppliers, product sheets, questions, tags, and other data. 
+                    This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={resetAllData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Reset Data
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
             <PageHeaderAction
               label="Export Data"
               variant="outline"
               onClick={() => toast.info("Exporting supplier data...")}
             />
+            
             {canInviteSuppliers && (
               <PageHeaderAction
                 label="Invite New Supplier"
