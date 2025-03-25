@@ -108,7 +108,7 @@ const Customers = () => {
             <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold">No customers found</h3>
             <p className="text-muted-foreground mb-4">
-              {user && user.role === "customer" 
+              {user && companies.find(c => c.id === user.companyId)?.role === "customer" 
                 ? "As a customer, you don't have access to view other customers."
                 : "Add your first customer to get started."}
             </p>

@@ -108,7 +108,7 @@ const Suppliers = () => {
             <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold">No suppliers found</h3>
             <p className="text-muted-foreground mb-4">
-              {user && user.role === "supplier" 
+              {user && companies.find(c => c.id === user.companyId)?.role === "supplier" 
                 ? "As a supplier, you don't have access to view other suppliers."
                 : "Invite your first supplier to get started."}
             </p>
