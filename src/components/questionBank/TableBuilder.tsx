@@ -1,7 +1,6 @@
-
 import React, { useState } from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash, ChevronDown, ChevronUp, FileDown, Upload, X } from "lucide-react";
 import { FormLabel, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 
 export type ColumnType = "text" | "number" | "boolean" | "select";
 
@@ -33,6 +33,8 @@ interface TableBuilderProps {
 export function TableBuilder({ form }: TableBuilderProps) {
   const [newColumnOption, setNewColumnOption] = useState("");
   const [expandedNested, setExpandedNested] = useState<number | null>(null);
+  const [bulkOptionsText, setBulkOptionsText] = useState("");
+  const [showBulkImport, setShowBulkImport] = useState<{column: number, nested?: number} | null>(null);
 
   const tableColumns = form.watch("tableColumns") || [];
 
@@ -77,7 +79,6 @@ export function TableBuilder({ form }: TableBuilderProps) {
     
     form.setValue("tableColumns", currentColumns);
     
-    // Toggle expanded state
     setExpandedNested(expandedNested === index ? null : index);
   };
 
@@ -128,6 +129,43 @@ export function TableBuilder({ form }: TableBuilderProps) {
     };
     
     form.setValue("tableColumns", currentColumns);
+  };
+
+  const handleBulkImportOptions = (columnIndex: number, isNested = false, nestedIndex?: number) => {
+    if (bulkOptionsText.trim()) {
+      const newOptions = bulkOptionsText
+        .split(/[\n,]/)
+        .map(option => option.trim())
+        .filter(option => option !== "");
+      
+      const currentColumns = [...(form.getValues("tableColumns") || [])];
+      
+      if (isNested && nestedIndex !== undefined) {
+        const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
+        const currentOptions = currentNestedColumns[nestedIndex].options || [];
+        
+        currentNestedColumns[nestedIndex] = {
+          ...currentNestedColumns[nestedIndex],
+          options: [...currentOptions, ...newOptions],
+        };
+        
+        currentColumns[columnIndex] = {
+          ...currentColumns[columnIndex],
+          nestedColumns: currentNestedColumns,
+        };
+      } else {
+        const currentOptions = currentColumns[columnIndex].options || [];
+        
+        currentColumns[columnIndex] = {
+          ...currentColumns[columnIndex],
+          options: [...currentOptions, ...newOptions],
+        };
+      }
+      
+      form.setValue("tableColumns", currentColumns);
+      setBulkOptionsText("");
+      setShowBulkImport(null);
+    }
   };
 
   const addColumnOption = (columnIndex: number, isNested = false, nestedIndex?: number) => {
@@ -259,23 +297,74 @@ export function TableBuilder({ form }: TableBuilderProps) {
 
                 {column.type === "select" && (
                   <div className="space-y-2">
-                    <FormLabel className="text-sm">Options</FormLabel>
-                    <div className="flex space-x-2">
-                      <Input
-                        placeholder="Add an option"
-                        value={newColumnOption}
-                        onChange={(e) => setNewColumnOption(e.target.value)}
-                        className="flex-1"
-                      />
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="text-sm">Options</FormLabel>
                       <Button
                         type="button"
-                        onClick={() => addColumnOption(index)}
                         variant="outline"
                         size="sm"
+                        onClick={() => {
+                          if (showBulkImport && showBulkImport.column === index && !showBulkImport.nested) {
+                            setShowBulkImport(null);
+                          } else {
+                            setShowBulkImport({ column: index });
+                            setBulkOptionsText("");
+                          }
+                        }}
                       >
-                        Add
+                        {(showBulkImport && showBulkImport.column === index && !showBulkImport.nested) ? (
+                          <>
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel
+                          </>
+                        ) : (
+                          <>
+                            <FileDown className="h-4 w-4 mr-2" />
+                            Bulk Import
+                          </>
+                        )}
                       </Button>
                     </div>
+                    
+                    {(showBulkImport && showBulkImport.column === index && !showBulkImport.nested) ? (
+                      <div className="space-y-3 p-3 border rounded-md bg-muted/10">
+                        <FormDescription className="text-xs">
+                          Paste options from Excel or text (one per line or comma-separated)
+                        </FormDescription>
+                        <Textarea
+                          placeholder="Option 1&#10;Option 2&#10;Option 3"
+                          value={bulkOptionsText}
+                          onChange={(e) => setBulkOptionsText(e.target.value)}
+                          className="min-h-[80px] text-sm"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleBulkImportOptions(index)}
+                          disabled={!bulkOptionsText.trim()}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Import Options
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex space-x-2">
+                        <Input
+                          placeholder="Add an option"
+                          value={newColumnOption}
+                          onChange={(e) => setNewColumnOption(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => addColumnOption(index)}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    )}
                     
                     <div className="mt-2 space-y-1">
                       {(column.options || []).map((option, optionIndex) => (
@@ -380,44 +469,105 @@ export function TableBuilder({ form }: TableBuilderProps) {
                               
                               {nestedColumn.type === "select" && (
                                 <div className="space-y-2">
-                                  <FormLabel className="text-xs">Options</FormLabel>
-                                  <div className="flex space-x-2">
-                                    <Input
-                                      placeholder="Add an option"
-                                      value={newColumnOption}
-                                      onChange={(e) => setNewColumnOption(e.target.value)}
-                                      className="flex-1 h-8 text-sm"
-                                    />
+                                  <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs">Options</FormLabel>
                                     <Button
                                       type="button"
-                                      onClick={() => addColumnOption(index, true, nestedIndex)}
                                       variant="outline"
                                       size="sm"
-                                      className="h-8"
+                                      className="h-7"
+                                      onClick={() => {
+                                        if (showBulkImport && 
+                                            showBulkImport.column === index && 
+                                            showBulkImport.nested === nestedIndex) {
+                                          setShowBulkImport(null);
+                                        } else {
+                                          setShowBulkImport({ column: index, nested: nestedIndex });
+                                          setBulkOptionsText("");
+                                        }
+                                      }}
                                     >
-                                      Add
+                                      {(showBulkImport && 
+                                        showBulkImport.column === index && 
+                                        showBulkImport.nested === nestedIndex) ? (
+                                        <>
+                                          <X className="h-3 w-3 mr-1" />
+                                          Cancel
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FileDown className="h-3 w-3 mr-1" />
+                                          Bulk Import
+                                        </>
+                                      )}
                                     </Button>
                                   </div>
                                   
-                                  <div className="mt-2 space-y-1">
-                                    {(nestedColumn.options || []).map((option, optionIndex) => (
-                                      <div
-                                        key={optionIndex}
-                                        className="flex items-center justify-between p-1.5 border rounded-md bg-background"
+                                  {(showBulkImport && 
+                                    showBulkImport.column === index && 
+                                    showBulkImport.nested === nestedIndex) ? (
+                                    <div className="space-y-2 p-2 border rounded-md bg-muted/10">
+                                      <FormDescription className="text-xs">
+                                        Paste options (one per line or comma-separated)
+                                      </FormDescription>
+                                      <Textarea
+                                        placeholder="Option 1&#10;Option 2&#10;Option 3"
+                                        value={bulkOptionsText}
+                                        onChange={(e) => setBulkOptionsText(e.target.value)}
+                                        className="min-h-[60px] text-xs"
+                                      />
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => handleBulkImportOptions(index, true, nestedIndex)}
+                                        disabled={!bulkOptionsText.trim()}
                                       >
-                                        <span className="text-xs">{option}</span>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-6 w-6"
-                                          onClick={() => removeColumnOption(index, optionIndex, true, nestedIndex)}
+                                        <Upload className="h-3 w-3 mr-1" />
+                                        Import
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex space-x-2">
+                                      <Input
+                                        placeholder="Add an option"
+                                        value={newColumnOption}
+                                        onChange={(e) => setNewColumnOption(e.target.value)}
+                                        className="flex-1 h-8 text-sm"
+                                      />
+                                      <Button
+                                        type="button"
+                                        onClick={() => addColumnOption(index, true, nestedIndex)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8"
+                                      >
+                                        Add
+                                      </Button>
+                                    </div>
+                                  )}
+                                  
+                                  {(column.nestedColumns || []).length > 0 ? (
+                                    <div className="mt-2 space-y-1">
+                                      {(nestedColumn.options || []).map((option, optionIndex) => (
+                                        <div
+                                          key={optionIndex}
+                                          className="flex items-center justify-between p-1.5 border rounded-md bg-background"
                                         >
-                                          <Trash className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
+                                          <span className="text-xs">{option}</span>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6"
+                                            onClick={() => removeColumnOption(index, optionIndex, true, nestedIndex)}
+                                          >
+                                            <Trash className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
                                 </div>
                               )}
                             </CardContent>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useApp } from "@/context/AppContext";
 import { Question, Tag, Section, Subsection, ColumnType, TableColumn } from "@/types";
-import { X, Plus, Trash, Tag as TagIcon } from "lucide-react";
+import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,8 @@ export function QuestionBuilderDialog({
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3B82F6"); // Default blue color
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+  const [bulkOptionsText, setBulkOptionsText] = useState("");
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const editingQuestion = questionId
     ? questions.find((q) => q.id === questionId)
@@ -161,6 +163,20 @@ export function QuestionBuilderDialog({
       "options",
       currentOptions.filter((_, i) => i !== index)
     );
+  };
+
+  const handleBulkImportOptions = () => {
+    if (bulkOptionsText.trim()) {
+      const newOptions = bulkOptionsText
+        .split(/[\n,]/)
+        .map(option => option.trim())
+        .filter(option => option !== "");
+      
+      const currentOptions = form.getValues("options") || [];
+      form.setValue("options", [...currentOptions, ...newOptions]);
+      setBulkOptionsText("");
+      setShowBulkImport(false);
+    }
   };
 
   const handleSectionChange = (sectionId: string) => {
@@ -395,23 +411,66 @@ export function QuestionBuilderDialog({
 
             {(questionType === "select" || questionType === "multi-select") && (
               <div className="space-y-4">
-                <FormLabel>Options</FormLabel>
-                <div className="flex space-x-2">
-                  <Input
-                    placeholder="Add an option"
-                    value={newOption}
-                    onChange={(e) => setNewOption(e.target.value)}
-                    className="flex-1"
-                  />
+                <div className="flex items-center justify-between">
+                  <FormLabel>Options</FormLabel>
                   <Button
                     type="button"
-                    onClick={addOption}
                     variant="outline"
+                    size="sm"
+                    onClick={() => setShowBulkImport(!showBulkImport)}
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
+                    {showBulkImport ? (
+                      <>
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel Bulk Import
+                      </>
+                    ) : (
+                      <>
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Bulk Import Options
+                      </>
+                    )}
                   </Button>
                 </div>
+
+                {showBulkImport ? (
+                  <div className="space-y-4 p-4 border rounded-md bg-muted/10">
+                    <FormDescription>
+                      Paste options from Excel or text (one per line or comma-separated)
+                    </FormDescription>
+                    <Textarea
+                      placeholder="Option 1&#10;Option 2&#10;Option 3"
+                      value={bulkOptionsText}
+                      onChange={(e) => setBulkOptionsText(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleBulkImportOptions}
+                      disabled={!bulkOptionsText.trim()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import Options
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex space-x-2">
+                    <Input
+                      placeholder="Add an option"
+                      value={newOption}
+                      onChange={(e) => setNewOption(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={addOption}
+                      variant="outline"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   {form.watch("options")?.map((option, index) => (
