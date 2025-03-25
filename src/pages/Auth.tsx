@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
 const Auth = () => {
@@ -20,6 +20,7 @@ const Auth = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Redirect if user is already authenticated
@@ -30,8 +31,10 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     if (!email || !password) {
-      toast.error("Please fill in all fields");
+      setError("Please fill in all fields");
       return;
     }
     
@@ -39,9 +42,9 @@ const Auth = () => {
       setIsSubmitting(true);
       await signIn(email, password);
       // No need to navigate here, the auth state change will trigger the useEffect
-    } catch (error) {
-      // Error is handled in the signIn function
+    } catch (error: any) {
       console.error("Login error:", error);
+      setError(error.message || "Failed to sign in");
     } finally {
       setIsSubmitting(false);
     }
@@ -49,18 +52,21 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     if (!email || !password || !firstName || !lastName) {
-      toast.error("Please fill in all fields");
+      setError("Please fill in all fields");
       return;
     }
     
     try {
       setIsSubmitting(true);
       await signUp(email, password, firstName, lastName);
+      toast.success("Account created successfully! You can now log in.");
       setActiveTab("login");
-    } catch (error) {
-      // Error is handled in the signUp function
+    } catch (error: any) {
       console.error("Sign up error:", error);
+      setError(error.message || "Failed to create account");
     } finally {
       setIsSubmitting(false);
     }
@@ -88,6 +94,12 @@ const Auth = () => {
             Sign in to your account or create a new one
           </p>
         </div>
+
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid grid-cols-2">

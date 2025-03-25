@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
+        console.log("Auth state changed:", event, newSession?.user?.email);
         setSession(newSession);
         setUser(newSession?.user ?? null);
         setLoading(false);
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      console.log("Initial session check:", currentSession?.user?.email || "No session");
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       setLoading(false);
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       toast.success("Signed in successfully");
     } catch (error: any) {
+      console.error("Sign in error:", error);
       toast.error(error.message || "Error signing in");
       throw error;
     } finally {
@@ -59,7 +62,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({
+      // Create the user in Supabase Auth
+      const { error, data } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -69,9 +73,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         },
       });
+      
       if (error) throw error;
-      toast.success("Sign up successful! Please check your email for confirmation.");
+      
+      // If successful but no user was returned (email confirmation required)
+      if (!data.user) {
+        toast.success("Sign up successful! Please check your email for confirmation.");
+        return;
+      }
+      
+      // If user was created immediately, try to manually create a profile
+      // This is a fallback in case the trigger fails
+      try {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          email: data.user.email,
+          first_name: firstName,
+          last_name: lastName,
+        });
+        toast.success("Account created successfully!");
+      } catch (profileError) {
+        console.error("Error creating profile:", profileError);
+        // Don't throw here - the auth part worked, we'll just log the profile error
+      }
     } catch (error: any) {
+      console.error("Sign up error:", error);
       toast.error(error.message || "Error signing up");
       throw error;
     } finally {
@@ -86,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       toast.success("Signed out successfully");
     } catch (error: any) {
+      console.error("Sign out error:", error);
       toast.error(error.message || "Error signing out");
     } finally {
       setLoading(false);
