@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
@@ -23,22 +23,46 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProductSheet } from "@/types";
 
 const SupplierProducts = () => {
   const { productSheets, companies, user } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
+  const [filteredSheets, setFilteredSheets] = useState<ProductSheet[]>([]);
   const navigate = useNavigate();
   
-  // Filter product sheets based on user role
-  const filteredSheets = productSheets.filter((sheet) => {
-    // Always show all sheets for demo purposes
-    const matchesSearch = 
-      (sheet.name && sheet.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (sheet.supplierId && getCompanyName(sheet.supplierId).toLowerCase().includes(searchTerm.toLowerCase()));
+  useEffect(() => {
+    if (!user) return;
     
-    // In a real app with auth, we'd filter by user's company role
-    return matchesSearch;
-  });
+    // Find the current user's company
+    const userCompany = companies.find(company => company.id === user.companyId);
+    
+    // Filter sheets based on user role and company
+    let sheetsToShow: ProductSheet[] = [];
+    
+    if (!userCompany) {
+      // Admin view - show all sheets
+      sheetsToShow = [...productSheets];
+    } else if (userCompany.role === "supplier") {
+      // Suppliers should only see their own sheets
+      sheetsToShow = productSheets.filter(sheet => sheet.supplierId === userCompany.id);
+    } else if (userCompany.role === "customer" || userCompany.role === "both") {
+      // Customers should see sheets they requested or from their suppliers
+      // In a real app, this would be based on relationships
+      sheetsToShow = productSheets.filter(sheet => sheet.requestedById === userCompany.id);
+    }
+    
+    // Apply search filter
+    const searchFiltered = sheetsToShow.filter((sheet) => {
+      const matchesSearch = 
+        (sheet.name && sheet.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (sheet.supplierId && getCompanyName(sheet.supplierId).toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      return matchesSearch;
+    });
+    
+    setFilteredSheets(searchFiltered);
+  }, [productSheets, user, companies, searchTerm]);
 
   // Find company name by ID
   const getCompanyName = (supplierId: string) => {
@@ -64,14 +88,31 @@ const SupplierProducts = () => {
   };
 
   // Determine if the current user can edit or review based on user role
-  // In a real app, this would check user permissions more thoroughly
-  const canEdit = true; // For demo purposes
-  const canReview = true; // For demo purposes
+  const canEdit = user && (
+    user.role === "admin" ||
+    (user.companyId && companies.find(c => c.id === user.companyId)?.role === "supplier")
+  );
+  
+  const canReview = user && (
+    user.role === "admin" ||
+    (user.companyId && companies.find(c => c.id === user.companyId)?.role === "customer")
+  );
+
+  // Get company type text for subtitle
+  const getCompanyTypeText = () => {
+    if (!user || !user.companyId) return "Admin View";
+    
+    const company = companies.find(c => c.id === user.companyId);
+    if (!company) return "Unknown Company";
+    
+    return `${company.name} (${company.role.charAt(0).toUpperCase() + company.role.slice(1)})`;
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Product Sheets (All Suppliers)"
+        title="Product Sheets"
+        subtitle={`Viewing as ${user?.name || 'Unknown User'} - ${getCompanyTypeText()}`}
         actions={
           <>
             <PageHeaderAction
@@ -79,10 +120,12 @@ const SupplierProducts = () => {
               variant="outline"
               onClick={() => toast.info("Exporting data...")}
             />
-            <PageHeaderAction
-              label="Request New Sheet"
-              onClick={() => toast.info("Creating new sheet request...")}
-            />
+            {canReview && (
+              <PageHeaderAction
+                label="Request New Sheet"
+                onClick={() => toast.info("Creating new sheet request...")}
+              />
+            )}
           </>
         }
       />
