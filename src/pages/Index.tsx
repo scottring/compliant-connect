@@ -2,9 +2,11 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-gradient-to-b from-gray-50 to-gray-100">
@@ -25,21 +27,31 @@ const Index = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <Button 
-            size="lg"
-            onClick={() => navigate("/dashboard")}
-            className="px-8"
-          >
-            Go to Dashboard
-          </Button>
+          {user ? (
+            <Button 
+              size="lg"
+              onClick={() => navigate("/dashboard")}
+              className="px-8"
+            >
+              Go to Dashboard
+            </Button>
+          ) : (
+            <Button 
+              size="lg"
+              onClick={() => navigate("/auth")}
+              className="px-8"
+            >
+              Sign In / Register
+            </Button>
+          )}
           
           <Button 
             size="lg"
             variant="outline"
-            onClick={() => navigate("/suppliers")}
+            onClick={() => navigate(user ? "/suppliers" : "/auth")}
             className="px-8"
           >
-            Manage Suppliers
+            {user ? "Manage Suppliers" : "Learn More"}
           </Button>
         </div>
       </div>
@@ -49,17 +61,17 @@ const Index = () => {
           {
             title: "Question Bank",
             description: "Create and organize compliance questions with tags for different regulations.",
-            action: () => navigate("/question-bank")
+            action: () => navigate(user ? "/question-bank" : "/auth")
           },
           {
             title: "Product Sheets",
             description: "Collect and review compliance information for specific products.",
-            action: () => navigate("/product-sheets")
+            action: () => navigate(user ? "/product-sheets" : "/auth")
           },
           {
             title: "Tags & Categories",
             description: "Organize compliance requirements by regulatory frameworks.",
-            action: () => navigate("/tags")
+            action: () => navigate(user ? "/tags" : "/auth")
           }
         ].map((feature, i) => (
           <div key={i} className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow">
