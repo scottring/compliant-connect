@@ -489,20 +489,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_public_tables: {
+        Args: Record<string, never>
+        Returns: { table_name: string }[]
+      }
+      truncate_table: {
+        Args: { table_name: string }
+        Returns: void
+      }
+      disable_rls_temporarily: {
+        Args: Record<string, never>
+        Returns: void
+      }
+      enable_rls: {
+        Args: Record<string, never>
+        Returns: void
+      }
       user_belongs_to_company: {
-        Args: {
-          company_id: string
-        }
+        Args: { company_id: string }
         Returns: boolean
       }
       user_has_permission: {
-        Args: {
-          permission_name: string
-        }
+        Args: { permission: string }
         Returns: boolean
       }
       user_is_admin: {
-        Args: Record<PropertyKey, never>
+        Args: Record<string, never>
         Returns: boolean
       }
     }

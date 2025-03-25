@@ -1,30 +1,45 @@
-
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
+import React from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { Skeleton } from './ui/skeleton';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  requiredPermission?: string;
+  redirectTo?: string;
+  children?: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  requiredPermission,
+  redirectTo = '/auth',
+  children,
+}) => {
+  const { user, loading, hasPermission } = useAuth();
   const location = useLocation();
 
+  // Show loading state while checking authentication
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex flex-col gap-4 p-8">
+        <Skeleton className="h-6 w-full max-w-md" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
       </div>
     );
   }
 
+  // If not authenticated, redirect to login
   if (!user) {
-    // Redirect to login page but save the location they were trying to access
-    return <Navigate to="/auth" state={{ from: location }} replace />;
+    return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-  return <>{children}</>;
+  // If permission is required but user doesn't have it, redirect
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Render children if provided, otherwise render Outlet
+  return children ? <>{children}</> : <Outlet />;
 };
 
 export default ProtectedRoute;

@@ -1,9 +1,8 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { AuthProvider } from "./context/AuthContext";
 import Sidebar from "./components/Sidebar";
@@ -23,9 +22,30 @@ import OurProducts from "./pages/OurProducts";
 import Auth from "./pages/Auth";
 import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Unauthorized from "./pages/Unauthorized";
+import CompanySelector from "./components/CompanySelector";
+import AuthDebug from "./components/AuthDebug";
+import Onboarding from "./pages/Onboarding";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
 import UserSwitcher from "./components/UserSwitcher";
+import { useAuth } from "./context/AuthContext";
+
+// Component to check if user has a company association
+const CheckCompany = () => {
+  const { userCompanies, loading } = useAuth();
+  
+  // Wait until loading is done
+  if (loading) return <Outlet />;
+  
+  // If user has no companies, redirect to onboarding
+  if (userCompanies.length === 0) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  
+  // Otherwise, render the children
+  return <Outlet />;
+};
 
 const queryClient = new QueryClient();
 
@@ -42,109 +62,53 @@ const App = () => {
             <Sonner />
             <BrowserRouter>
               <Routes>
+                {/* Public Routes */}
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/email-confirmation" element={<EmailConfirmation />} />
+                <Route path="/unauthorized" element={<Unauthorized />} />
                 
                 {/* Protected Routes */}
-                <Route path="/dashboard" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <Dashboard />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
+                <Route element={<ProtectedRoute />}>
+                  {/* Onboarding route - for users with no company */}
+                  <Route path="/onboarding" element={<Onboarding />} />
+                  
+                  {/* Main Routes - require company association */}
+                  <Route element={<CheckCompany />}>
+                    <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
+                      {/* Dashboard - accessible to all authenticated users */}
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      
+                      {/* Supplier Routes */}
+                      <Route path="/suppliers" element={<Suppliers />} />
+                      <Route path="/suppliers/:id" element={<SupplierDetail />} />
+                      <Route path="/supplier-products" element={<SupplierProducts />} />
+                      <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
+                      
+                      {/* Customer Routes */}
+                      <Route path="/customers" element={<Customers />} />
+                      <Route path="/customer-review/:id" element={<CustomerReview />} />
+                      
+                      {/* Product Routes */}
+                      <Route path="/product-sheets" element={<ProductSheets />} />
+                      <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
+                      <Route path="/our-products" element={<OurProducts />} />
+                      
+                      {/* Admin Routes - require admin permissions */}
+                      <Route element={<ProtectedRoute requiredPermission="admin:access" />}>
+                        <Route path="/question-bank" element={<QuestionBank />} />
+                        <Route path="/tags" element={<Tags />} />
+                      </Route>
+                    </Route>
+                  </Route>
+                </Route>
                 
-                <Route path="/suppliers" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <Suppliers />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/suppliers/:id" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <SupplierDetail />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/customers" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <Customers />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/product-sheets" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <ProductSheets />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/product-sheets/:id" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <SupplierResponseForm />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/supplier-products" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <SupplierProducts />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/supplier-response-form/:id" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <SupplierResponseForm />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/customer-review/:id" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <CustomerReview />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/our-products" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <OurProducts />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/question-bank" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <QuestionBank />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/tags" element={
-                  <ProtectedRoute>
-                    <MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-                      <Tags />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
+                {/* Fallback Route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              
+              {/* Auth Debug Panel - visible in development mode */}
+              <AuthDebug />
             </BrowserRouter>
           </TooltipProvider>
         </AppProvider>
@@ -155,11 +119,9 @@ const App = () => {
 
 // Extract the main layout into a separate component
 const MainLayout = ({ 
-  children, 
   sidebarOpen, 
   setSidebarOpen 
 }: { 
-  children: React.ReactNode; 
   sidebarOpen: boolean; 
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
@@ -167,10 +129,11 @@ const MainLayout = ({
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
       <main className="flex-1 overflow-auto p-8">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <CompanySelector />
           <UserSwitcher />
         </div>
-        {children}
+        <Outlet />
       </main>
     </div>
   );

@@ -113,3 +113,71 @@ type PIRStatus =
 3. Data isolation
 4. API security
 5. Input validation 
+
+## Directory Structure Patterns
+
+### Core Directory Organization
+```
+src/
+├── components/          # UI Components
+│   ├── common/         # Shared components
+│   ├── features/       # Feature-specific components
+│   ├── layout/         # Layout components
+│   └── ui/             # Base UI components
+├── pages/              # Page components
+│   ├── auth/
+│   ├── products/
+│   ├── suppliers/
+│   └── shared/
+├── context/            # React contexts
+├── hooks/              # Custom React hooks
+├── types/              # TypeScript types
+│   ├── api/
+│   ├── models/
+│   └── shared/
+├── utils/              # Utility functions
+│   ├── api/
+│   ├── formatting/
+│   ├── validation/
+│   └── helpers/
+├── config/            # Configuration
+└── integrations/      # External service integrations
+```
+
+### Component Organization Guidelines
+1. **Feature-First Organization**: Group related components by feature
+2. **Shared Components**: Place reusable components in `common/`
+3. **Layout Components**: Keep layout-specific components separate
+4. **UI Components**: Base UI components in dedicated directory
+
+### Page Organization Guidelines
+1. **Feature-Based Structure**: Group related pages by feature
+2. **Shared Pages**: Common pages (404, unauthorized) in shared directory
+3. **Index Files**: Use index.ts for clean exports
+4. **Lazy Loading**: Implement code splitting at the page level
+
+### Type Organization Guidelines
+1. **Co-location**: Keep types close to their implementation when specific
+2. **Shared Types**: Common types in dedicated directories
+3. **API Types**: Separate directory for API-related types
+4. **Model Types**: Business model types in dedicated directory
+
+### Utils Organization Guidelines
+1. **Functional Groups**: Organize by functionality
+2. **API Utils**: Keep API-related utilities separate
+3. **Formatting**: Dedicated space for formatting functions
+4. **Validation**: Separate validation logic
+
+### Best Practices
+1. **Consistent Naming**: Use consistent naming conventions across directories
+2. **Index Files**: Utilize index files for clean exports
+3. **Co-location**: Keep related files close together
+4. **Separation of Concerns**: Clear boundaries between different types of code
+5. **Documentation**: Maintain README files in key directories
+6. **Testing**: Co-locate tests with implementation files
+
+### Migration Guidelines
+1. **Incremental Updates**: Move files gradually to new structure
+2. **Documentation**: Update imports systematically
+3. **Testing**: Ensure all tests pass after moves
+4. **Review**: Peer review structural changes 

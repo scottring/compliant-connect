@@ -37,6 +37,16 @@
 - Status updates
 - Filtered views
 
+### 6. Development Environment
+- Environment-specific configuration
+- Development, staging, and production Supabase instances
+- MCP server integration for all environments
+- Database exploration and verification capabilities
+- Documentation for environment-specific tools
+- Advanced MCP server for write operations
+- Database schema management tools
+- User and authentication management via MCP
+
 ## In Progress
 
 ### 1. Authentication
@@ -100,4 +110,6 @@
 3. Implement backend integration
 4. Add missing validations
 5. Optimize user experience
-6. Add comprehensive testing 
+6. Add comprehensive testing
+7. Use MCP to verify database schema and data consistency across environments
+8. Use advanced MCP server to set up initial database schema 
