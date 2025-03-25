@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserCircle, UserPlus } from "lucide-react";
+import { UserCircle, UserPlus, Users } from "lucide-react";
 import { mockUsers } from "@/data/mockData";
 import { toast } from "sonner";
 import { User } from "@/types";
@@ -67,6 +67,14 @@ const UserSwitcher = () => {
     toast.success(`Created ${role} company and user`);
   };
 
+  // Get all available users (created + mock)
+  const availableUsers = [...mockUsers];
+
+  // Add current user if not in mockUsers
+  if (user && !availableUsers.some(u => u.id === user.id)) {
+    availableUsers.push(user);
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -75,40 +83,66 @@ const UserSwitcher = () => {
           {user?.name || "Not signed in"}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Test Users</DropdownMenuLabel>
-        <DropdownMenuSeparator />
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>User Selection</DropdownMenuLabel>
         
-        {mockUsers.length > 0 ? (
-          mockUsers.map((mockUser) => (
-            <DropdownMenuItem
-              key={mockUser.id}
-              onClick={() => setUser(mockUser)}
-              className={mockUser.id === user?.id ? "bg-accent" : ""}
-            >
-              {mockUser.name} ({mockUser.companyId && mockUser.companyId.slice(0, 4)})
-            </DropdownMenuItem>
-          ))
-        ) : (
+        {availableUsers.length > 0 && (
           <>
-            <DropdownMenuItem onClick={handleCreateTestUser} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Create Admin User
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("customer")} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Create Customer Company + User
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("supplier")} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Create Supplier Company + User
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("both")} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Create Hybrid Company + User
-            </DropdownMenuItem>
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground pt-2">
+              Available Users
+            </DropdownMenuLabel>
+            {availableUsers.map((availableUser) => {
+              const userCompany = companies.find(c => c.id === availableUser.companyId);
+              return (
+                <DropdownMenuItem
+                  key={availableUser.id}
+                  onClick={() => {
+                    setUser(availableUser);
+                    toast.success(`Switched to ${availableUser.name}`);
+                  }}
+                  className={`${availableUser.id === user?.id ? "bg-accent" : ""} justify-between`}
+                >
+                  <div className="flex flex-col">
+                    <span>{availableUser.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {availableUser.role === "admin" 
+                        ? "Admin" 
+                        : userCompany 
+                          ? `${userCompany.name} (${userCompany.role})` 
+                          : "No company"}
+                    </span>
+                  </div>
+                  {availableUser.id === user?.id && (
+                    <span className="text-xs bg-primary/20 text-primary rounded px-1.5 py-0.5">
+                      Current
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              );
+            })}
+            <DropdownMenuSeparator />
           </>
         )}
+        
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+          Create Test Users
+        </DropdownMenuLabel>
+        <DropdownMenuItem onClick={handleCreateTestUser} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          Create Admin User
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("customer")} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          Create Customer User
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("supplier")} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          Create Supplier User
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("both")} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          Create Hybrid User
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
