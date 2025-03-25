@@ -46,7 +46,7 @@ const UserSwitcher = () => {
       contactName: "Test Contact",
       contactEmail: "contact@example.com",
       role: role,
-      phone: "555-123-4567",
+      contactPhone: "555-123-4567",
       address: "123 Test St",
       city: "Testville",
       state: "TS",
