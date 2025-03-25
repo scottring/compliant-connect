@@ -36,7 +36,6 @@ const OurProducts = () => {
   });
 
   const customerRequests = productSheets.filter((sheet) => {
-    console.log("Checking sheet:", sheet.name, "supplierId:", sheet.supplierId, "requestedById:", sheet.requestedById, "user companyId:", user?.companyId);
     return user?.companyId && sheet.supplierId === user.companyId && sheet.requestedById && sheet.requestedById !== user.companyId;
   });
 
@@ -44,7 +43,6 @@ const OurProducts = () => {
   console.log("User company ID:", user?.companyId);
   console.log("Our Products count:", ourProducts.length);
   console.log("Customer Requests count:", customerRequests.length);
-  console.log("Customer Requests:", customerRequests);
 
   const getFilteredProducts = () => {
     const productsToFilter = 

@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserCircle, UserPlus, Users } from "lucide-react";
-import { mockUsers } from "@/data/mockData";
 import { toast } from "sonner";
 import { User } from "@/types";
 
@@ -25,7 +24,6 @@ const UserSwitcher = () => {
       name: "Admin User",
       email: "admin@example.com",
       role: "admin",
-      companyId: null,
     };
     setUser(newUser);
     toast.success("Created and switched to admin user");
@@ -38,8 +36,6 @@ const UserSwitcher = () => {
       : role === "supplier" 
         ? "Test Supplier Ltd." 
         : "Test Hybrid Corp.";
-    
-    const newCompanyId = `c${Date.now()}`;
     
     addCompany({
       name: companyName,
@@ -54,26 +50,28 @@ const UserSwitcher = () => {
       country: "Testland",
     });
     
-    // Create and switch to a new user for this company
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
-      email: `${role}@example.com`,
-      role: "user",
-      companyId: newCompanyId,
-    };
-    
-    setUser(newUser);
-    toast.success(`Created ${role} company and user`);
+    // Wait a moment for the company to be added before creating the user
+    setTimeout(() => {
+      // Find the newly created company
+      const newCompany = companies.find(c => c.name === companyName);
+      
+      if (newCompany) {
+        // Create and switch to a new user for this company
+        const newUser: User = {
+          id: `user-${Date.now()}`,
+          name: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
+          email: `${role}@example.com`,
+          role: "user",
+          companyId: newCompany.id,
+        };
+        
+        setUser(newUser);
+        toast.success(`Created ${role} company and user`);
+      } else {
+        toast.error("Failed to create company. Please try again.");
+      }
+    }, 100);
   };
-
-  // Get all available users (created + mock)
-  const availableUsers = [...mockUsers];
-
-  // Add current user if not in mockUsers
-  if (user && !availableUsers.some(u => u.id === user.id)) {
-    availableUsers.push(user);
-  }
 
   return (
     <DropdownMenu>
@@ -86,45 +84,7 @@ const UserSwitcher = () => {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>User Selection</DropdownMenuLabel>
         
-        {availableUsers.length > 0 && (
-          <>
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground pt-2">
-              Available Users
-            </DropdownMenuLabel>
-            {availableUsers.map((availableUser) => {
-              const userCompany = companies.find(c => c.id === availableUser.companyId);
-              return (
-                <DropdownMenuItem
-                  key={availableUser.id}
-                  onClick={() => {
-                    setUser(availableUser);
-                    toast.success(`Switched to ${availableUser.name}`);
-                  }}
-                  className={`${availableUser.id === user?.id ? "bg-accent" : ""} justify-between`}
-                >
-                  <div className="flex flex-col">
-                    <span>{availableUser.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {availableUser.role === "admin" 
-                        ? "Admin" 
-                        : userCompany 
-                          ? `${userCompany.name} (${userCompany.role})` 
-                          : "No company"}
-                    </span>
-                  </div>
-                  {availableUser.id === user?.id && (
-                    <span className="text-xs bg-primary/20 text-primary rounded px-1.5 py-0.5">
-                      Current
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              );
-            })}
-            <DropdownMenuSeparator />
-          </>
-        )}
-        
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground pt-2">
           Create Test Users
         </DropdownMenuLabel>
         <DropdownMenuItem onClick={handleCreateTestUser} className="gap-2">
