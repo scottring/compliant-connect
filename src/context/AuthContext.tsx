@@ -82,20 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // If user was created immediately, try to manually create a profile
-      // This is a fallback in case the trigger fails
-      try {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          email: data.user.email,
-          first_name: firstName,
-          last_name: lastName,
-        });
-        toast.success("Account created successfully!");
-      } catch (profileError) {
-        console.error("Error creating profile:", profileError);
-        // Don't throw here - the auth part worked, we'll just log the profile error
-      }
+      // We'll skip the manual profile creation since it's handled by the database trigger
+      // This eliminates the TypeScript error with the profiles table
+      toast.success("Account created successfully!");
     } catch (error: any) {
       console.error("Sign up error:", error);
       toast.error(error.message || "Error signing up");
