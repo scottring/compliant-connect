@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   name: string;
@@ -16,6 +15,11 @@ export interface Company {
   contactEmail: string;
   contactPhone: string;
   progress: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
 }
 
 export interface Tag {
