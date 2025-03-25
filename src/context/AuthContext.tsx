@@ -52,7 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       toast.success("Signed in successfully");
     } catch (error: any) {
       console.error("Sign in error:", error);
-      toast.error(error.message || "Error signing in");
+      
+      // Special handling for unconfirmed email
+      if (error.message === "Email not confirmed") {
+        toast.error("Please confirm your email before signing in. Check your inbox for the confirmation link.");
+      } else {
+        toast.error(error.message || "Error signing in");
+      }
       throw error;
     } finally {
       setLoading(false);
@@ -71,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             first_name: firstName,
             last_name: lastName,
           },
+          emailRedirectTo: window.location.origin + "/email-confirmation",
         },
       });
       

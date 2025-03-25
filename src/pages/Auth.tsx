@@ -21,6 +21,7 @@ const Auth = () => {
   const [lastName, setLastName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
 
   useEffect(() => {
     // Redirect if user is already authenticated
@@ -44,7 +45,13 @@ const Auth = () => {
       // No need to navigate here, the auth state change will trigger the useEffect
     } catch (error: any) {
       console.error("Login error:", error);
-      setError(error.message || "Failed to sign in");
+      
+      // Special handling for unconfirmed email
+      if (error.message === "Email not confirmed") {
+        setError("Please confirm your email before signing in. Check your inbox for the confirmation link.");
+      } else {
+        setError(error.message || "Failed to sign in");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -62,11 +69,38 @@ const Auth = () => {
     try {
       setIsSubmitting(true);
       await signUp(email, password, firstName, lastName);
-      toast.success("Account created successfully! You can now log in.");
-      setActiveTab("login");
+      setEmailConfirmationSent(true);
+      toast.success("Account created successfully! Please check your email for confirmation.");
     } catch (error: any) {
       console.error("Sign up error:", error);
       setError(error.message || "Failed to create account");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + "/email-confirmation",
+        },
+      });
+      
+      if (error) throw error;
+      
+      toast.success("Confirmation email resent. Please check your inbox.");
+    } catch (error: any) {
+      console.error("Error resending confirmation email:", error);
+      setError(error.message || "Failed to resend confirmation email");
     } finally {
       setIsSubmitting(false);
     }
@@ -98,6 +132,22 @@ const Auth = () => {
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {emailConfirmationSent && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              A confirmation email has been sent. Please check your inbox and click the link to verify your email.
+              <Button 
+                variant="link" 
+                onClick={handleResendConfirmation}
+                disabled={isSubmitting}
+                className="p-0 ml-2 h-auto"
+              >
+                Resend confirmation email
+              </Button>
+            </AlertDescription>
           </Alert>
         )}
 

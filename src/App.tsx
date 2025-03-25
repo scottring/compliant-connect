@@ -21,6 +21,7 @@ import CustomerReview from "./pages/CustomerReview";
 import Customers from "./pages/Customers";
 import OurProducts from "./pages/OurProducts";
 import Auth from "./pages/Auth";
+import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
@@ -43,6 +44,7 @@ const App = () => {
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/email-confirmation" element={<EmailConfirmation />} />
                 
                 {/* Protected Routes */}
                 <Route path="/dashboard" element={
