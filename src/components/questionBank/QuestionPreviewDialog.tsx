@@ -16,24 +16,13 @@ export function QuestionPreviewDialog({
   onOpenChange,
   question
 }: QuestionPreviewDialogProps) {
-  // Create a mock answer object to pass to QuestionItem
-  const mockAnswer = question ? {
-    id: "preview-answer-id",
-    questionId: question.id,
-    value: undefined,
-    comments: [],
-    flags: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  } : null;
-
   // Dummy handlers that don't actually update anything
   const handleAnswerUpdate = (value: any) => {
-    console.log("Answer updated:", value);
+    console.log("Preview mode - no updates are saved");
   };
 
   const handleAddComment = (text: string) => {
-    console.log("Comment added:", text);
+    console.log("Preview mode - no comments are saved");
   };
 
   return (
@@ -50,7 +39,6 @@ export function QuestionPreviewDialog({
             <CardContent className="pt-6">
               <QuestionItem
                 question={question}
-                answer={mockAnswer}
                 productSheetId="preview"
                 onAnswerUpdate={handleAnswerUpdate}
                 onAddComment={handleAddComment}
