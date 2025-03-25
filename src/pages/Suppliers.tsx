@@ -7,6 +7,8 @@ import InviteSupplierModal from "@/components/suppliers/InviteSupplierModal";
 import { Company } from "@/types";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { Plus, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Suppliers = () => {
   const { companies, addCompany, user } = useApp();
@@ -55,6 +57,10 @@ const Suppliers = () => {
     (user.companyId && companies.find(c => c.id === user.companyId)?.role !== "supplier")
   );
 
+  const handleInviteSupplier = () => {
+    setInviteModalOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -70,7 +76,7 @@ const Suppliers = () => {
             {canInviteSuppliers && (
               <PageHeaderAction
                 label="Invite New Supplier"
-                onClick={() => setInviteModalOpen(true)}
+                onClick={handleInviteSupplier}
                 icon={
                   <svg
                     className="h-4 w-4"
@@ -91,10 +97,30 @@ const Suppliers = () => {
         }
       />
 
-      <SupplierTable
-        suppliers={filteredSuppliers}
-        onAction={handleSupplierAction}
-      />
+      {filteredSuppliers.length > 0 ? (
+        <SupplierTable
+          suppliers={filteredSuppliers}
+          onAction={handleSupplierAction}
+        />
+      ) : (
+        <div className="border rounded-md p-8 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold">No suppliers found</h3>
+            <p className="text-muted-foreground mb-4">
+              {user && user.role === "supplier" 
+                ? "As a supplier, you don't have access to view other suppliers."
+                : "Invite your first supplier to get started."}
+            </p>
+            {canInviteSuppliers && (
+              <Button onClick={handleInviteSupplier} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Invite Supplier
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       <InviteSupplierModal
         open={inviteModalOpen}

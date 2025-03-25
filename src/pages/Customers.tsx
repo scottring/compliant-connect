@@ -6,6 +6,8 @@ import CustomerTable from "@/components/customers/CustomerTable";
 import { Company } from "@/types";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { Plus, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Customers = () => {
   const { companies, addCompany, user } = useApp();
@@ -54,6 +56,11 @@ const Customers = () => {
     (user.companyId && companies.find(c => c.id === user.companyId)?.role !== "customer")
   );
 
+  const handleAddCustomer = () => {
+    toast.info("Open the Add/Invite Customer modal");
+    setInviteModalOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -69,7 +76,7 @@ const Customers = () => {
             {canAddCustomers && (
               <PageHeaderAction
                 label="Add New Customer"
-                onClick={() => setInviteModalOpen(true)}
+                onClick={handleAddCustomer}
                 icon={
                   <svg
                     className="h-4 w-4"
@@ -90,10 +97,30 @@ const Customers = () => {
         }
       />
 
-      <CustomerTable
-        customers={filteredCustomers}
-        onAction={handleCustomerAction}
-      />
+      {filteredCustomers.length > 0 ? (
+        <CustomerTable
+          customers={filteredCustomers}
+          onAction={handleCustomerAction}
+        />
+      ) : (
+        <div className="border rounded-md p-8 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold">No customers found</h3>
+            <p className="text-muted-foreground mb-4">
+              {user && user.role === "customer" 
+                ? "As a customer, you don't have access to view other customers."
+                : "Add your first customer to get started."}
+            </p>
+            {canAddCustomers && (
+              <Button onClick={handleAddCustomer} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Customer
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal to be implemented later */}
       {/* <InviteCustomerModal

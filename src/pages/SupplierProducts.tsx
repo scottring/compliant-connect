@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
-import { Search, Filter, Eye, ClipboardCheck } from "lucide-react";
+import { Search, Filter, Eye, ClipboardCheck, FileSpreadsheet, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,6 +98,11 @@ const SupplierProducts = () => {
     (user.companyId && companies.find(c => c.id === user.companyId)?.role === "customer")
   );
 
+  const canRequestSheet = user && (
+    user.role === "admin" ||
+    (user.companyId && companies.find(c => c.id === user.companyId)?.role !== "supplier")
+  );
+
   // Get company type text for subtitle
   const getCompanyTypeText = () => {
     if (!user || !user.companyId) return "Admin View";
@@ -106,6 +111,11 @@ const SupplierProducts = () => {
     if (!company) return "Unknown Company";
     
     return `${company.name} (${company.role.charAt(0).toUpperCase() + company.role.slice(1)})`;
+  };
+
+  const handleRequestSheet = () => {
+    toast.info("Navigate to supplier selection to request a new product sheet");
+    navigate("/suppliers");
   };
 
   return (
@@ -120,10 +130,10 @@ const SupplierProducts = () => {
               variant="outline"
               onClick={() => toast.info("Exporting data...")}
             />
-            {canReview && (
+            {canRequestSheet && (
               <PageHeaderAction
                 label="Request New Sheet"
-                onClick={() => toast.info("Creating new sheet request...")}
+                onClick={handleRequestSheet}
               />
             )}
           </>
@@ -155,68 +165,85 @@ const SupplierProducts = () => {
         </Button>
       </div>
 
-      <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product Name</TableHead>
-              <TableHead>Supplier Name</TableHead>
-              <TableHead>Task Progress</TableHead>
-              <TableHead>Last Updated</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredSheets.map((sheet) => (
-              <TableRow key={sheet.id}>
-                <TableCell className="font-medium">{sheet.name}</TableCell>
-                <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
-                <TableCell>
-                  <Progress value={getCompletionRate(sheet)} className="h-2 w-[100px]" />
-                </TableCell>
-                <TableCell>
-                  {sheet.updatedAt 
-                    ? format(new Date(sheet.updatedAt), "yyyy-MM-dd") 
-                    : "N/A"}
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button 
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                        size="sm"
-                      >
-                        Actions
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      {canEdit && (
-                        <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View & Edit
-                        </DropdownMenuItem>
-                      )}
-                      {canReview && (
-                        <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
-                          <ClipboardCheck className="h-4 w-4 mr-2" />
-                          Review
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filteredSheets.length === 0 && (
+      {filteredSheets.length > 0 ? (
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
-                  No product sheets found
-                </TableCell>
+                <TableHead>Product Name</TableHead>
+                <TableHead>Supplier Name</TableHead>
+                <TableHead>Task Progress</TableHead>
+                <TableHead>Last Updated</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredSheets.map((sheet) => (
+                <TableRow key={sheet.id}>
+                  <TableCell className="font-medium">{sheet.name}</TableCell>
+                  <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
+                  <TableCell>
+                    <Progress value={getCompletionRate(sheet)} className="h-2 w-[100px]" />
+                  </TableCell>
+                  <TableCell>
+                    {sheet.updatedAt 
+                      ? format(new Date(sheet.updatedAt), "yyyy-MM-dd") 
+                      : "N/A"}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          size="sm"
+                        >
+                          Actions
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {canEdit && (
+                          <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View & Edit
+                          </DropdownMenuItem>
+                        )}
+                        {canReview && (
+                          <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
+                            <ClipboardCheck className="h-4 w-4 mr-2" />
+                            Review
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <div className="border rounded-md p-8 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <FileSpreadsheet className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold">No product sheets found</h3>
+            <p className="text-muted-foreground mb-4">
+              {!user ? (
+                "Please sign in to view product sheets."
+              ) : user.companyId && companies.find(c => c.id === user.companyId)?.role === "supplier" ? (
+                "You currently don't have any product sheets assigned to you."
+              ) : (
+                "Request product information sheets from your suppliers to get started."
+              )}
+            </p>
+            {canRequestSheet && (
+              <Button onClick={handleRequestSheet} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Request New Sheet
+              </Button>
             )}
-          </TableBody>
-        </Table>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
