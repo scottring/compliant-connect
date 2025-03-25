@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,6 @@ import { supabase } from "@/integrations/supabase/client";
 const Auth = () => {
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [activeTab, setActiveTab] = useState<string>("login");
   
   // Form state
@@ -24,16 +23,12 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
 
-  // Get the intended destination from location state, or default to dashboard
-  const from = location.state?.from?.pathname || "/dashboard";
-
   useEffect(() => {
     // Redirect if user is already authenticated
     if (user) {
-      console.log("User is authenticated, redirecting to:", from);
-      navigate(from, { replace: true });
+      navigate("/dashboard");
     }
-  }, [user, navigate, from]);
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,14 +42,7 @@ const Auth = () => {
     try {
       setIsSubmitting(true);
       await signIn(email, password);
-      
-      // Add a small delay to ensure the user data is fully loaded
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Explicitly navigate after successful login
-      // This ensures redirection even if the useEffect doesn't trigger
-      console.log("Login successful, redirecting to:", from);
-      navigate(from, { replace: true });
+      // No need to navigate here, the auth state change will trigger the useEffect
     } catch (error: any) {
       console.error("Login error:", error);
       

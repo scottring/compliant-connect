@@ -4,23 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --mode development",
-    "build": "vite build --mode production",
+    "dev": "vite",
+    "build": "vite build",
     "build:dev": "vite build --mode development",
-    "build:staging": "vite build --mode staging",
-    "preview": "vite preview",
-    "preview:staging": "vite preview --mode staging",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "type-check": "tsc --noEmit",
-    "db:clear": "tsx scripts/clearDatabase.ts",
-    "db:clear:dev": "NODE_ENV=development tsx scripts/clearDatabase.ts --mode=development",
-    "db:clear:staging": "NODE_ENV=staging tsx scripts/clearDatabase.ts --mode=staging",
-    "migration:apply": "tsx scripts/applyMigration.ts",
-    "migration:print": "tsx scripts/applyMigration.ts",
-    "mcp:dev": "./scripts/mcp/start-dev.sh",
-    "mcp:staging": "./scripts/mcp/start-staging.sh",
-    "mcp:prod": "./scripts/mcp/start-prod.sh"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -57,7 +45,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
-    "dotenv": "^16.4.7",
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.462.0",
@@ -90,7 +77,6 @@
     "lovable-tagger": "^1.1.7",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
-    "tsx": "^4.19.3",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1"
