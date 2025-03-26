@@ -1,113 +1,196 @@
 # Active Context
 
+## Current Focus: MVP Implementation by 3 PM Today
+
+### Timeline and Implementation Plan
+
+#### 1. Authentication and Company Context (1.5 hours)
+- Fix company state management in AuthContext
+- Complete role-based access control
+- Improve company context switching
+- Enhance error handling and loading states
+- Verify company relationship validation
+
+#### 2. Question Bank and PIR System (2.5 hours)
+- Question bank setup and management
+- PIR creation and workflow
+- Response submission flow
+- Review process implementation
+- Basic validation and error handling
+
+#### 3. Basic User Flows (2 hours)
+- PIR dashboard views by role
+- Question bank management UI
+- Response review interface
+- Core navigation
+
+#### 4. Testing and Bug Fixes (1 hour)
+- End-to-end PIR flow testing
+- Critical path validation
+- Bug fixes for core functionality
+- Basic performance optimization
+
+### Implementation Schedule
+
+1. **Immediate Focus (Next 30 mins)**
+   - Fix AuthContext company state
+   - Complete role-based access
+   - Verify company relationships
+
+2. **Morning Block (2.5 hours)**
+   - Question bank implementation
+   - PIR creation workflow
+   - Response submission system
+   - Review process setup
+
+3. **Early Afternoon (2.5 hours)**
+   - Role-based PIR dashboards
+   - Authentication refinement
+   - Company context integration
+   - State management implementation
+
+4. **Final Implementation (1.5 hours)**
+   - End-to-end testing
+   - Bug fixes and optimization
+   - Documentation updates
+   - Basic polish
+
+### Critical Success Factors
+1. Solid authentication foundation
+2. Working company relationships
+3. Complete PIR workflow functionality
+4. Efficient question bank management
+5. Clear response submission process
+
+### Current Status
+- Authentication foundation needs fixes
+- Company state management incomplete
+- Role-based access control pending
+- Database schema needs PIR extension
+
+### Next Immediate Steps
+1. Fix company state in AuthContext
+2. Implement role-based access
+3. Verify company relationships
+4. Define question bank schema
+5. Implement PIR creation flow
+
+### Risk Mitigation
+1. Fix authentication issues first
+2. Validate company relationships
+3. Test access controls thoroughly
+4. Focus on core PIR functionality
+5. Implement basic validation
+
+### Notes
+- Deadline: 3 PM today
+- Total estimated time: 7 hours
+- Authentication fixes are blocking
+- PIR system depends on auth/company foundation
+
 ## Current Focus
-Refining authentication system and company relationship management:
-1. Fixing company state management in auth context
-2. Improving invitation-based registration flow
-3. Enhancing error handling and user feedback
-4. Implementing proper role-based access
+Completing authentication and company foundation:
+1. Fix company state management
+2. Complete role-based access
+3. Improve error handling
+4. Verify company relationships
+5. Test access controls
 
 ## Recent Changes
-1. Enhanced understanding of authentication flows:
-   - Standard Sign Up Flow
-   - Standard Sign In Flow
-   - Invitation-Based Sign Up Flow
-   - Company role management (supplier/customer/both)
+1. Reprioritized implementation focus:
+   - Authentication fixes as blocker
+   - Company relationship validation
+   - Role-based access completion
+   - Error handling improvements
 
-2. Identified and addressed issues:
-   - Company state management in AuthContext
-   - User-company relationship handling
-   - Registration and login flow improvements
-   - Enhanced error handling and logging
+2. Identified critical components:
+   - AuthContext company state
+   - Role-based access control
+   - Company relationship validation
+   - Error handling system
 
-3. Documentation improvements:
-   - Added historical context tracking
-   - Updated authentication flow documentation
-   - Enhanced company relationship documentation
-   - Improved error handling documentation
+3. Documentation updates:
+   - Updated implementation timeline
+   - Revised priority structure
+   - Enhanced auth requirements
+   - Updated risk mitigation
 
 ## Active Decisions
-1. Authentication Flow Requirements
-   - Clear separation between sign-up flows
-   - Robust error handling and user feedback
-   - Proper company role management
-   - Efficient invitation handling
+1. Authentication Requirements
+   - Reliable company state management
+   - Complete role-based access
+   - Proper error handling
+   - Verified company relationships
 
-2. Company Relationship Management
-   - Support for multiple roles (supplier/customer/both)
-   - Clear company context switching
-   - Proper data access control
-   - Efficient relationship tracking
+2. Access Control Requirements
+   - Role-based access implementation
+   - Company-specific views
+   - Proper data isolation
+   - Workflow permissions
 
 3. State Management
-   - Centralized auth context
-   - Proper company state handling
-   - Clear loading states
-   - Comprehensive error states
+   - Company state reliability
+   - Loading state improvements
+   - Error state handling
+   - Context switching fixes
 
 ## Next Steps
-1. Authentication Refinement
-   - [ ] Fix company state management in AuthContext
-   - [ ] Improve invitation flow error handling
-   - [ ] Add comprehensive logging
-   - [ ] Implement proper role-based redirects
+1. Authentication Completion
+   - [ ] Fix company state management
+   - [ ] Implement role-based access
+   - [ ] Improve error handling
+   - [ ] Test company relationships
 
-2. Company Management
-   - [ ] Enhance company relationship tracking
-   - [ ] Improve company context switching
-   - [ ] Add company role validation
-   - [ ] Implement proper data access controls
+2. Question Bank Implementation
+   - [ ] Create question bank schema
+   - [ ] Build management interface
+   - [ ] Implement CRUD operations
+   - [ ] Add validation logic
 
 3. Testing & Validation
-   - [ ] Add authentication flow tests
-   - [ ] Validate company relationship handling
-   - [ ] Test error scenarios
-   - [ ] Verify data access controls
+   - [ ] Test authentication flows
+   - [ ] Validate company relationships
+   - [ ] Verify access controls
+   - [ ] Test PIR creation flow
 
 ## Known Issues
-1. Authentication
-   - Company state sometimes null after login
-   - Inconsistent error handling in invitation flow
-   - Missing role-based redirect logic
-   - Incomplete loading state handling
+1. Core Functionality
+   - Company state management unreliable
+   - Role-based access incomplete
+   - Error handling needs improvement
+   - Company relationships need validation
 
-2. Company Management
-   - Incomplete company relationship filtering
-   - Context switching needs improvement
-   - Missing role validation in some flows
-   - Inconsistent data access controls
+2. Access Control
+   - Role-based access needed
+   - Company data isolation required
+   - Workflow permissions undefined
+   - Status tracking missing
 
 3. User Experience
-   - Unclear error messages
-   - Inconsistent loading indicators
-   - Missing progress feedback
-   - Incomplete form validation
+   - Loading states inconsistent
+   - Error messages unclear
+   - Context switching issues
+   - Status indicators needed
 
 ## Implementation Status
 
 ### Authentication System
-- ✅ Basic Supabase Auth integration
-- ✅ User profile management
-- ✅ Company association
-- 🔄 Role-based access control
-- 🔄 Invitation flow refinement
-- ❌ Comprehensive error handling
-- ❌ Complete test coverage
+- 🔄 Company state management
+- 🔄 Role-based access
+- 🔄 Error handling
+- 🔄 Company relationships
 
-### Company Management
-- ✅ Basic company creation
-- ✅ Company role definition
-- 🔄 Relationship tracking
-- 🔄 Context switching
-- ❌ Complete access control
-- ❌ Relationship validation
+### Question Bank System
+- ❌ Question bank schema
+- ❌ Management interface
+- ❌ CRUD operations
+- ❌ Validation logic
 
-### State Management
-- ✅ Auth context setup
-- 🔄 Company state handling
-- 🔄 Loading state management
-- ❌ Complete error handling
-- ❌ State persistence
+### PIR System
+- ❌ PIR creation flow
+- ❌ Response submission
+- ❌ Review process
+- ❌ Status tracking
 
 Legend:
 ✅ Complete

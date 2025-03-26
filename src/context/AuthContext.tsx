@@ -3,8 +3,37 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
-import { Company, UserCompany, ExtendedUser, UserRole } from '@/types/auth';
+import { Company, UserCompany, ExtendedUser } from '@/types/auth';
 import { Database } from "@/integrations/supabase/types";
+
+// Add structured error types
+interface AuthError {
+  code: 'AUTH_ERROR' | 'PROFILE_ERROR' | 'COMPANY_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN_ERROR';
+  message: string;
+  originalError?: any;
+  recoverable: boolean;
+}
+
+interface LoadingState {
+  auth: boolean;
+  profile: boolean;
+  company: boolean;
+  global: boolean;
+}
+
+type CompanyRole = 'supplier' | 'customer' | 'both';
+type UserRole = 'owner' | 'admin' | 'member';
+
+const COMPANY_STORAGE_KEY = 'lastActiveCompany';
+const LOADING_TIMEOUT = 10000; // 10 seconds
+
+interface CompanyContextState {
+  companies: UserCompany[];
+  currentCompany: Company | null;
+  role: UserRole;
+  permissions: string[];
+  lastUpdated: number;
+}
 
 interface AuthContextType {
   user: ExtendedUser | null;
@@ -12,32 +41,172 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   signOut: () => Promise<void>;
-  loading: boolean;
+  loading: LoadingState;
   userCompanies: UserCompany[];
   currentCompany: Company | null;
   setCurrentCompany: (company: Company | null) => void;
   userRole: UserRole | null;
   refreshUserData: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
+  error: AuthError | null;
+  clearError: () => void;
+  switchCompanyContext: (companyId: string) => Promise<void>;
+  getAvailableRoutes: () => string[];
+  companyContext: CompanyContextState;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Define permission constants
+const PERMISSIONS = {
+  SUPPLIER: {
+    OWNER: [
+      'supplier.manage',
+      'supplier.view',
+      'supplier.edit',
+      'pir.respond',
+      'pir.view',
+      'company.manage',
+      'users.manage'
+    ],
+    ADMIN: [
+      'supplier.view',
+      'supplier.edit',
+      'pir.respond',
+      'pir.view',
+      'users.view'
+    ],
+    MEMBER: [
+      'supplier.view',
+      'pir.respond',
+      'pir.view'
+    ]
+  },
+  CUSTOMER: {
+    OWNER: [
+      'customer.manage',
+      'customer.view',
+      'customer.edit',
+      'pir.create',
+      'pir.manage',
+      'pir.view',
+      'company.manage',
+      'users.manage',
+      'questions.manage'
+    ],
+    ADMIN: [
+      'customer.view',
+      'customer.edit',
+      'pir.create',
+      'pir.manage',
+      'pir.view',
+      'questions.edit',
+      'users.view'
+    ],
+    MEMBER: [
+      'customer.view',
+      'pir.view',
+      'questions.view'
+    ]
+  }
+};
+
+// Define route permissions mapping
+const ROUTE_PERMISSIONS: Record<string, string[]> = {
+  '/dashboard': ['pir.view'],
+  '/questions': ['questions.view'],
+  '/questions/manage': ['questions.manage'],
+  '/pir/create': ['pir.create'],
+  '/pir/manage': ['pir.manage'],
+  '/pir/respond': ['pir.respond'],
+  '/company/settings': ['company.manage'],
+  '/users': ['users.view'],
+  '/users/manage': ['users.manage']
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<ExtendedUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<LoadingState>({
+    auth: false,
+    profile: false,
+    company: false,
+    global: false
+  });
   const [userCompanies, setUserCompanies] = useState<UserCompany[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loadingStartTime, setLoadingStartTime] = useState(Date.now());
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthError | null>(null);
+  const [companyContext, setCompanyContext] = useState<CompanyContextState>({
+    companies: [],
+    currentCompany: null,
+    role: 'member',
+    permissions: [],
+    lastUpdated: Date.now()
+  });
+
+  const clearError = () => setError(null);
+
+  const handleAuthError = (error: any, context: string): AuthError => {
+    console.error(`Error in ${context}:`, error);
+    
+    let authError: AuthError = {
+      code: 'UNKNOWN_ERROR',
+      message: 'An unexpected error occurred',
+      originalError: error,
+      recoverable: false
+    };
+
+    if (error.message?.includes('auth')) {
+      authError = {
+        code: 'AUTH_ERROR',
+        message: error.message,
+        originalError: error,
+        recoverable: true
+      };
+    } else if (error.message?.includes('profile')) {
+      authError = {
+        code: 'PROFILE_ERROR',
+        message: error.message,
+        originalError: error,
+        recoverable: true
+      };
+    } else if (error.message?.includes('company')) {
+      authError = {
+        code: 'COMPANY_ERROR',
+        message: error.message,
+        originalError: error,
+        recoverable: true
+      };
+    } else if (error.message?.includes('network')) {
+      authError = {
+        code: 'NETWORK_ERROR',
+        message: 'Network connection error',
+        originalError: error,
+        recoverable: true
+      };
+    }
+
+    setError(authError);
+    return authError;
+  };
+
+  // Update loading state helper
+  const updateLoading = (key: keyof LoadingState, value: boolean) => {
+    setLoading(prev => {
+      const newState = { ...prev, [key]: value };
+      // Update global loading if any state is loading
+      newState.global = Object.values(newState).some(v => v && v !== newState.global);
+      return newState;
+    });
+  };
 
   // Format company data to match UserCompany type
   const formatCompanyData = (companyData: any, userRole: UserRole): UserCompany => ({
     id: companyData.id,
     name: companyData.name,
-    role: companyData.role as "supplier" | "customer" | "both",
+    role: companyData.role as CompanyRole,
     contactName: companyData.contact_name || '',
     contactEmail: companyData.contact_email || '',
     contactPhone: companyData.contact_phone || '',
@@ -54,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Update companies data transformation
   const transformCompaniesData = (companyUsers: any[]): UserCompany[] => {
-    return companyUsers.map(cu => formatCompanyData(cu.company, cu.role as UserRole));
+    return companyUsers.map(cu => formatCompanyData(cu, cu.role as UserRole));
   };
 
   // Fetch user data with proper typing
@@ -80,7 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select(`
           role,
           id,
-          companies!inner (
+          companies (
             id,
             name,
             role,
@@ -89,7 +258,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             contact_phone,
             progress,
             created_at,
-            updated_at
+            updated_at,
+            address,
+            city,
+            state,
+            country,
+            zip_code
           )
         `)
         .eq("user_id", userId);
@@ -100,8 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Transform company data
       const companies = (companyUsers || []).map((cu: any) => {
-        const company = cu.companies;
-        return formatCompanyData(company, cu.role as UserRole);
+        return formatCompanyData(cu.companies, cu.role as UserRole);
       });
       
       console.log("Transformed companies:", companies);
@@ -131,7 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUserData = async () => {
     if (!user?.id) return;
     
-    setLoading(true);
+    setLoading(prev => ({ ...prev, company: true }));
     try {
       const userData = await fetchUserData(user.id);
       if (userData) {
@@ -156,7 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error refreshing user data:", error);
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, company: false }));
     }
   };
 
@@ -165,22 +338,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const loadUser = async () => {
       try {
         console.log("AuthProvider: Initial user loading started");
-        setLoading(true);
+        setLoading(prev => ({ ...prev, auth: true }));
 
         // Get current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
           console.error("AuthProvider: Session retrieval error", sessionError);
-          setError(sessionError.message);
-          setLoading(false);
+          setError(handleAuthError(sessionError, 'initial load'));
+          setLoading(prev => ({ ...prev, auth: false }));
           return;
         }
 
         if (!session) {
           console.log("AuthProvider: No session found, user is not authenticated");
           setUser(null);
-          setLoading(false);
+          setLoading(prev => ({ ...prev, auth: false }));
           return;
         }
 
@@ -191,8 +364,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (userError || !authUser) {
           console.error("AuthProvider: User retrieval error", userError);
-          setError(userError?.message || "Failed to retrieve user data");
-          setLoading(false);
+          setError(handleAuthError(userError, 'initial load'));
+          setUser(null);
+          setLoading(prev => ({ ...prev, auth: false }));
           return;
         }
 
@@ -201,7 +375,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (response.error) {
           console.error("AuthProvider: User data fetch error", response.error);
-          setError(response.error);
+          setError(handleAuthError(new Error(response.error), 'initial load'));
           
           // Try again with a fresh session if it looks like an auth issue
           if (response.error.includes("auth") || response.error.includes("permission")) {
@@ -212,7 +386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (retryResponse.error) {
               console.error("AuthProvider: Retry user data fetch failed", retryResponse.error);
               setUser(null);
-              setLoading(false);
+              setLoading(prev => ({ ...prev, auth: false }));
               return;
             }
             
@@ -224,13 +398,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               currentCompany: retryResponse.currentCompany,
               role: "user", // Default role
             });
-            setLoading(false);
+            setLoading(prev => ({ ...prev, auth: false }));
             return;
           }
           
           // Non-auth related error
           setUser(null);
-          setLoading(false);
+          setLoading(prev => ({ ...prev, auth: false }));
           return;
         }
 
@@ -244,10 +418,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       } catch (error: any) {
         console.error("AuthProvider: Unexpected error during initial load", error);
-        setError(error.message);
+        setError(handleAuthError(error, 'initial load'));
         setUser(null);
       } finally {
-        setLoading(false);
+        setLoading(prev => ({ ...prev, auth: false }));
         console.log("AuthProvider: Initial user loading completed");
       }
     };
@@ -287,9 +461,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("AuthProvider: Loading state check...");
       
       // Check if loading state has been true for too long (10+ seconds)
-      if (loading && Date.now() - loadingStartTime > 10000) {
+      if (loading.global && Date.now() - loadingStartTime > 10000) {
         console.log("AuthProvider: Force resetting loading state");
-        setLoading(false);
+        setLoading(prev => ({ ...prev, global: false }));
       }
     }, 5000);
 
@@ -317,28 +491,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Update loadingStartTime whenever loading changes to true
   useEffect(() => {
-    if (loading) {
+    if (loading.auth || loading.profile || loading.company) {
       setLoadingStartTime(Date.now());
     }
-  }, [loading]);
+  }, [loading.auth, loading.profile, loading.company]);
 
   // Force-reset loading state if needed (fallback safety mechanism)
   useEffect(() => {
     // Check every second if loading has been going on too long
     const forceResetInterval = setInterval(() => {
-      if (loading) {
+      if (loading.global) {
         console.log("AuthProvider: Loading state check...");
         const now = Date.now();
         // After 5 seconds of loading, force reset
         if (now - loadingStartTime > 5000) {
           console.log("AuthProvider: Force resetting loading state");
-          setLoading(false);
+          setLoading(prev => ({ ...prev, global: false }));
         }
       }
     }, 1000);
 
     return () => clearInterval(forceResetInterval);
-  }, [loading, loadingStartTime]);
+  }, [loading.global, loadingStartTime]);
 
   // Create initial company for user
   const createInitialCompany = async (userId: string, email: string) => {
@@ -408,9 +582,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true);
+      updateLoading('auth', true);
+      clearError();
       
-      // Sign in with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -418,62 +592,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) throw error;
       
-      // Set session
       setSession(data.session);
       
-      // Debug the user info
-      console.log("Auth sign-in successful:", {
-        user: data.user?.email,
-        id: data.user?.id,
-        hasMetadata: !!data.user?.user_metadata,
-        metadata: data.user?.user_metadata
-      });
-      
       if (data.user) {
-        // Fetch user data including companies
+        updateLoading('profile', true);
         const userData = await fetchUserData(data.user.id);
         
         if (userData.error) {
-          console.error("Error fetching user data after sign in:", userData.error);
-          toast.error("Error loading user data");
-        } else {
-          // Set user with complete data
-          setUser({
-            ...data.user,
-            profile: userData.profile,
-            companies: userData.companies,
-            currentCompany: userData.currentCompany,
-            role: "user"
-          });
-          
-          // Update company states
-          setUserCompanies(userData.companies);
-          if (userData.currentCompany) {
-            setCurrentCompany(userData.currentCompany);
-          }
+          throw new Error(`profile:${userData.error}`);
+        }
+        
+        setUser({
+          ...data.user,
+          profile: userData.profile,
+          companies: userData.companies,
+          currentCompany: userData.currentCompany,
+          role: "user"
+        });
+        
+        setUserCompanies(userData.companies);
+        if (userData.currentCompany) {
+          setCurrentCompany(userData.currentCompany);
         }
       }
       
       toast.success("Signed in successfully");
     } catch (error: any) {
-      console.error("Sign in error:", error);
-      
-      // Special handling for unconfirmed email
-      if (error.message === "Email not confirmed") {
-        toast.error("Please confirm your email before signing in. Check your inbox for the confirmation link.");
-      } else {
-        toast.error(error.message || "Error signing in");
-      }
+      const authError = handleAuthError(error, 'signIn');
+      toast.error(authError.message);
       throw error;
     } finally {
-      setLoading(false);
+      updateLoading('auth', false);
+      updateLoading('profile', false);
     }
   };
 
   // Modify signUp to create initial company
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     try {
-      setLoading(true);
+      setLoading(prev => ({ ...prev, auth: true }));
       console.log("Starting signup process for:", email);
 
       // Sign up with Supabase Auth
@@ -561,13 +718,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       toast.error(error.message);
       throw error;
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, auth: false }));
     }
   };
 
   const signOut = async () => {
     try {
-      setLoading(true);
+      setLoading(prev => ({ ...prev, global: true }));
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       toast.success("Signed out successfully");
@@ -575,88 +732,201 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Sign out error:", error);
       toast.error(error.message || "Error signing out");
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, global: false }));
     }
   };
 
-  // Check if user has a specific permission
-  const hasPermission = (permission: string): boolean => {
-    if (!user || !currentCompany) return false;
-
-    // Find the user's role in the current company
-    const companyData = userCompanies.find(c => c.id === currentCompany.id);
-    if (!companyData) return false;
-
-    // For now, using a simple role-based approach
-    switch (permission) {
-      case 'create:company':
-        return true; // Any logged-in user can create a company
-      case 'admin:access':
-        return companyData.userRole === 'admin' || companyData.userRole === 'owner';
-      case 'owner:access':
-        return companyData.userRole === 'owner';
-      default:
-        return true; // Default to allowing basic access
-    }
-  };
-
-  // Load user's companies
-  const loadUserCompanies = async (userId: string) => {
+  // Update the switchCompanyContext function
+  const switchCompanyContext = async (companyId: string) => {
     try {
-      const { data: companyUsers, error: companyUsersError } = await supabase
-        .from('company_users')
-        .select(`
-          companies (
-            id,
-            name,
-            role,
-            contact_name,
-            contact_email,
-            contact_phone,
-            progress,
-            address,
-            city,
-            state,
-            country,
-            zip_code,
-            created_at,
-            updated_at
-          ),
-          role as userRole
-        `)
-        .eq('user_id', userId);
+      updateLoading('company', true);
+      
+      // Validate company ID
+      if (!companyId) {
+        throw new Error('Invalid company ID');
+      }
 
-      if (companyUsersError) throw companyUsersError;
+      // Find target company in user's companies
+      const targetCompany = userCompanies.find(c => c.id === companyId);
+      if (!targetCompany) {
+        throw new Error('Company not found in user\'s companies');
+      }
 
-      // Transform the data to match UserCompany type
-      const transformedCompanies: UserCompany[] = companyUsers.map((cu: any) => ({
-        ...cu.companies,
-        userRole: cu.userRole
-      }));
+      // Fetch fresh company data
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
 
-      setUser(prev => prev ? { ...prev, companies: transformedCompanies } : null);
-    } catch (error) {
-      console.error('Error loading user companies:', error);
-      toast.error('Failed to load user companies');
+      if (companyError) throw companyError;
+
+      // Validate company data
+      if (!companyData) {
+        throw new Error('Company data not found');
+      }
+
+      // Format company data
+      const formattedCompany = formatCompanyData(companyData, targetCompany.userRole);
+
+      // Calculate permissions
+      const permissions = calculatePermissions(targetCompany.userRole, formattedCompany.role);
+
+      // Update company context
+      const newContext: CompanyContextState = {
+        companies: userCompanies,
+        currentCompany: formattedCompany,
+        role: targetCompany.userRole,
+        permissions,
+        lastUpdated: Date.now()
+      };
+
+      setCompanyContext(newContext);
+      setCurrentCompany(formattedCompany);
+
+      // Persist company selection
+      localStorage.setItem(COMPANY_STORAGE_KEY, companyId);
+
+      // Notify success
+      toast.success('Company context updated successfully');
+
+    } catch (error: any) {
+      const authError = handleAuthError(error, 'switchCompanyContext');
+      toast.error(authError.message);
+    } finally {
+      updateLoading('company', false);
     }
+  };
+
+  // Initialize company context from storage
+  useEffect(() => {
+    const initializeCompanyContext = async () => {
+      try {
+        // Only initialize if we have user companies
+        if (userCompanies.length === 0) return;
+
+        // Get last active company from storage
+        const lastActiveCompanyId = localStorage.getItem(COMPANY_STORAGE_KEY);
+        
+        // If we have a stored company ID and it's in user's companies, use it
+        if (lastActiveCompanyId && userCompanies.some(c => c.id === lastActiveCompanyId)) {
+          await switchCompanyContext(lastActiveCompanyId);
+        } else {
+          // Otherwise use first company
+          await switchCompanyContext(userCompanies[0].id);
+        }
+      } catch (error: any) {
+        handleAuthError(error, 'initializeCompanyContext');
+      }
+    };
+
+    initializeCompanyContext();
+  }, [userCompanies]);
+
+  // Handle loading timeouts
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const currentTime = Date.now();
+      const loadingDuration = currentTime - loadingStartTime;
+
+      if (loadingDuration >= LOADING_TIMEOUT) {
+        // Reset loading states if they've been active too long
+        setLoading({
+          auth: false,
+          profile: false,
+          company: false,
+          global: false
+        });
+        
+        handleAuthError(
+          new Error('Loading timeout - operation took too long'),
+          'loadingTimeout'
+        );
+      }
+    }, LOADING_TIMEOUT);
+
+    return () => clearTimeout(timeoutId);
+  }, [loading, loadingStartTime]);
+
+  const calculatePermissions = (role: UserRole, companyType: CompanyRole): string[] => {
+    let permissions: string[] = [];
+
+    // Handle 'both' company type
+    if (companyType === 'both') {
+      // For 'both', combine permissions from supplier and customer roles
+      permissions = [
+        ...PERMISSIONS.SUPPLIER[role.toUpperCase() as keyof typeof PERMISSIONS.SUPPLIER],
+        ...PERMISSIONS.CUSTOMER[role.toUpperCase() as keyof typeof PERMISSIONS.CUSTOMER]
+      ];
+    } else {
+      // Get permissions for specific company type
+      const typePermissions = companyType === 'supplier' ? PERMISSIONS.SUPPLIER : PERMISSIONS.CUSTOMER;
+      permissions = typePermissions[role.toUpperCase() as keyof typeof PERMISSIONS.SUPPLIER];
+    }
+
+    // Add common permissions that everyone should have
+    permissions.push('auth.logout', 'profile.view', 'profile.edit');
+
+    // Remove duplicates
+    return [...new Set(permissions)];
+  };
+
+  const getAvailableRoutes = (): string[] => {
+    if (!companyContext.currentCompany || !companyContext.permissions) {
+      return ['/auth/login', '/auth/signup'];
+    }
+
+    const availableRoutes = Object.entries(ROUTE_PERMISSIONS)
+      .filter(([_, requiredPermissions]) => 
+        requiredPermissions.some(permission => companyContext.permissions.includes(permission))
+      )
+      .map(([route]) => route);
+
+    // Add routes that don't require specific permissions
+    availableRoutes.push(
+      '/profile',
+      '/auth/logout',
+      '/'
+    );
+
+    return availableRoutes;
+  };
+
+  const hasPermission = (permission: string): boolean => {
+    if (!companyContext.permissions) {
+      return false;
+    }
+
+    // Handle permission wildcards (e.g., 'pir.*' matches all PIR permissions)
+    if (permission.endsWith('.*')) {
+      const prefix = permission.slice(0, -2);
+      return companyContext.permissions.some(p => p.startsWith(prefix));
+    }
+
+    return companyContext.permissions.includes(permission);
   };
 
   return (
-    <div id="auth-provider" data-loading={loading}>
+    <div id="auth-provider" data-loading={loading.global}>
       <AuthContext.Provider
-        value={{ 
-          user, 
-          session, 
-          signIn, 
-          signUp, 
-          signOut, 
+        value={{
+          user,
+          session,
+          signIn,
+          signUp,
+          signOut,
           loading,
+          error,
+          clearError,
           userCompanies,
           currentCompany,
           setCurrentCompany,
           userRole,
           refreshUserData,
-          hasPermission
+          hasPermission,
+          switchCompanyContext,
+          getAvailableRoutes,
+          companyContext
         }}
       >
         {children}

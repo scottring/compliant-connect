@@ -3,16 +3,32 @@
 ## Critical Implementation Paths
 
 ### 1. Authentication Flow
-- Always implement Supabase auth before other backend features
-- Role-based access control is essential for all routes
-- Company relationships determine data access
+- Always implement proper error handling and logging
+- Ensure company state is properly managed
+- Handle loading states consistently
+- Implement proper role-based redirects
+- Support invitation-based registration
 
-### 2. Data Model Dependencies
+### 2. Company Management
+- Maintain clear company role definitions
+- Handle company relationships properly
+- Implement efficient context switching
+- Ensure proper data access controls
+- Support multiple roles per company
+
+### 3. State Management
+- Centralize auth context
+- Handle loading states consistently
+- Implement proper error handling
+- Maintain state consistency
+- Support cross-tab synchronization
+
+### 4. Data Model Dependencies
 - Company relationships are foundational
 - Product sheets depend on company and product data
 - PIRs link everything together
 
-### 3. User Workflows
+### 5. User Workflows
 - Question bank → PIR creation → Supplier response → Review process
 - Each step must maintain proper state
 - Email notifications at key points
@@ -31,15 +47,43 @@
 - Clear progress indicators
 - Efficient filtering and search
 
+### 3. Error Handling
+- Clear error messages
+- Proper error recovery
+- Consistent error display
+- Helpful resolution steps
+- Proper loading indicators
+
+### 4. Authentication UX
+- Smooth sign-in process
+- Clear role indication
+- Easy company switching
+- Proper progress feedback
+- Clear validation messages
+
 ## Project-Specific Patterns
 
-### 1. Terminology
+### 1. Authentication Patterns
+- Use AuthContext for central state
+- Implement proper loading states
+- Handle errors consistently
+- Support role-based access
+- Manage company state
+
+### 2. Company Patterns
+- Clear role definitions
+- Proper relationship tracking
+- Efficient context switching
+- Secure data access
+- Proper validation
+
+### 3. Terminology
 - "Product Information Request (PIR)" not "Sheet Request"
 - "Product Sheet" is the master document
 - "In Progress" vs "Partially Submitted" for status
 - Clear distinction between suppliers and customers
 
-### 2. Data Organization
+### 4. Data Organization
 - Questions organized by sections/subsections
 - Tags for compliance categories
 - Support for nested tables
@@ -47,13 +91,27 @@
 
 ## Known Challenges
 
-### 1. Technical Complexity
+### 1. Authentication Complexity
+- Company state management
+- Role-based access control
+- Invitation flow handling
+- Error recovery
+- State consistency
+
+### 2. Company Management
+- Relationship tracking
+- Context switching
+- Role validation
+- Access control
+- Data isolation
+
+### 3. Technical Complexity
 - Complex nested table implementations
 - Multi-tenant data isolation
 - Real-time updates and notifications
 - Answer history tracking
 
-### 2. UX Considerations
+### 4. UX Considerations
 - Balance between auto-save and notifications
 - Clear status progression
 - Efficient review process
@@ -61,28 +119,264 @@
 
 ## Tool Usage Patterns
 
-### 1. Form Handling
+### 1. Supabase Auth
+- Use auth helpers consistently
+- Implement proper error handling
+- Handle session management
+- Track loading states
+- Manage user data
+
+### 2. Database Access
+- Use Row Level Security
+- Implement proper policies
+- Handle relationships
+- Manage permissions
+- Track changes
+
+### 3. Form Handling
 - React Hook Form for form state
 - Zod for validation
 - Progressive saving
 - Proper error handling
 
-### 2. Data Management
+### 4. Data Management
 - Supabase for real-time features
-- Row Level Security for access control
 - Optimistic updates for better UX
 - Smart caching where appropriate
 
 ## Evolution Notes
 
-### 1. UI Improvements
+### 1. Authentication Improvements
+- Enhanced error handling
+- Improved state management
+- Better loading states
+- Clearer user feedback
+- Robust invitation flow
+
+### 2. Company Management
+- Enhanced relationship tracking
+- Improved context switching
+- Better role validation
+- Stronger access controls
+- Clearer user feedback
+
+### 3. UI Improvements
 - Moved from grid to table views
 - Enhanced filtering capabilities
 - Improved status indicators
 - Added bulk import features
 
-### 2. Workflow Refinements
+### 4. Workflow Refinements
 - Streamlined review process
 - Enhanced communication features
 - Improved answer reuse
-- Better progress tracking 
+- Better progress tracking
+
+## Implementation Guidelines
+
+### 1. Authentication
+```typescript
+// Always handle loading states
+const [loading, setLoading] = useState({
+  auth: false,
+  profile: false,
+  company: false
+});
+
+// Proper error handling
+const [error, setError] = useState<{
+  type: 'auth' | 'profile' | 'company' | null;
+  message: string | null;
+}>({
+  type: null,
+  message: null
+});
+
+// Company state management
+const [companies, setCompanies] = useState<UserCompany[]>([]);
+const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
+```
+
+### 2. Company Management
+```typescript
+// Role-based access control
+const checkAccess = (
+  company: Company,
+  action: string
+): boolean => {
+  const role = company.role;
+  return rolePermissions[role]?.[action] ?? false;
+};
+
+// Company context switching
+const switchCompany = async (
+  companyId: string
+): Promise<void> => {
+  try {
+    setLoading(true);
+    // Validate access
+    // Update state
+    // Refresh permissions
+    // Update UI
+  } catch (error) {
+    handleError(error);
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+### 3. Error Handling
+```typescript
+// Consistent error handling
+const handleError = (
+  error: unknown,
+  context: string
+): void => {
+  console.error(`Error in ${context}:`, error);
+  const message = getErrorMessage(error);
+  setError({
+    type: context as 'auth' | 'profile' | 'company',
+    message
+  });
+  showToast({
+    type: 'error',
+    message
+  });
+};
+
+// Error recovery
+const recoverFromError = async (
+  error: AuthError
+): Promise<void> => {
+  switch (error.type) {
+    case 'auth':
+      await refreshSession();
+      break;
+    case 'profile':
+      await refreshProfile();
+      break;
+    case 'company':
+      await refreshCompanyData();
+      break;
+  }
+};
+```
+
+## Testing Requirements
+
+### 1. Authentication Tests
+```typescript
+describe('Authentication', () => {
+  test('handles successful login', async () => {
+    // Setup
+    // Execute
+    // Verify state
+    // Check redirects
+  });
+
+  test('handles login errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+});
+```
+
+### 2. Company Tests
+```typescript
+describe('Company Management', () => {
+  test('handles company switching', async () => {
+    // Setup multiple companies
+    // Switch company
+    // Verify state update
+    // Check permissions
+  });
+
+  test('validates access control', async () => {
+    // Setup roles
+    // Attempt actions
+    // Verify permissions
+    // Check error handling
+  });
+});
+```
+
+### 3. Data Model Tests
+```typescript
+describe('Data Model', () => {
+  test('handles company relationships', async () => {
+    // Setup multiple companies
+    // Verify relationships
+    // Check data access
+  });
+
+  test('handles product sheets', async () => {
+    // Setup product sheets
+    // Verify data consistency
+    // Check data integrity
+  });
+});
+```
+
+### 4. User Workflow Tests
+```typescript
+describe('User Workflow', () => {
+  test('handles question bank', async () => {
+    // Setup question bank
+    // Verify data retrieval
+    // Check workflow consistency
+  });
+
+  test('handles PIR creation', async () => {
+    // Setup PIR creation
+    // Verify PIR creation
+    // Check data consistency
+  });
+
+  test('handles supplier response', async () => {
+    // Setup supplier response
+    // Verify response handling
+    // Check data consistency
+  });
+
+  test('handles review process', async () => {
+    // Setup review process
+    // Verify review handling
+    // Check data consistency
+  });
+});
+```
+
+### 5. Error Handling Tests
+```typescript
+describe('Error Handling', () => {
+  test('handles authentication errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+
+  test('handles company management errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+
+  test('handles data model errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+
+  test('handles user workflow errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+}); 
