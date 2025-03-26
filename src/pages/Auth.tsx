@@ -86,10 +86,12 @@ const Auth = () => {
       const redirectLoop = async () => {
         while (!(await attemptRedirect())) {
           // Keep trying until we succeed or max out
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       };
       
       redirectLoop();
+      
     } catch (error: any) {
       console.error("Login error:", error);
       

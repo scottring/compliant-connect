@@ -1,79 +1,118 @@
 # Active Context
 
 ## Current Focus
-Setting up proper development, staging, and production environments before proceeding with authentication implementation.
+Refining authentication system and company relationship management:
+1. Fixing company state management in auth context
+2. Improving invitation-based registration flow
+3. Enhancing error handling and user feedback
+4. Implementing proper role-based access
 
 ## Recent Changes
-1. Completed core UI components and workflows:
-   - Question bank management
-   - PIR creation and management
-   - Supplier response forms
-   - Review process
-   - Product sheet management
+1. Enhanced understanding of authentication flows:
+   - Standard Sign Up Flow
+   - Standard Sign In Flow
+   - Invitation-Based Sign Up Flow
+   - Company role management (supplier/customer/both)
 
-2. Refined terminology:
-   - "Sheet Request" → "Product Information Request (PIR)"
-   - Clarified distinction between PIRs and Product Sheets
-   - Standardized status terminology
+2. Identified and addressed issues:
+   - Company state management in AuthContext
+   - User-company relationship handling
+   - Registration and login flow improvements
+   - Enhanced error handling and logging
 
-3. Implemented workflow improvements:
-   - Status changes now properly reflect form state
-   - Review process shows only open flagged issues
-   - Improved supplier response form UX
-   - Added bulk import for question options
-
-4. Added MCP capabilities for database analysis:
-   - Configured MCP servers for all three Supabase environments (dev, staging, production)
-   - Created documentation for MCP usage in `docs/supabase-mcp.md`
-   - Set up secure read-only connections to databases
-   - Enabled cross-environment data verification
-   - Added advanced MCP server with write capabilities
-   - Created scripts to easily start MCP servers for each environment
-   - Added comprehensive documentation for advanced features
+3. Documentation improvements:
+   - Added historical context tracking
+   - Updated authentication flow documentation
+   - Enhanced company relationship documentation
+   - Improved error handling documentation
 
 ## Active Decisions
-1. Environment Setup Requirements
-   - Development environment for local work
-   - Staging environment for testing
-   - Production environment for live deployment
-   - Separate Supabase instances for each environment
-   - Environment-specific configuration management
+1. Authentication Flow Requirements
+   - Clear separation between sign-up flows
+   - Robust error handling and user feedback
+   - Proper company role management
+   - Efficient invitation handling
 
-2. User Role Management
-   - Companies can be both suppliers and customers
-   - Role-based access control needed
-   - Company relationships must be properly tracked
+2. Company Relationship Management
+   - Support for multiple roles (supplier/customer/both)
+   - Clear company context switching
+   - Proper data access control
+   - Efficient relationship tracking
 
-3. Data Model Requirements
-   - Company relationships table needed
-   - Proper filtering based on authenticated user's company
-   - Row Level Security implementation in Supabase
+3. State Management
+   - Centralized auth context
+   - Proper company state handling
+   - Clear loading states
+   - Comprehensive error states
 
 ## Next Steps
-1. Environment Setup
-   - ✅ Configure development environment
-   - ✅ Set up staging environment
-   - ✅ Configure production environment
-   - Implement environment switching
-   - Set up CI/CD pipeline
+1. Authentication Refinement
+   - [ ] Fix company state management in AuthContext
+   - [ ] Improve invitation flow error handling
+   - [ ] Add comprehensive logging
+   - [ ] Implement proper role-based redirects
 
-2. Authentication Implementation
-   - Set up Supabase authentication
-   - Implement proper user session management
-   - Add role-based access control
+2. Company Management
+   - [ ] Enhance company relationship tracking
+   - [ ] Improve company context switching
+   - [ ] Add company role validation
+   - [ ] Implement proper data access controls
 
-3. Backend Integration
-   - Replace mock data with real database queries
-   - Implement proper relationship filtering
-   - Set up Row Level Security
-   - Use MCP to verify database state across environments
-   - Use advanced MCP server for schema management and initial data loading
+3. Testing & Validation
+   - [ ] Add authentication flow tests
+   - [ ] Validate company relationship handling
+   - [ ] Test error scenarios
+   - [ ] Verify data access controls
 
 ## Known Issues
-1. Company relationship filtering not properly implemented
-2. User role-based views need refinement
-3. Product dropdown in PIR creation needs company-specific filtering
-4. Toast notifications too frequent during form input
+1. Authentication
+   - Company state sometimes null after login
+   - Inconsistent error handling in invitation flow
+   - Missing role-based redirect logic
+   - Incomplete loading state handling
+
+2. Company Management
+   - Incomplete company relationship filtering
+   - Context switching needs improvement
+   - Missing role validation in some flows
+   - Inconsistent data access controls
+
+3. User Experience
+   - Unclear error messages
+   - Inconsistent loading indicators
+   - Missing progress feedback
+   - Incomplete form validation
+
+## Implementation Status
+
+### Authentication System
+- ✅ Basic Supabase Auth integration
+- ✅ User profile management
+- ✅ Company association
+- 🔄 Role-based access control
+- 🔄 Invitation flow refinement
+- ❌ Comprehensive error handling
+- ❌ Complete test coverage
+
+### Company Management
+- ✅ Basic company creation
+- ✅ Company role definition
+- 🔄 Relationship tracking
+- 🔄 Context switching
+- ❌ Complete access control
+- ❌ Relationship validation
+
+### State Management
+- ✅ Auth context setup
+- 🔄 Company state handling
+- 🔄 Loading state management
+- ❌ Complete error handling
+- ❌ State persistence
+
+Legend:
+✅ Complete
+🔄 In Progress
+❌ Not Started
 
 ## Directory Structure Status
 

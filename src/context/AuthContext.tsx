@@ -3,34 +3,8 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
-import { Company, CompanyUser } from '@/types';
-import { UserCompany, ExtendedUser, UserRole } from '@/types/auth';
-
-// Extended user type to include profile and company data
-export type ExtendedUser = User & {
-  profile: any;
-  companies: Array<{
-    id: string;
-    name: string;
-    role: string;
-    userRole: string;
-    contact_name: string;
-    contact_email: string;
-    contact_phone: string;
-    progress: number;
-  }>;
-  currentCompany: {
-    id: string;
-    name: string;
-    role: string;
-    userRole: string;
-    contact_name: string;
-    contact_email: string;
-    contact_phone: string;
-    progress: number;
-  } | null;
-  role: string;
-};
+import { Company, UserCompany, ExtendedUser, UserRole } from '@/types/auth';
+import { Database } from "@/integrations/supabase/types";
 
 interface AuthContextType {
   user: ExtendedUser | null;
@@ -39,9 +13,9 @@ interface AuthContextType {
   signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
-  userCompanies: Tables<"companies">[];
-  currentCompany: Tables<"companies"> | null;
-  setCurrentCompany: (company: Tables<"companies"> | null) => void;
+  userCompanies: UserCompany[];
+  currentCompany: Company | null;
+  setCurrentCompany: (company: Company | null) => void;
   userRole: UserRole | null;
   refreshUserData: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -64,17 +38,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     id: companyData.id,
     name: companyData.name,
     role: companyData.role as "supplier" | "customer" | "both",
-    contact_name: companyData.contact_name || '',
-    contact_email: companyData.contact_email || '',
-    contact_phone: companyData.contact_phone || '',
+    contactName: companyData.contact_name || '',
+    contactEmail: companyData.contact_email || '',
+    contactPhone: companyData.contact_phone || '',
     progress: companyData.progress || 0,
     address: companyData.address || '',
     city: companyData.city || '',
     state: companyData.state || '',
     country: companyData.country || '',
-    zip_code: companyData.zip_code || '',
-    created_at: companyData.created_at || new Date().toISOString(),
-    updated_at: companyData.updated_at || new Date().toISOString(),
+    zipCode: companyData.zip_code || '',
+    createdAt: companyData.created_at || new Date().toISOString(),
+    updatedAt: companyData.updated_at || new Date().toISOString(),
     userRole: userRole
   });
 
@@ -84,8 +58,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Fetch user data with proper typing
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = async (userId: string): Promise<{
+    error?: string;
+    profile: any;
+    companies: UserCompany[];
+    currentCompany: UserCompany | null;
+  }> => {
     try {
+      console.log("Fetching user data for:", userId);
+      
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
@@ -97,9 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: companyUsers, error: companyUsersError } = await supabase
         .from("company_users")
         .select(`
-          id,
           role,
-          company:companies (
+          id,
+          companies!inner (
             id,
             name,
             role,
@@ -107,11 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             contact_email,
             contact_phone,
             progress,
-            address,
-            city,
-            state,
-            country,
-            zip_code,
             created_at,
             updated_at
           )
@@ -120,19 +96,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (companyUsersError) throw companyUsersError;
 
-      const companies = transformCompaniesData(companyUsers);
-      const currentCompany = companies.length > 0 ? companies[0] : null;
+      console.log("Raw company users data:", companyUsers);
+
+      // Transform company data
+      const companies = (companyUsers || []).map((cu: any) => {
+        const company = cu.companies;
+        return formatCompanyData(company, cu.role as UserRole);
+      });
+      
+      console.log("Transformed companies:", companies);
+      
+      // Find the first company that is a customer or both
+      const currentCompany = companies.find(c => c.role === "customer" || c.role === "both") || companies[0] || null;
+      console.log("Selected current company:", currentCompany);
 
       return {
-        error: null,
         profile: profileData,
         companies,
         currentCompany
       };
+
     } catch (error: any) {
-      console.error("Unexpected error in fetchUserData:", error);
-      return { 
-        error: `Unexpected error: ${error.message}`,
+      console.error("Error fetching user data:", error);
+      return {
+        error: error.message,
         profile: null,
         companies: [],
         currentCompany: null
@@ -267,6 +254,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     loadUser();
     
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event);
+      setSession(session);
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Fetch and set user data
+        const userData = await fetchUserData(session.user.id);
+        if (!userData.error) {
+          setUser({
+            ...session.user,
+            profile: userData.profile,
+            companies: userData.companies,
+            currentCompany: userData.currentCompany,
+            role: "user"
+          });
+          setUserCompanies(userData.companies);
+          if (userData.currentCompany) {
+            setCurrentCompany(userData.currentCompany);
+          }
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setUserCompanies([]);
+        setCurrentCompany(null);
+      }
+    });
+    
     // Set up a periodic check for loading state getting stuck
     const loadingCheckInterval = setInterval(() => {
       console.log("AuthProvider: Loading state check...");
@@ -279,6 +294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 5000);
 
     return () => {
+      subscription.unsubscribe();
       clearInterval(loadingCheckInterval);
     };
   }, []);
@@ -287,18 +303,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user?.companies && currentCompany) {
       // Find the company in the user's companies array to get the user's role in that company
-      const userCompanyData = user.companies.find(c => c.id === currentCompany.id);
+      const userCompanyData = userCompanies.find(c => c.id === currentCompany.id);
       
       if (userCompanyData) {
-        // Use the userRole from the company data
-        setUserRole(userCompanyData.userRole as UserRole);
+        setUserRole(userCompanyData.userRole);
       } else {
         setUserRole(null);
       }
     } else {
       setUserRole(null);
     }
-  }, [currentCompany, user?.companies]);
+  }, [currentCompany, userCompanies]);
 
   // Update loadingStartTime whenever loading changes to true
   useEffect(() => {
@@ -325,6 +340,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(forceResetInterval);
   }, [loading, loadingStartTime]);
 
+  // Create initial company for user
+  const createInitialCompany = async (userId: string, email: string) => {
+    try {
+      console.log("Creating initial company for user:", userId);
+      
+      // Create the company
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .insert({
+          name: "My Company",
+          role: "customer",
+          contact_name: "Admin User",
+          contact_email: email,
+          contact_phone: "",
+          progress: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (companyError) {
+        console.error("Error creating company:", companyError);
+        throw new Error(`Failed to create company: ${companyError.message}`);
+      }
+
+      if (!company) {
+        throw new Error("Company creation succeeded but no company data returned");
+      }
+
+      console.log("Company created successfully:", company);
+
+      // Create the company_user relationship
+      const { data: relationship, error: relationError } = await supabase
+        .from("company_users")
+        .insert({
+          company_id: company.id,
+          user_id: userId,
+          role: "owner",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (relationError) {
+        console.error("Error creating company relationship:", relationError);
+        // Clean up the company if relationship creation fails
+        await supabase.from("companies").delete().eq("id", company.id);
+        throw new Error(`Failed to create company relationship: ${relationError.message}`);
+      }
+
+      if (!relationship) {
+        // Clean up the company if relationship data is missing
+        await supabase.from("companies").delete().eq("id", company.id);
+        throw new Error("Company relationship creation succeeded but no data returned");
+      }
+
+      console.log("Company relationship created successfully:", relationship);
+      return company;
+    } catch (error) {
+      console.error("Error in createInitialCompany:", error);
+      throw error;
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
@@ -348,13 +429,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         metadata: data.user?.user_metadata
       });
       
-      // Check if email is confirmed (if needed by app flow)
-      // ...
-      
-      // Set base user right away so there's something
       if (data.user) {
-        // If profile loading fails, still set the user to the basic auth user
-        setUser(data.user as ExtendedUser);
+        // Fetch user data including companies
+        const userData = await fetchUserData(data.user.id);
+        
+        if (userData.error) {
+          console.error("Error fetching user data after sign in:", userData.error);
+          toast.error("Error loading user data");
+        } else {
+          // Set user with complete data
+          setUser({
+            ...data.user,
+            profile: userData.profile,
+            companies: userData.companies,
+            currentCompany: userData.currentCompany,
+            role: "user"
+          });
+          
+          // Update company states
+          setUserCompanies(userData.companies);
+          if (userData.currentCompany) {
+            setCurrentCompany(userData.currentCompany);
+          }
+        }
       }
       
       toast.success("Signed in successfully");
@@ -373,11 +470,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Modify signUp to create initial company
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     try {
       setLoading(true);
-      // Create the user in Supabase Auth
-      const { error, data } = await supabase.auth.signUp({
+      console.log("Starting signup process for:", email);
+
+      // Sign up with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -385,22 +485,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             first_name: firstName,
             last_name: lastName,
           },
-          emailRedirectTo: window.location.origin + "/email-confirmation",
         },
       });
-      
+
       if (error) throw error;
-      
-      // If successful but no user was returned (email confirmation required)
-      if (!data.user) {
-        toast.success("Sign up successful! Please check your email for confirmation.");
-        return;
+      console.log("Auth signup successful:", data.user?.id);
+
+      if (data.user) {
+        try {
+          console.log("Creating profile for user:", data.user.id);
+          // Create profile first
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .insert({
+              id: data.user.id,
+              first_name: firstName,
+              last_name: lastName,
+              email: email,
+            });
+
+          if (profileError) {
+            console.error("Error creating profile:", profileError);
+            throw profileError;
+          }
+          console.log("Profile created successfully");
+
+          // Sign in to get session
+          console.log("Signing in after signup");
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          
+          if (signInError) throw signInError;
+          console.log("Sign in successful");
+
+          // Create initial company
+          console.log("Creating initial company");
+          const company = await createInitialCompany(data.user.id, email);
+          console.log("Initial company created:", company);
+
+          // Transform the company data to match UserCompany type
+          const userCompany = formatCompanyData(company, 'owner');
+          
+          // Set the session and user data
+          setSession(signInData.session);
+          setUser({
+            ...data.user,
+            profile: {
+              firstName,
+              lastName
+            },
+            companies: [userCompany],
+            currentCompany: userCompany,
+            role: "user"
+          });
+
+          // Update userCompanies state
+          setUserCompanies([userCompany]);
+          setCurrentCompany(userCompany);
+
+          toast.success("Account created successfully!");
+          return;
+
+        } catch (setupError: any) {
+          console.error("Error in post-signup setup:", setupError);
+          toast.error("Account created but there was an error setting up your profile. Please try signing in.");
+          throw setupError;
+        }
       }
-      
-      toast.success("Account created successfully!");
+
+      toast.success("Account created! Please check your email to confirm your account.");
     } catch (error: any) {
       console.error("Sign up error:", error);
-      toast.error(error.message || "Error signing up");
+      toast.error(error.message);
       throw error;
     } finally {
       setLoading(false);

@@ -181,3 +181,289 @@ src/
 2. **Documentation**: Update imports systematically
 3. **Testing**: Ensure all tests pass after moves
 4. **Review**: Peer review structural changes 
+
+## Authentication Patterns
+
+### 1. Authentication Flows
+```typescript
+interface AuthFlow {
+  // Standard Sign Up
+  standardSignUp: {
+    steps: [
+      'collectUserInfo',
+      'createSupabaseUser',
+      'createProfile',
+      'createInitialCompany',
+      'setupCompanyRelationship'
+    ];
+    rollback: boolean; // Supports rollback on failure
+  };
+
+  // Standard Sign In
+  standardSignIn: {
+    steps: [
+      'authenticateUser',
+      'fetchUserProfile',
+      'fetchCompanyRelationships',
+      'determineActiveCompany'
+    ];
+    retry: boolean; // Supports retry on data fetch failure
+  };
+
+  // Invitation-Based Sign Up
+  invitationSignUp: {
+    steps: [
+      'validateInvitation',
+      'collectUserInfo',
+      'createSupabaseUser',
+      'createProfile',
+      'createSupplierCompany',
+      'setupCompanyRelationship',
+      'linkWithCustomer'
+    ];
+    rollback: boolean;
+  };
+}
+```
+
+### 2. Company Role Management
+```typescript
+type CompanyRole = 'supplier' | 'customer' | 'both';
+
+interface CompanyContext {
+  currentRole: CompanyRole;
+  availableRoles: CompanyRole[];
+  canSwitchRole: boolean;
+}
+
+interface RoleAccess {
+  supplier: {
+    canViewRequests: true;
+    canRespond: true;
+    canInitiateRequest: false;
+  };
+  customer: {
+    canViewRequests: true;
+    canRespond: false;
+    canInitiateRequest: true;
+  };
+  both: {
+    canViewRequests: true;
+    canRespond: true;
+    canInitiateRequest: true;
+  };
+}
+```
+
+### 3. State Management
+```typescript
+interface AuthState {
+  user: User | null;
+  profile: Profile | null;
+  companies: UserCompany[];
+  currentCompany: Company | null;
+  loading: {
+    user: boolean;
+    profile: boolean;
+    companies: boolean;
+  };
+  error: {
+    type: 'auth' | 'profile' | 'company' | null;
+    message: string | null;
+  };
+}
+
+interface AuthActions {
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (data: SignUpData) => Promise<void>;
+  signOut: () => Promise<void>;
+  switchCompany: (companyId: string) => Promise<void>;
+  refreshUserData: () => Promise<void>;
+}
+```
+
+## Company Relationship Patterns
+
+### 1. Company Structure
+```typescript
+interface Company {
+  id: string;
+  name: string;
+  role: CompanyRole;
+  // Core company data
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface CompanyRelationship {
+  id: string;
+  customerCompanyId: string;
+  supplierCompanyId: string;
+  status: 'active' | 'inactive';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface UserCompany {
+  userId: string;
+  companyId: string;
+  role: 'owner' | 'admin' | 'member';
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### 2. Access Control Patterns
+```typescript
+interface AccessControl {
+  // Row Level Security Policies
+  companies: {
+    select: 'user_has_company_access';
+    insert: 'user_can_create_company';
+    update: 'user_is_company_admin';
+    delete: 'user_is_company_owner';
+  };
+
+  companyRelationships: {
+    select: 'user_in_related_company';
+    insert: 'user_can_create_relationship';
+    update: 'user_in_customer_company';
+    delete: 'user_in_customer_company';
+  };
+
+  // Function-level access
+  functions: {
+    createCompany: 'authenticated';
+    updateCompany: 'company_admin';
+    deleteCompany: 'company_owner';
+    createRelationship: 'customer_admin';
+  };
+}
+```
+
+### 3. Data Flow Patterns
+```typescript
+interface DataFlow {
+  // Company Creation
+  createCompany: {
+    validation: ['validateCompanyData', 'checkUserPermissions'];
+    creation: ['createCompanyRecord', 'setupUserRelationship'];
+    postCreation: ['setupDefaultSettings', 'notifyStakeholders'];
+  };
+
+  // Relationship Management
+  createRelationship: {
+    validation: ['validateCompanies', 'checkPermissions'];
+    creation: ['createRelationshipRecord', 'setupInitialState'];
+    notification: ['notifySupplier', 'notifyCustomer'];
+  };
+
+  // Context Switching
+  switchCompanyContext: {
+    validation: ['validateUserAccess', 'checkCompanyStatus'];
+    transition: ['updateActiveCompany', 'refreshPermissions'];
+    sideEffects: ['updateUI', 'refreshData'];
+  };
+}
+```
+
+## Error Handling Patterns
+
+### 1. Authentication Errors
+```typescript
+interface AuthError {
+  type: 'auth' | 'profile' | 'company';
+  code: string;
+  message: string;
+  context?: any;
+  retry?: boolean;
+  recovery?: {
+    possible: boolean;
+    steps?: string[];
+  };
+}
+
+interface ErrorHandling {
+  // Authentication
+  auth: {
+    invalidCredentials: 'RETRY';
+    sessionExpired: 'REFRESH';
+    networkError: 'RETRY';
+  };
+
+  // Profile
+  profile: {
+    notFound: 'CREATE';
+    invalid: 'UPDATE';
+    locked: 'CONTACT_SUPPORT';
+  };
+
+  // Company
+  company: {
+    notFound: 'SELECT_DIFFERENT';
+    accessDenied: 'REQUEST_ACCESS';
+    invalid: 'UPDATE';
+  };
+}
+```
+
+### 2. Recovery Patterns
+```typescript
+interface RecoveryPattern {
+  // Session Recovery
+  session: {
+    expired: ['refreshToken', 'revalidateSession', 'restoreState'];
+    invalid: ['clearSession', 'redirectToLogin'];
+  };
+
+  // Data Recovery
+  data: {
+    profileMissing: ['createProfile', 'retryOperation'];
+    companyMissing: ['selectDefaultCompany', 'retryOperation'];
+  };
+
+  // State Recovery
+  state: {
+    inconsistent: ['refreshUserData', 'validateState', 'restoreConsistency'];
+    corrupt: ['resetState', 'rehydrateFromServer'];
+  };
+}
+```
+
+## Testing Patterns
+
+### 1. Authentication Testing
+```typescript
+interface AuthTest {
+  // Flow Testing
+  flows: {
+    standardSignUp: ['happy_path', 'validation_errors', 'network_errors'];
+    standardSignIn: ['success', 'invalid_credentials', 'locked_account'];
+    invitationSignUp: ['valid_invitation', 'expired_invitation', 'network_errors'];
+  };
+
+  // State Testing
+  state: {
+    initialization: ['empty', 'partial', 'complete'];
+    transitions: ['signIn', 'signOut', 'refresh', 'expire'];
+    errors: ['handling', 'recovery', 'persistence'];
+  };
+}
+```
+
+### 2. Company Testing
+```typescript
+interface CompanyTest {
+  // Relationship Testing
+  relationships: {
+    creation: ['customer_initiated', 'invalid_data', 'duplicate'];
+    access: ['permitted', 'denied', 'role_based'];
+    modification: ['status_update', 'role_change', 'deletion'];
+  };
+
+  // Context Testing
+  context: {
+    switching: ['valid_switch', 'invalid_switch', 'during_operation'];
+    persistence: ['page_reload', 'tab_switch', 'browser_restart'];
+  };
+} 

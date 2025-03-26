@@ -65,8 +65,12 @@ export const AddSupplierModal = ({
   });
 
   const handleSubmit = async (data: FormData) => {
-    await onSubmit(data);
-    form.reset();
+    try {
+      await onSubmit(data);
+      form.reset();
+    } catch (error) {
+      console.error('Error submitting form:', error);
+    }
   };
 
   return (

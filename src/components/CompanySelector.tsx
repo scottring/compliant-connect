@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   Select,
@@ -11,6 +11,13 @@ import { Tables } from "@/integrations/supabase/types";
 
 const CompanySelector = () => {
   const { userCompanies, currentCompany, setCurrentCompany } = useAuth();
+
+  // Automatically set the current company if there's only one
+  useEffect(() => {
+    if (userCompanies.length === 1 && !currentCompany) {
+      setCurrentCompany(userCompanies[0]);
+    }
+  }, [userCompanies, currentCompany, setCurrentCompany]);
 
   // If user has only one company, don't show the selector
   if (userCompanies.length <= 1) {

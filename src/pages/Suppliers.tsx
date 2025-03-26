@@ -30,7 +30,7 @@ type CompanyRow = Database['public']['Tables']['companies']['Row'];
 type RelationshipRow = Database['public']['Tables']['company_relationships']['Row'];
 
 const Suppliers = () => {
-  const { user, currentCompany, refreshUserData } = useAuth();
+  const { user, currentCompany, refreshUserData, userCompanies } = useAuth();
   const { companies } = useApp();
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -144,9 +144,13 @@ const Suppliers = () => {
     contactPhone: string;
     relationshipType: RelationshipType;
   }) => {
+    console.log("Current company state:", currentCompany);
+    console.log("User companies:", userCompanies);
+    
     if (!currentCompany) {
+      console.error("No company selected - userCompanies:", userCompanies);
       toast.error("No company selected");
-      return;
+      throw new Error("No company selected");
     }
 
     try {
@@ -169,7 +173,7 @@ const Suppliers = () => {
       if (supplierError) {
         toast.error("Error creating supplier");
         console.error("Error:", supplierError);
-        return;
+        throw supplierError;
       }
 
       // Create the relationship
@@ -187,7 +191,7 @@ const Suppliers = () => {
         console.error("Error:", relationshipError);
         // Try to clean up the supplier
         await supabase.from("companies").delete().eq("id", newSupplier.id);
-        return;
+        throw relationshipError;
       }
 
       toast.success("Supplier added successfully");
@@ -196,6 +200,7 @@ const Suppliers = () => {
     } catch (error) {
       console.error("Error in handleAddSupplierSubmit:", error);
       toast.error("Failed to add supplier");
+      throw error; // Re-throw the error so the modal can catch it
     } finally {
       setLoading(false);
     }
