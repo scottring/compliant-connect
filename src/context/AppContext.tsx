@@ -1,6 +1,5 @@
 import React, { createContext, useContext } from "react";
 import { Company, ProductSheet, Question, Tag, User, Section, Subsection, Comment, SupplierResponse, PIR } from "../types";
-import { mockCompanies, mockProductSheets, mockQuestions, mockTags, mockUsers } from "../data/mockData";
 import { toast } from "sonner";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 
@@ -38,11 +37,11 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = usePersistedState<User | null>("current-user", mockUsers[0]);
-  const [companies, setCompanies] = usePersistedState<Company[]>("companies", mockCompanies);
-  const [productSheets, setProductSheets] = usePersistedState<ProductSheet[]>("product-sheets", mockProductSheets);
-  const [questions, setQuestions] = usePersistedState<Question[]>("questions", mockQuestions);
-  const [tags, setTags] = usePersistedState<Tag[]>("tags", mockTags);
+  const [user, setUser] = usePersistedState<User | null>("current-user", null);
+  const [companies, setCompanies] = usePersistedState<Company[]>("companies", []);
+  const [productSheets, setProductSheets] = usePersistedState<ProductSheet[]>("product-sheets", []);
+  const [questions, setQuestions] = usePersistedState<Question[]>("questions", []);
+  const [tags, setTags] = usePersistedState<Tag[]>("tags", []);
   const [sections, setSections] = usePersistedState<Section[]>("sections", []);
   const [subsections, setSubsections] = usePersistedState<Subsection[]>("subsections", []);
 

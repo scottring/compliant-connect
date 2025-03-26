@@ -1,0 +1,95 @@
+# Directory Structure Evolution
+
+## Current Phase: Pre-Restructure (Alpha Development)
+- Maintaining development velocity for alpha release
+- Following forward-compatible patterns for new code
+- Documenting structure decisions for future reorganization
+
+## Structure Patterns
+1. Feature-based organization
+   - Components grouped by feature
+   - Pages organized by feature domain
+   - Types co-located with features when possible
+
+2. Shared Resources
+   - Common components in src/components/common
+   - Shared utilities in src/utils
+   - Global types in src/types
+
+3. Import Patterns
+   - Relative imports for feature-specific code
+   - Absolute imports for shared resources
+   - Index files for clean exports
+
+## Future Migration Notes
+- Components will move to feature-based structure
+- Pages will organize into domain directories
+- Utils will categorize by function
+- Types will organize by domain
+
+## Technical Decisions
+1. Authentication
+   - Supabase Auth with custom profile extension
+   - Company association handling
+   - Role-based access control
+
+2. Data Management
+   - Supabase as backend (eu-central-1)
+   - Project ID: aybytyqwuhtsjigxgxwl
+   - Row Level Security implementation
+   - Real-time subscriptions where needed
+
+3. UI/UX
+   - ShadcnUI as component library
+   - TailwindCSS for styling
+   - Responsive design patterns
+   - Toast notifications for feedback
+
+## Development Workflow
+1. Feature Implementation
+   - Create feature directory if new
+   - Co-locate related components
+   - Document in feature README
+   - Add to memory bank if significant
+
+2. Code Organization
+   - Group by feature first
+   - Extract shared components when pattern emerges
+   - Keep utils close to usage unless clearly global
+   - Document temporary solutions
+
+3. Testing Strategy
+   - Co-locate tests with implementation
+   - Integration tests for key flows
+   - E2E tests for critical paths
+
+## Known Patterns
+1. Component Patterns
+   - Feature containers handle data
+   - UI components are pure rendering
+   - Hooks extract complex logic
+   - Context for global state
+
+2. Data Patterns
+   - Supabase queries in dedicated hooks
+   - Error handling with toast feedback
+   - Loading states with skeletons
+   - Optimistic updates where possible
+
+3. Navigation Patterns
+   - Feature-based routing
+   - Protected routes with role checks
+   - Breadcrumb navigation
+   - Deep linking support
+
+## Client Preferences
+- Focus on functionality over perfect structure
+- Clear error messages
+- Responsive design
+- Fast loading times
+
+## Project Evolution
+- Starting with core features
+- Adding polish incrementally
+- Documentation grows with code
+- Structure improves over time 

@@ -3,7 +3,58 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { env } from '@/config/env';
 
+console.log('Initializing Supabase client with URL:', env.supabase.url);
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(env.supabase.url, env.supabase.anonKey);
+// Initialize Supabase client with custom settings
+export const supabase = createClient<Database>(
+  env.supabase.url, 
+  env.supabase.anonKey,
+  {
+    auth: {
+      persistSession: true, // Enable session persistence
+      autoRefreshToken: true, // Automatically refresh token
+      detectSessionInUrl: true, // Detect auth tokens in URL
+      storage: localStorage, // Explicitly use localStorage
+    },
+    global: {
+      // Add custom headers if needed
+      headers: { 
+        'x-client-info': '@stacksdata/compliance-platform'
+      },
+    },
+    realtime: {
+      // Disable realtime subscriptions if not needed
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+    db: {
+      schema: 'public',
+    },
+  }
+);
+
+// Verify session on load
+supabase.auth.getSession().then(({ data }) => {
+  if (data.session) {
+    console.log('Supabase session found on load:', { 
+      user: data.session.user.email,
+      expires_at: new Date(data.session.expires_at * 1000).toISOString()
+    });
+  } else {
+    console.log('No Supabase session found on load');
+  }
+}).catch(err => {
+  console.error('Error checking Supabase session:', err);
+});
+
+// Log Supabase initialization for debugging
+if (env.app.env === 'development') {
+  console.log(`Supabase client initialized for ${env.app.env} environment`, {
+    url: env.supabase.url,
+    anon_key_prefix: env.supabase.anonKey.substring(0, 5) + '...'
+  });
+}

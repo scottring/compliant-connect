@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import Sidebar from "./components/Sidebar";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -25,24 +25,48 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Unauthorized from "./pages/Unauthorized";
 import CompanySelector from "./components/CompanySelector";
 import AuthDebug from "./components/AuthDebug";
+import LoadingDebug from "./components/LoadingDebug";
+import AuthStateDebug from "./components/AuthStateDebug";
 import Onboarding from "./pages/Onboarding";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
 import UserSwitcher from "./components/UserSwitcher";
-import { useAuth } from "./context/AuthContext";
+import AdminSettings from "@/pages/AdminSettings";
 
 // Component to check if user has a company association
 const CheckCompany = () => {
-  const { userCompanies, loading } = useAuth();
+  const { userCompanies, loading, user } = useAuth();
+  
+  console.log("CheckCompany:", { 
+    loading, 
+    userLoggedIn: !!user, 
+    companyCount: userCompanies.length,
+    currentPath: window.location.pathname
+  });
   
   // Wait until loading is done
-  if (loading) return <Outlet />;
-  
-  // If user has no companies, redirect to onboarding
-  if (userCompanies.length === 0) {
-    return <Navigate to="/onboarding" replace />;
+  if (loading) {
+    console.log("CheckCompany: Still loading");
+    return <Outlet />;
   }
   
+  // Check if user exists first
+  if (!user) {
+    console.log("CheckCompany: No user, redirecting to auth");
+    return <Navigate to="/auth" replace />;
+  }
+  
+  // TEMPORARILY DISABLED: Allow access to all routes even without companies
+  // This allows us to test navigation after company creation
+  /*
+  // If user has no companies, redirect to onboarding
+  if (userCompanies.length === 0) {
+    console.log("CheckCompany: User has no companies, redirecting to onboarding");
+    return <Navigate to="/onboarding" replace />;
+  }
+  */
+  
+  console.log("CheckCompany: User has companies or check bypassed, rendering children");
   // Otherwise, render the children
   return <Outlet />;
 };
@@ -73,12 +97,13 @@ const App = () => {
                   {/* Onboarding route - for users with no company */}
                   <Route path="/onboarding" element={<Onboarding />} />
                   
-                  {/* Main Routes - require company association */}
-                  <Route element={<CheckCompany />}>
-                    <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
-                      {/* Dashboard - accessible to all authenticated users */}
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      
+                  {/* Main Routes - including Dashboard */}
+                  <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
+                    {/* Dashboard - accessible to all authenticated users */}
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    
+                    {/* The rest of routes in MainLayout */}
+                    <Route element={<CheckCompany />}>
                       {/* Supplier Routes */}
                       <Route path="/suppliers" element={<Suppliers />} />
                       <Route path="/suppliers/:id" element={<SupplierDetail />} />
@@ -103,12 +128,25 @@ const App = () => {
                   </Route>
                 </Route>
                 
+                {/* Admin Settings Route */}
+                <Route
+                  path="/admin/settings"
+                  element={
+                    <ProtectedRoute requiredPermission="admin:access">
+                      <AdminSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                
                 {/* Fallback Route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
               
-              {/* Auth Debug Panel - visible in development mode */}
-              <AuthDebug />
+              {/* Debug Panels - visible in development mode */}
+              {/* Removing debug panels as they're no longer needed */}
+              {/* <AuthDebug />
+              <LoadingDebug />
+              <AuthStateDebug /> */}
             </BrowserRouter>
           </TooltipProvider>
         </AppProvider>

@@ -87,6 +87,46 @@
 - Deployment guides
 - Security documentation
 
+## Directory Structure Improvements
+
+### Pending Tasks
+1. **Components Reorganization**
+   - [ ] Create new directory structure
+   - [ ] Move components to feature-based organization
+   - [ ] Identify and relocate shared components
+   - [ ] Separate layout components
+   - [ ] Update import paths
+
+2. **Pages Structure**
+   - [ ] Create feature-based directory structure
+   - [ ] Move pages to appropriate feature directories
+   - [ ] Implement lazy loading
+   - [ ] Update router configuration
+
+3. **Utils Enhancement**
+   - [ ] Create categorized directories
+   - [ ] Move utilities to appropriate categories
+   - [ ] Separate API utilities
+   - [ ] Update import paths
+
+4. **Types Organization**
+   - [ ] Create domain-based structure
+   - [ ] Move types to appropriate domains
+   - [ ] Co-locate feature-specific types
+   - [ ] Update import paths
+
+### Documentation Updates
+- [ ] Add README files to key directories
+- [ ] Update contribution guidelines
+- [ ] Document new structure in wiki
+- [ ] Update development setup guide
+
+### Testing Requirements
+- [ ] Verify all imports after restructuring
+- [ ] Run full test suite after each major move
+- [ ] Update test paths as needed
+- [ ] Verify build process with new structure
+
 ## Known Issues
 
 ### 1. Data Management

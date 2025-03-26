@@ -1,6 +1,4 @@
-
 import React, { useState, useEffect } from "react";
-import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,51 +21,113 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProductSheet } from "@/types";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import RequestSheetModal from "@/components/suppliers/RequestSheetModal";
+
+// Define the product sheet type based on database structure
+interface ProductSheet {
+  id: string;
+  name: string;
+  supplierId: string;
+  supplierName?: string;
+  requestedById: string;
+  progress: number;
+  updatedAt: string;
+  status: string;
+}
+
+// Define the database record type
+interface ProductSheetRecord {
+  id: string;
+  name: string;
+  supplier_id: string;
+  requested_by_id: string;
+  updated_at: string;
+  status?: string;
+  companies?: { name: string };
+  [key: string]: any; // Allow for additional fields that may exist
+}
 
 const SupplierProducts = () => {
-  const { productSheets, companies, user } = useApp();
+  const { user, currentCompany } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [productSheets, setProductSheets] = useState<ProductSheet[]>([]);
   const [filteredSheets, setFilteredSheets] = useState<ProductSheet[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+  const [selectedSupplierName, setSelectedSupplierName] = useState<string>("");
   const navigate = useNavigate();
   
+  // Load product sheets from Supabase
   useEffect(() => {
-    if (!user) return;
+    const loadProductSheets = async () => {
+      if (!user?.id || !currentCompany?.id) return;
+      
+      setLoading(true);
+      try {
+        // Fetch product sheets that were requested by the current company
+        const { data, error } = await supabase
+          .from('product_sheets')
+          .select(`
+            *,
+            companies:supplier_id (name)
+          `)
+          .eq('requested_by_id', currentCompany.id);
+          
+        if (error) {
+          console.error('Error loading product sheets:', error);
+          toast.error('Failed to load product sheets');
+          return;
+        }
+        
+        if (!data || data.length === 0) {
+          setProductSheets([]);
+          return;
+        }
+        
+        // Transform data to match our interface
+        const transformedSheets: ProductSheet[] = (data as ProductSheetRecord[]).map(sheet => ({
+          id: sheet.id,
+          name: sheet.name,
+          supplierId: sheet.supplier_id,
+          supplierName: sheet.companies?.name || 'Unknown Supplier',
+          requestedById: sheet.requested_by_id,
+          // Use a default progress of 0 for now
+          progress: 0,
+          updatedAt: sheet.updated_at,
+          status: sheet.status || 'pending'
+        }));
+        
+        setProductSheets(transformedSheets);
+        
+      } catch (err) {
+        console.error('Unexpected error loading product sheets:', err);
+        toast.error('An unexpected error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // Find the current user's company
-    const userCompany = companies.find(company => company.id === user.companyId);
-    
-    // Filter sheets based on user role and company
-    let sheetsToShow: ProductSheet[] = [];
-    
-    if (!userCompany) {
-      // Admin view - show all sheets
-      sheetsToShow = [...productSheets];
-    } else if (userCompany.role === "supplier") {
-      // Suppliers should only see their own sheets
-      sheetsToShow = productSheets.filter(sheet => sheet.supplierId === userCompany.id);
-    } else if (userCompany.role === "customer" || userCompany.role === "both") {
-      // Customers should see sheets they requested or from their suppliers
-      sheetsToShow = productSheets.filter(sheet => sheet.requestedById === userCompany.id);
+    loadProductSheets();
+  }, [user, currentCompany]);
+
+  // Filter product sheets based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredSheets(productSheets);
+      return;
     }
     
-    // Apply search filter
-    const searchFiltered = sheetsToShow.filter((sheet) => {
-      const matchesSearch = 
-        (sheet.name && sheet.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (sheet.supplierId && getCompanyName(sheet.supplierId).toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      return matchesSearch;
-    });
+    const searchTermLower = searchTerm.toLowerCase();
+    const filtered = productSheets.filter(sheet => 
+      sheet.name.toLowerCase().includes(searchTermLower) ||
+      sheet.supplierName?.toLowerCase().includes(searchTermLower)
+    );
     
-    setFilteredSheets(searchFiltered);
-  }, [productSheets, user, companies, searchTerm]);
-
-  // Find company name by ID
-  const getCompanyName = (supplierId: string) => {
-    const company = companies.find(c => c.id === supplierId);
-    return company ? company.name : "Unknown";
-  };
+    setFilteredSheets(filtered);
+  }, [productSheets, searchTerm]);
 
   const handleAction = (sheetId: string, action: string) => {
     if (action === "edit") {
@@ -77,51 +137,16 @@ const SupplierProducts = () => {
     }
   };
 
-  // Calculate a completion rate if one doesn't exist
-  const getCompletionRate = (sheet: any) => {
-    if (sheet.completionRate !== undefined) return sheet.completionRate;
-    
-    // Calculate from the progress property if available
-    const company = companies.find(c => c.id === sheet.supplierId);
-    return company ? company.progress : 0;
-  };
-
-  // Determine if the current user can edit or review based on user role
-  const canEdit = user && (
-    user.role === "admin" ||
-    (user.companyId && companies.find(c => c.id === user.companyId)?.role === "supplier")
-  );
-  
-  const canReview = user && (
-    user.role === "admin" ||
-    (user.companyId && companies.find(c => c.id === user.companyId)?.role === "customer")
-  );
-
-  const canRequestSheet = user && (
-    user.role === "admin" ||
-    (user.companyId && companies.find(c => c.id === user.companyId)?.role !== "supplier")
-  );
-
-  // Get company type text for subtitle
-  const getCompanyTypeText = () => {
-    if (!user || !user.companyId) return "Admin View";
-    
-    const company = companies.find(c => c.id === user.companyId);
-    if (!company) return "Unknown Company";
-    
-    return `${company.name} (${company.role.charAt(0).toUpperCase() + company.role.slice(1)})`;
-  };
-
-  const handleRequestSheet = () => {
-    toast.info("Navigate to supplier selection to request a new product sheet");
-    navigate("/suppliers");
+  const handleRequestSheet = async () => {
+    // Simply open the modal, supplier selection is now handled inside the modal
+    setIsRequestModalOpen(true);
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Product Sheets"
-        subtitle={`Viewing as ${user?.name || 'Unknown User'} - ${getCompanyTypeText()}`}
+        title="Our Suppliers' Product Sheets"
+        subtitle={currentCompany ? `Viewing as ${currentCompany.name}` : "All Product Sheets"}
         actions={
           <>
             <PageHeaderAction
@@ -129,24 +154,13 @@ const SupplierProducts = () => {
               variant="outline"
               onClick={() => toast.info("Exporting data...")}
             />
-            {canRequestSheet && (
-              <PageHeaderAction
-                label="Request New Sheet"
-                onClick={handleRequestSheet}
-              />
-            )}
+            <PageHeaderAction
+              label="Request New Sheet"
+              onClick={handleRequestSheet}
+            />
           </>
         }
       />
-
-      {user && (
-        <div className="bg-muted p-4 rounded-md mb-4">
-          <p className="text-sm">You are currently signed in as: <strong>{user.name}</strong> ({user.email})</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Use the user switcher in the top-right corner to test different user roles
-          </p>
-        </div>
-      )}
 
       <div className="flex justify-between items-center space-x-4">
         <div className="relative flex-1 max-w-sm">
@@ -164,15 +178,20 @@ const SupplierProducts = () => {
         </Button>
       </div>
 
-      {filteredSheets.length > 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
+      ) : filteredSheets.length > 0 ? (
         <div className="border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Product Name</TableHead>
                 <TableHead>Supplier Name</TableHead>
-                <TableHead>Task Progress</TableHead>
+                <TableHead>Progress</TableHead>
                 <TableHead>Last Updated</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -180,14 +199,24 @@ const SupplierProducts = () => {
               {filteredSheets.map((sheet) => (
                 <TableRow key={sheet.id}>
                   <TableCell className="font-medium">{sheet.name}</TableCell>
-                  <TableCell>{getCompanyName(sheet.supplierId)}</TableCell>
+                  <TableCell>{sheet.supplierName}</TableCell>
                   <TableCell>
-                    <Progress value={getCompletionRate(sheet)} className="h-2 w-[100px]" />
+                    <Progress value={sheet.progress} className="h-2 w-[100px]" />
                   </TableCell>
                   <TableCell>
                     {sheet.updatedAt 
                       ? format(new Date(sheet.updatedAt), "yyyy-MM-dd") 
                       : "N/A"}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      sheet.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      sheet.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {sheet.status === 'completed' ? 'Completed' :
+                       sheet.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -200,18 +229,14 @@ const SupplierProducts = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
-                        {canEdit && (
-                          <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View & Edit
-                          </DropdownMenuItem>
-                        )}
-                        {canReview && (
-                          <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
-                            <ClipboardCheck className="h-4 w-4 mr-2" />
-                            Review
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem onClick={() => handleAction(sheet.id, "review")}>
+                          <ClipboardCheck className="h-4 w-4 mr-2" />
+                          Review
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAction(sheet.id, "edit")}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -226,23 +251,24 @@ const SupplierProducts = () => {
             <FileSpreadsheet className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold">No product sheets found</h3>
             <p className="text-muted-foreground mb-4">
-              {!user ? (
-                "Please sign in to view product sheets."
-              ) : user.companyId && companies.find(c => c.id === user.companyId)?.role === "supplier" ? (
-                "You currently don't have any product sheets assigned to you."
-              ) : (
-                "Request product information sheets from your suppliers to get started."
-              )}
+              You haven't requested any product sheets from your suppliers yet.
             </p>
-            {canRequestSheet && (
-              <Button onClick={handleRequestSheet} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Request New Sheet
-              </Button>
-            )}
+            <Button onClick={handleRequestSheet} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Request New Sheet
+            </Button>
           </div>
         </div>
       )}
+
+      {/* Request Sheet Modal */}
+      <RequestSheetModal
+        open={isRequestModalOpen}
+        onOpenChange={setIsRequestModalOpen}
+        // Optionally pass pre-selected supplier if we have it
+        supplierId={selectedSupplierId || undefined}
+        supplierName={selectedSupplierName || undefined}
+      />
     </div>
   );
 };

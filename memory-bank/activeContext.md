@@ -73,4 +73,98 @@ Setting up proper development, staging, and production environments before proce
 1. Company relationship filtering not properly implemented
 2. User role-based views need refinement
 3. Product dropdown in PIR creation needs company-specific filtering
-4. Toast notifications too frequent during form input 
+4. Toast notifications too frequent during form input
+
+## Directory Structure Status
+
+### Current Structure Assessment
+The project currently has a solid foundation with clear separation of concerns, but some areas need optimization:
+
+#### Strengths
+- Clear separation of core concerns (components, pages, context, etc.)
+- Well-organized infrastructure (migrations, scripts, docs)
+- Proper configuration file placement
+- Memory bank structure follows best practices
+
+#### Areas for Improvement
+1. **Components Directory**
+   - Need to reorganize into feature-based structure
+   - Move shared components to common directory
+   - Separate layout components
+   - Current Status: Partially organized, needs restructuring
+
+2. **Pages Directory**
+   - Currently flat structure needs feature-based organization
+   - Missing proper lazy loading implementation
+   - Current Status: Functional but needs reorganization
+
+3. **Utils Directory**
+   - Needs better categorization
+   - API utilities should be separated
+   - Current Status: Basic structure, needs expansion
+
+4. **Types Organization**
+   - Could benefit from domain-based organization
+   - Some types could be co-located with features
+   - Current Status: Basic structure, needs enhancement
+
+### Next Steps
+1. Create new directory structure according to systemPatterns.md guidelines
+2. Move components to feature-based organization
+3. Implement proper lazy loading for pages
+4. Reorganize utils and types directories
+5. Update import statements systematically
+6. Add README files to key directories
+
+### Migration Priority
+1. High: Component reorganization
+2. Medium: Page structure improvement
+3. Medium: Utils categorization
+4. Low: Types reorganization
+
+## Immediate Development Structure Guidelines
+
+### Forward-Compatible Development (Pre-Restructure)
+To minimize restructuring effort while maintaining development velocity, follow these patterns for new code:
+
+#### New Components
+```
+src/components/[feature]/
+├── features/     # New feature-specific components
+├── ui/          # New feature-specific UI components
+└── utils/       # New feature-specific utilities
+```
+
+#### New Pages
+```
+src/pages/[feature]/
+└── index.tsx    # Main feature page
+```
+
+#### New Types
+```
+src/types/
+└── [feature]/   # Feature-specific types
+```
+
+### Current Development Rules
+1. **New Features**
+   - Create feature-specific directories upfront
+   - Keep related code co-located
+   - Use index.ts files for exports
+
+2. **Shared Components**
+   - If clearly reusable, place in `src/components/common/`
+   - Document reuse potential in component comments
+
+3. **Documentation**
+   - Add README.md in new feature directories
+   - Document component purposes and relationships
+   - Mark temporary solutions with TODO comments
+
+4. **Imports**
+   - Use relative paths for feature-specific imports
+   - Use absolute paths for shared utilities
+   - Keep import statements organized and grouped
+
+This approach allows continued development while making future restructuring easier. 

@@ -11,15 +11,17 @@ export interface Company {
   id: string;
   name: string;
   role: "supplier" | "customer" | "both";
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
   progress: number;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  country?: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  zip_code: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Tag {
@@ -127,3 +129,12 @@ export interface TableColumn {
   nested?: boolean;
   nestedColumns?: NestedTableColumns[];
 }
+
+export type CompanyUser = {
+  id: string;
+  company_id: string;
+  user_id: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+};

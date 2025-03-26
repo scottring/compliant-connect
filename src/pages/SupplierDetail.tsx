@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import PageHeader from "@/components/PageHeader";
@@ -13,29 +13,195 @@ import { toast } from "sonner";
 import TagBadge from "@/components/tags/TagBadge";
 import RequestSheetModal from "@/components/suppliers/RequestSheetModal";
 import { ProductSheet } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { Company } from "@/types";
+
+// Define the database record type for product sheets
+interface ProductSheetRecord {
+  id: string;
+  name: string;
+  supplier_id: string;
+  requested_by_id: string;
+  updated_at: string;
+  status?: string;
+  tags?: string[];
+  [key: string]: any; // Allow for additional fields that may exist
+}
+
+// Helper function to map database status to ProductSheet status type
+const mapStatus = (status: string | undefined): "draft" | "submitted" | "reviewing" | "approved" | "rejected" => {
+  if (!status) return "draft";
+  
+  switch(status) {
+    case "submitted": return "submitted";
+    case "reviewing": return "reviewing";
+    case "approved": return "approved";
+    case "rejected": return "rejected";
+    case "draft": return "draft";
+    default: return "draft"; // Default to draft for any unrecognized status
+  }
+};
 
 const SupplierDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { companies, productSheets, tags } = useApp();
+  const { companies, productSheets: appProductSheets, tags } = useApp();
   const [comment, setComment] = useState("");
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [supplierProductSheets, setSupplierProductSheets] = useState<ProductSheet[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [supplier, setSupplier] = useState<Company | null>(null);
+  const [loadingSupplier, setLoadingSupplier] = useState(true);
 
-  // Find the supplier by ID
-  const supplier = companies.find(
-    (company) => company.id === id && (company.role === "supplier" || company.role === "both")
-  );
+  // Load supplier data directly from Supabase
+  useEffect(() => {
+    const loadSupplier = async () => {
+      if (!id) return;
+      
+      setLoadingSupplier(true);
+      try {
+        const { data, error } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (error) {
+          console.error('Error loading supplier:', error);
+          toast.error('Failed to load supplier details');
+          return;
+        }
+        
+        if (!data) {
+          toast.error('Supplier not found');
+          return;
+        }
+        
+        // Transform to Company type
+        const supplierData: Company = {
+          id: data.id,
+          name: data.name,
+          role: data.role as "supplier" | "customer" | "both",
+          contactName: data.contact_name,
+          contactEmail: data.contact_email,
+          contactPhone: data.contact_phone,
+          progress: data.progress || 0
+        };
+        
+        setSupplier(supplierData);
+      } catch (err) {
+        console.error('Unexpected error loading supplier:', err);
+        toast.error('An unexpected error occurred');
+      } finally {
+        setLoadingSupplier(false);
+      }
+    };
+    
+    loadSupplier();
+  }, [id]);
 
-  // Filter product sheets for this supplier
-  const supplierProductSheets = useMemo(() => {
-    return productSheets.filter(sheet => sheet.supplierId === id);
-  }, [productSheets, id]);
+  // Load product sheets for this supplier from Supabase
+  useEffect(() => {
+    const loadProductSheets = async () => {
+      if (!id) return;
+      
+      setLoading(true);
+      try {
+        // Fetch product sheets for this supplier
+        const { data, error } = await supabase
+          .from('product_sheets')
+          .select('*')
+          .eq('supplier_id', id);
+          
+        if (error) {
+          console.error('Error loading product sheets for supplier:', error);
+          toast.error('Failed to load product sheets');
+          return;
+        }
+        
+        if (!data || data.length === 0) {
+          setSupplierProductSheets([]);
+          return;
+        }
+        
+        // Transform data to match our interface
+        const transformedSheets: ProductSheet[] = (data as ProductSheetRecord[]).map(sheet => ({
+          id: sheet.id,
+          name: sheet.name,
+          supplierId: sheet.supplier_id,
+          requestedById: sheet.requested_by_id,
+          progress: 0, // Use a default progress of 0 for now
+          updatedAt: new Date(sheet.updated_at), // Convert to Date object
+          status: mapStatus(sheet.status), // Use the mapper function
+          tags: sheet.tags || [],
+          createdAt: new Date(),
+          answers: [],
+          questions: []
+        }));
+        
+        setSupplierProductSheets(transformedSheets);
+      } catch (err) {
+        console.error('Unexpected error loading product sheets for supplier:', err);
+        toast.error('An unexpected error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProductSheets();
+    
+    // Also set up a real-time subscription to product sheets changes
+    const productSheetsSubscription = supabase
+      .channel('product-sheets-changes')
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'product_sheets',
+          filter: `supplier_id=eq.${id}`
+        },
+        (payload) => {
+          console.log('Product sheets changed:', payload);
+          // Reload the product sheets when changes occur
+          loadProductSheets();
+        }
+      )
+      .subscribe();
+      
+    // Clean up the subscription when the component unmounts
+    return () => {
+      supabase.removeChannel(productSheetsSubscription);
+    };
+  }, [id]);
 
-  if (!supplier) {
+  // Merge in any product sheets from the app context that might not be in Supabase yet
+  const allSupplierProductSheets = useMemo(() => {
+    // Get sheets from app context
+    const contextSheets = appProductSheets.filter(sheet => sheet.supplierId === id);
+    
+    // Create a map of existing sheets by ID
+    const existingSheetIds = new Set(supplierProductSheets.map(sheet => sheet.id));
+    
+    // Add any sheets from the app context that aren't in the Supabase results
+    const additionalSheets = contextSheets.filter(sheet => !existingSheetIds.has(sheet.id));
+    
+    return [...supplierProductSheets, ...additionalSheets];
+  }, [appProductSheets, supplierProductSheets, id]);
+
+  if (!supplier && !loadingSupplier) {
     return (
       <div className="py-12 text-center">
         <h2 className="text-2xl font-bold mb-4">Supplier not found</h2>
         <Button onClick={() => navigate("/suppliers")}>Back to Suppliers</Button>
+      </div>
+    );
+  }
+
+  if (loadingSupplier) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -180,62 +346,68 @@ const SupplierDetail = () => {
           </Button>
         </div>
         
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product ID</TableHead>
-                <TableHead>Product Name</TableHead>
-                <TableHead>Info Categories</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {supplierProductSheets.length > 0 ? (
-                supplierProductSheets.map((sheet) => (
-                  <TableRow 
-                    key={sheet.id}
-                    className={sheet.status === "submitted" ? "bg-red-50" : ""}
-                  >
-                    <TableCell>{sheet.id}</TableCell>
-                    <TableCell>{sheet.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {sheet.tags.map((tagId) => getTagBadge(tagId))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        className={`${getStatusStyle(sheet.status).bg} ${getStatusStyle(sheet.status).text} border-none`}
-                      >
-                        {getStatusLabel(sheet)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formattedDate(sheet.updatedAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="bg-brand hover:bg-brand-700 text-white"
-                        onClick={() => navigate(`/product-sheets/${sheet.id}`)}
-                      >
-                        View Details
-                      </Button>
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          </div>
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product ID</TableHead>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead>Info Categories</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allSupplierProductSheets.length > 0 ? (
+                  allSupplierProductSheets.map((sheet) => (
+                    <TableRow 
+                      key={sheet.id}
+                      className={sheet.status === "submitted" ? "bg-red-50" : ""}
+                    >
+                      <TableCell>{sheet.id}</TableCell>
+                      <TableCell>{sheet.name}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {sheet.tags.map((tagId) => getTagBadge(tagId))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          className={`${getStatusStyle(sheet.status).bg} ${getStatusStyle(sheet.status).text} border-none`}
+                        >
+                          {getStatusLabel(sheet)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{sheet.updatedAt ? formattedDate(new Date(sheet.updatedAt)) : "N/A"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-brand hover:bg-brand-700 text-white"
+                          onClick={() => navigate(`/product-sheets/${sheet.id}`)}
+                        >
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                      No product sheets available for this supplier
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                    No product sheets available for this supplier
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
       {/* PIR Modal */}

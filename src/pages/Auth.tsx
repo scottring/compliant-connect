@@ -35,6 +35,11 @@ const Auth = () => {
     }
   }, [user, navigate, from]);
 
+  // Debug Auth state
+  useEffect(() => {
+    console.log("Auth page state:", { loading, isAuthenticated: !!user, from });
+  }, [loading, user, from]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -46,23 +51,58 @@ const Auth = () => {
     
     try {
       setIsSubmitting(true);
+      console.log("Attempting login for:", email);
       await signIn(email, password);
       
-      // Add a small delay to ensure the user data is fully loaded
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Add logging to track login success
+      console.log("Login successful for:", email);
       
-      // Explicitly navigate after successful login
-      // This ensures redirection even if the useEffect doesn't trigger
-      console.log("Login successful, redirecting to:", from);
-      navigate(from, { replace: true });
+      // Attempt redirect with delay strategy
+      const maxRetries = 5;
+      let attempt = 0;
+      
+      const attemptRedirect = async () => {
+        attempt++;
+        console.log(`Redirect attempt ${attempt}/${maxRetries} - User: ${user?.email || 'null'}`);
+        
+        if (user) {
+          // User data is loaded, redirect
+          console.log("User data available, redirecting to:", from);
+          navigate(from, { replace: true });
+          return true;
+        } else if (attempt >= maxRetries) {
+          // We've waited long enough, force redirect to dashboard even if user isn't loaded
+          console.log("Max retries reached. Force redirecting to:", from);
+          navigate(from, { replace: true });
+          return true;
+        } else {
+          // Wait and try again
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return false;
+        }
+      };
+      
+      // Start the redirect attempts
+      const redirectLoop = async () => {
+        while (!(await attemptRedirect())) {
+          // Keep trying until we succeed or max out
+        }
+      };
+      
+      redirectLoop();
     } catch (error: any) {
       console.error("Login error:", error);
       
-      // Special handling for unconfirmed email
-      if (error.message === "Email not confirmed") {
+      if (error.code === 'PGRST116') {
+        setError("User profile not found. Please check your email and password.");
+      } else if (error.code === 'auth/email-not-verified') {
         setError("Please confirm your email before signing in. Check your inbox for the confirmation link.");
+      } else if (error.message === "Email not confirmed") {
+        setError("Please confirm your email before signing in. Check your inbox for the confirmation link.");
+      } else if (error.message?.includes("Invalid login credentials")) {
+        setError("Invalid email or password. Please try again.");
       } else {
-        setError(error.message || "Failed to sign in");
+        setError(error.message || "Failed to sign in. Please try again.");
       }
     } finally {
       setIsSubmitting(false);

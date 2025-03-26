@@ -3,15 +3,34 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
+import { Company, CompanyUser } from '@/types';
+import { UserCompany, ExtendedUser, UserRole } from '@/types/auth';
 
 // Extended user type to include profile and company data
 export type ExtendedUser = User & {
-  profile?: Tables<"profiles"> | null;
-  companies?: Tables<"companies">[];
-  roles?: Tables<"company_users">[];
+  profile: any;
+  companies: Array<{
+    id: string;
+    name: string;
+    role: string;
+    userRole: string;
+    contact_name: string;
+    contact_email: string;
+    contact_phone: string;
+    progress: number;
+  }>;
+  currentCompany: {
+    id: string;
+    name: string;
+    role: string;
+    userRole: string;
+    contact_name: string;
+    contact_email: string;
+    contact_phone: string;
+    progress: number;
+  } | null;
+  role: string;
 };
-
-export type UserRole = "admin" | "user" | "owner";
 
 interface AuthContextType {
   user: ExtendedUser | null;
@@ -34,198 +53,308 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<ExtendedUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userCompanies, setUserCompanies] = useState<Tables<"companies">[]>([]);
-  const [currentCompany, setCurrentCompany] = useState<Tables<"companies"> | null>(null);
+  const [userCompanies, setUserCompanies] = useState<UserCompany[]>([]);
+  const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [loadingStartTime, setLoadingStartTime] = useState(Date.now());
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch user profile and company data
+  // Format company data to match UserCompany type
+  const formatCompanyData = (companyData: any, userRole: UserRole): UserCompany => ({
+    id: companyData.id,
+    name: companyData.name,
+    role: companyData.role as "supplier" | "customer" | "both",
+    contact_name: companyData.contact_name || '',
+    contact_email: companyData.contact_email || '',
+    contact_phone: companyData.contact_phone || '',
+    progress: companyData.progress || 0,
+    address: companyData.address || '',
+    city: companyData.city || '',
+    state: companyData.state || '',
+    country: companyData.country || '',
+    zip_code: companyData.zip_code || '',
+    created_at: companyData.created_at || new Date().toISOString(),
+    updated_at: companyData.updated_at || new Date().toISOString(),
+    userRole: userRole
+  });
+
+  // Update companies data transformation
+  const transformCompaniesData = (companyUsers: any[]): UserCompany[] => {
+    return companyUsers.map(cu => formatCompanyData(cu.company, cu.role as UserRole));
+  };
+
+  // Fetch user data with proper typing
   const fetchUserData = async (userId: string) => {
     try {
-      // Fetch profile
-      const { data: profile, error: profileError } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
 
-      // Handle missing profile - attempt to create it from user metadata
-      if (profileError && profileError.code === 'PGRST116') {
-        console.log("Profile not found, checking user metadata");
-        const { data: { user: authUser } } = await supabase.auth.getUser(userId);
-        
-        if (authUser) {
-          // Create profile from auth user metadata
-          const { data: newProfile, error: createError } = await supabase
-            .from("profiles")
-            .insert({
-              id: userId,
-              email: authUser.email,
-              first_name: authUser.user_metadata.first_name,
-              last_name: authUser.user_metadata.last_name,
-            })
-            .select()
-            .single();
-          
-          if (createError) {
-            console.error("Error creating profile:", createError);
-          } else {
-            console.log("Profile created successfully");
-            // Use the newly created profile
-            return await fetchUserData(userId);
-          }
-        }
-      } else if (profileError) {
-        console.error("Error fetching profile:", profileError);
-      }
+      if (profileError) throw profileError;
 
-      // Fetch company associations
-      const { data: companyUsers, error: companyError } = await supabase
+      const { data: companyUsers, error: companyUsersError } = await supabase
         .from("company_users")
         .select(`
-          id, role,
-          company:companies(*)
+          id,
+          role,
+          company:companies (
+            id,
+            name,
+            role,
+            contact_name,
+            contact_email,
+            contact_phone,
+            progress,
+            address,
+            city,
+            state,
+            country,
+            zip_code,
+            created_at,
+            updated_at
+          )
         `)
         .eq("user_id", userId);
 
-      if (companyError) {
-        console.error("Error fetching company associations:", companyError);
-        // Continue execution but with empty company data
-      }
+      if (companyUsersError) throw companyUsersError;
 
-      // Extract companies from the response
-      const companies = companyUsers?.map((cu) => cu.company as Tables<"companies">) || [];
-      
-      // Set user companies
-      setUserCompanies(companies);
-      
-      // Set default company if not set
-      if (companies.length > 0 && !currentCompany) {
-        setCurrentCompany(companies[0]);
-      }
+      const companies = transformCompaniesData(companyUsers);
+      const currentCompany = companies.length > 0 ? companies[0] : null;
 
-      // Get user role for current company
-      if (currentCompany && companyUsers) {
-        const companyUser = companyUsers.find(cu => 
-          (cu.company as Tables<"companies">).id === currentCompany.id
-        );
-        if (companyUser) {
-          setUserRole(companyUser.role as UserRole);
-        }
-      } else if (companyUsers && companyUsers.length > 0) {
-        setUserRole(companyUsers[0].role as UserRole);
-      }
-
-      // Update user with extended data
       return {
-        ...user!,
-        profile: profile || null,
-        companies: companies || [],
-        roles: companyUsers || [],
+        error: null,
+        profile: profileData,
+        companies,
+        currentCompany
       };
-    } catch (error) {
-      console.error("Error in fetchUserData:", error);
-      return user;
+    } catch (error: any) {
+      console.error("Unexpected error in fetchUserData:", error);
+      return { 
+        error: `Unexpected error: ${error.message}`,
+        profile: null,
+        companies: [],
+        currentCompany: null
+      };
     }
   };
 
   // Refresh user data
   const refreshUserData = async () => {
-    if (user?.id) {
-      const extendedUser = await fetchUserData(user.id);
-      setUser(extendedUser as ExtendedUser);
+    if (!user?.id) return;
+    
+    setLoading(true);
+    try {
+      const userData = await fetchUserData(user.id);
+      if (userData) {
+        // Update user object with new data
+        setUser({
+          ...user,
+          profile: userData.profile,
+          companies: userData.companies,
+          currentCompany: userData.currentCompany
+        });
+        
+        // Update company lists
+        if (userData.companies && userData.companies.length > 0) {
+          setUserCompanies(userData.companies);
+          
+          // Set current company if not already set
+          if (!currentCompany && userData.currentCompany) {
+            setCurrentCompany(userData.currentCompany);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Initial loading of user
   useEffect(() => {
-    // Set up the auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        console.log("Auth state changed:", event, newSession?.user?.email);
-        setSession(newSession);
+    const loadUser = async () => {
+      try {
+        console.log("AuthProvider: Initial user loading started");
+        setLoading(true);
+
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (newSession?.user) {
-          console.log("User authenticated, fetching profile and company data...");
-          const extendedUser = await fetchUserData(newSession.user.id);
-          console.log("User data fetched:", { 
-            hasProfile: !!extendedUser.profile,
-            companyCount: extendedUser.companies?.length || 0
-          });
-          setUser(extendedUser as ExtendedUser);
-        } else {
-          console.log("User logged out or session ended");
-          setUser(null);
-          setUserCompanies([]);
-          setCurrentCompany(null);
-          setUserRole(null);
+        if (sessionError) {
+          console.error("AuthProvider: Session retrieval error", sessionError);
+          setError(sessionError.message);
+          setLoading(false);
+          return;
         }
+
+        if (!session) {
+          console.log("AuthProvider: No session found, user is not authenticated");
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        console.log("AuthProvider: Session found, retrieving user data");
         
+        // Get user from auth
+        const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError || !authUser) {
+          console.error("AuthProvider: User retrieval error", userError);
+          setError(userError?.message || "Failed to retrieve user data");
+          setLoading(false);
+          return;
+        }
+
+        // Fetch additional user data from the database
+        const response = await fetchUserData(authUser.id);
+        
+        if (response.error) {
+          console.error("AuthProvider: User data fetch error", response.error);
+          setError(response.error);
+          
+          // Try again with a fresh session if it looks like an auth issue
+          if (response.error.includes("auth") || response.error.includes("permission")) {
+            console.log("AuthProvider: Auth issue detected, refreshing session");
+            await supabase.auth.refreshSession();
+            const retryResponse = await fetchUserData(authUser.id);
+            
+            if (retryResponse.error) {
+              console.error("AuthProvider: Retry user data fetch failed", retryResponse.error);
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+            
+            // Success after retry
+            setUser({
+              ...authUser,
+              profile: retryResponse.profile,
+              companies: retryResponse.companies,
+              currentCompany: retryResponse.currentCompany,
+              role: "user", // Default role
+            });
+            setLoading(false);
+            return;
+          }
+          
+          // Non-auth related error
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        // Set user with database data
+        setUser({
+          ...authUser,
+          profile: response.profile,
+          companies: response.companies,
+          currentCompany: response.currentCompany,
+          role: "user", // Default role
+        });
+      } catch (error: any) {
+        console.error("AuthProvider: Unexpected error during initial load", error);
+        setError(error.message);
+        setUser(null);
+      } finally {
+        setLoading(false);
+        console.log("AuthProvider: Initial user loading completed");
+      }
+    };
+
+    loadUser();
+    
+    // Set up a periodic check for loading state getting stuck
+    const loadingCheckInterval = setInterval(() => {
+      console.log("AuthProvider: Loading state check...");
+      
+      // Check if loading state has been true for too long (10+ seconds)
+      if (loading && Date.now() - loadingStartTime > 10000) {
+        console.log("AuthProvider: Force resetting loading state");
         setLoading(false);
       }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      console.log("Initial session check:", currentSession?.user?.email || "No session");
-      setSession(currentSession);
-      
-      if (currentSession?.user) {
-        console.log("Found existing session, fetching user data...");
-        const extendedUser = await fetchUserData(currentSession.user.id);
-        console.log("Existing user data loaded:", { 
-          hasProfile: !!extendedUser.profile,
-          companyCount: extendedUser.companies?.length || 0
-        });
-        setUser(extendedUser as ExtendedUser);
-      } else {
-        console.log("No existing session found");
-        setUser(null);
-      }
-      
-      setLoading(false);
-    });
+    }, 5000);
 
     return () => {
-      subscription.unsubscribe();
+      clearInterval(loadingCheckInterval);
     };
   }, []);
 
   // Update role when current company changes
   useEffect(() => {
-    if (user?.roles && currentCompany) {
-      const companyUser = user.roles.find(cu => 
-        (cu as any).company?.id === currentCompany.id
-      );
+    if (user?.companies && currentCompany) {
+      // Find the company in the user's companies array to get the user's role in that company
+      const userCompanyData = user.companies.find(c => c.id === currentCompany.id);
       
-      if (companyUser) {
-        setUserRole(companyUser.role as UserRole);
+      if (userCompanyData) {
+        // Use the userRole from the company data
+        setUserRole(userCompanyData.userRole as UserRole);
       } else {
         setUserRole(null);
       }
+    } else {
+      setUserRole(null);
     }
-  }, [currentCompany, user?.roles]);
+  }, [currentCompany, user?.companies]);
+
+  // Update loadingStartTime whenever loading changes to true
+  useEffect(() => {
+    if (loading) {
+      setLoadingStartTime(Date.now());
+    }
+  }, [loading]);
+
+  // Force-reset loading state if needed (fallback safety mechanism)
+  useEffect(() => {
+    // Check every second if loading has been going on too long
+    const forceResetInterval = setInterval(() => {
+      if (loading) {
+        console.log("AuthProvider: Loading state check...");
+        const now = Date.now();
+        // After 5 seconds of loading, force reset
+        if (now - loadingStartTime > 5000) {
+          console.log("AuthProvider: Force resetting loading state");
+          setLoading(false);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(forceResetInterval);
+  }, [loading, loadingStartTime]);
 
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      console.log("Signing in user:", email);
       
-      // Attempt sign in
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      // Sign in with Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       
       if (error) throw error;
       
-      console.log("Authentication successful, waiting for session establishment");
+      // Set session
+      setSession(data.session);
       
-      // Ensure user data is loaded after sign in
+      // Debug the user info
+      console.log("Auth sign-in successful:", {
+        user: data.user?.email,
+        id: data.user?.id,
+        hasMetadata: !!data.user?.user_metadata,
+        metadata: data.user?.user_metadata
+      });
+      
+      // Check if email is confirmed (if needed by app flow)
+      // ...
+      
+      // Set base user right away so there's something
       if (data.user) {
-        const extendedUser = await fetchUserData(data.user.id);
-        setUser(extendedUser as ExtendedUser);
-        console.log("User signed in and profile loaded:", {
-          id: data.user.id,
-          email: data.user.email,
-          hasProfile: !!extendedUser.profile,
-          companyCount: extendedUser.companies?.length || 0
-        });
+        // If profile loading fails, still set the user to the basic auth user
+        setUser(data.user as ExtendedUser);
       }
       
       toast.success("Signed in successfully");
@@ -294,40 +423,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check if user has a specific permission
   const hasPermission = (permission: string): boolean => {
-    if (!user || !userRole) return false;
+    if (!user || !currentCompany) return false;
+
+    // Find the user's role in the current company
+    const companyData = userCompanies.find(c => c.id === currentCompany.id);
+    if (!companyData) return false;
 
     // For now, using a simple role-based approach
     switch (permission) {
       case 'create:company':
         return true; // Any logged-in user can create a company
       case 'admin:access':
-        return userRole === 'admin' || userRole === 'owner';
+        return companyData.userRole === 'admin' || companyData.userRole === 'owner';
       case 'owner:access':
-        return userRole === 'owner';
+        return companyData.userRole === 'owner';
       default:
         return true; // Default to allowing basic access
     }
   };
 
+  // Load user's companies
+  const loadUserCompanies = async (userId: string) => {
+    try {
+      const { data: companyUsers, error: companyUsersError } = await supabase
+        .from('company_users')
+        .select(`
+          companies (
+            id,
+            name,
+            role,
+            contact_name,
+            contact_email,
+            contact_phone,
+            progress,
+            address,
+            city,
+            state,
+            country,
+            zip_code,
+            created_at,
+            updated_at
+          ),
+          role as userRole
+        `)
+        .eq('user_id', userId);
+
+      if (companyUsersError) throw companyUsersError;
+
+      // Transform the data to match UserCompany type
+      const transformedCompanies: UserCompany[] = companyUsers.map((cu: any) => ({
+        ...cu.companies,
+        userRole: cu.userRole
+      }));
+
+      setUser(prev => prev ? { ...prev, companies: transformedCompanies } : null);
+    } catch (error) {
+      console.error('Error loading user companies:', error);
+      toast.error('Failed to load user companies');
+    }
+  };
+
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        session, 
-        signIn, 
-        signUp, 
-        signOut, 
-        loading,
-        userCompanies,
-        currentCompany,
-        setCurrentCompany,
-        userRole,
-        refreshUserData,
-        hasPermission
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <div id="auth-provider" data-loading={loading}>
+      <AuthContext.Provider
+        value={{ 
+          user, 
+          session, 
+          signIn, 
+          signUp, 
+          signOut, 
+          loading,
+          userCompanies,
+          currentCompany,
+          setCurrentCompany,
+          userRole,
+          refreshUserData,
+          hasPermission
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+    </div>
   );
 }
 
@@ -336,5 +512,19 @@ export const useAuth = () => {
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
-  return context;
+  
+  // Get a reference to the original loading state
+  const { loading: originalLoading, ...rest } = context;
+  
+  // Check if we should force the loading state to false
+  const authProvider = document.getElementById('auth-provider');
+  const forceLoaded = authProvider?.dataset.forceLoaded === 'true';
+  const loading = forceLoaded ? false : originalLoading;
+  
+  // Log if we're forcing the loading state
+  if (forceLoaded && originalLoading) {
+    console.log('useAuth: Force loading state to false');
+  }
+  
+  return { ...rest, loading };
 };
