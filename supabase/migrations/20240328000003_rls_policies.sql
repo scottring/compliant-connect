@@ -104,6 +104,13 @@ CREATE POLICY "Everyone can view tags"
     FOR SELECT
     USING (true);
 
+-- Add INSERT policy for tags (Allow any authenticated user)
+CREATE POLICY "Authenticated users can create tags"
+    ON public.tags
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+
 CREATE POLICY "Everyone can view sections"
     ON public.sections
     FOR SELECT
@@ -263,4 +270,4 @@ CREATE POLICY "Users can view comments on flags they can see"
             WHERE cu.user_id = auth.uid()
             AND rf.id = response_comments.flag_id
         )
-    ); 
+    );

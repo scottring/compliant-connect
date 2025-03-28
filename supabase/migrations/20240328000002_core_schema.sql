@@ -12,7 +12,8 @@ CREATE TABLE public.companies (
 CREATE TABLE public.company_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    -- Make the user_id foreign key deferrable
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED, 
     role TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -194,4 +195,4 @@ CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.pir_responses
     FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 
 CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.response_flags
-    FOR EACH ROW EXECUTE FUNCTION handle_updated_at(); 
+    FOR EACH ROW EXECUTE FUNCTION handle_updated_at();

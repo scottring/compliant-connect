@@ -107,10 +107,10 @@ export function QuestionBuilderDialog({
   const handleCreateTag = async () => {
     if (newTagName.trim()) {
       try {
+        // Pass only name and description (color is handled by UI only now)
         const newTag = await createTag({
           name: newTagName.trim(),
-          color: newTagColor,
-          description: ""
+          description: "" // Pass empty string or undefined if desired
         });
         setNewTagName("");
         setIsTagPopoverOpen(false);

@@ -56,8 +56,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error: insertError } = await supabase
           .from('profiles')
           .insert({ id: userId, first_name: firstName, last_name: lastName });
-        if (insertError) throw new Error('Failed to create user profile');
-        console.log('AuthContext: [_ensure] Profile created successfully');
+        // Ignore duplicate key (23505) AND foreign key (23503) errors, throw others
+        if (insertError && insertError.code !== '23505' && insertError.code !== '23503') { 
+            console.error("AuthContext: [_ensure] Error inserting profile:", insertError);
+            throw new Error('Failed to create user profile');
+        } else if (!insertError) {
+             console.log('AuthContext: [_ensure] Profile created successfully');
+        } else {
+             console.log(`AuthContext: [_ensure] Profile likely already exists or FK violation (ignored insert error ${insertError.code}).`);
+        }
       } else if (profileError) {
         console.error("AuthContext: [_ensure] Error checking for profile:", profileError);
         // Continue even if profile check fails, maybe it exists but query failed
@@ -98,9 +105,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       console.log("AuthContext: [_ensure] Created company:", company);
 
+      // Add a small delay to allow auth.users propagation
+      await new Promise(resolve => setTimeout(resolve, 500)); 
+      console.log("AuthContext: [_ensure] Waited 500ms, now attempting to associate user...");
+
       // Association Creation
       console.log("AuthContext: [_ensure] Attempting to associate user with company...");
-      // Remove comment from company_users insert as well
       const { data: companyUser, error: userError } = await supabase
         .from('company_users')
         .insert({ user_id: userId, company_id: company.id, role: 'admin' }) 

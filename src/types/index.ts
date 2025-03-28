@@ -27,7 +27,7 @@ export interface Company {
 export interface Tag {
   id: string;
   name: string;
-  color: string;
+  // color: string; // Removed - Not in DB schema
   description?: string;
 }
 
