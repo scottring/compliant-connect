@@ -34,7 +34,8 @@ import { Mail, Plus, Package, Building, SendHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import TagBadge from "@/components/tags/TagBadge";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase"; // Correct client import (though we might remove usage)
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
 
 interface RequestSheetModalProps {
   open: boolean;
@@ -58,7 +59,10 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   supplierId,
   supplierName,
 }) => {
-  const { productSheets, addProductSheet, tags, companies, questions, user } = useApp();
+  // Get userCompanies and currentCompany from AuthContext
+  const { userCompanies, currentCompany } = useAuth(); 
+  // const { productSheets, addProductSheet, tags, companies, questions, user } = useApp(); // Remove companies from useApp if not needed elsewhere
+  const { productSheets, addProductSheet, tags, questions, user } = useApp(); // Assuming user from useApp is different or less specific
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -67,56 +71,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [newProductName, setNewProductName] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(supplierId || "");
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(supplierName || "");
-  const [suppliers, setSuppliers] = useState<Company[]>([]);
-  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
-  
-  // Load suppliers from Supabase
-  useEffect(() => {
-    const loadSuppliers = async () => {
-      setLoadingSuppliers(true);
-      try {
-        const { data, error } = await supabase
-          .from('companies')
-          .select('*')
-          .or('role.eq.supplier,role.eq.both');
-          
-        if (error) {
-          console.error('Error loading suppliers:', error);
-          toast.error('Failed to load suppliers');
-          return;
-        }
-        
-        if (!data) {
-          setSuppliers([]);
-          return;
-        }
-        
-        // Transform to Company type
-        const suppliersList = data.map(supplier => ({
-          id: supplier.id,
-          name: supplier.name,
-          role: supplier.role as "supplier" | "customer" | "both",
-          contactName: supplier.contact_name,
-          contactEmail: supplier.contact_email,
-          contactPhone: supplier.contact_phone,
-          progress: supplier.progress || 0
-        }));
-        
-        setSuppliers(suppliersList);
-      } catch (err) {
-        console.error('Unexpected error loading suppliers:', err);
-        toast.error('An unexpected error occurred');
-      } finally {
-        setLoadingSuppliers(false);
-      }
-    };
-    
-    if (open) {
-      loadSuppliers();
-    }
-  }, [open]);
+  // Remove suppliers state and loading state - use userCompanies from context
+  // const [suppliers, setSuppliers] = useState<Company[]>([]); 
+  // const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
-  // Update selected supplier when props change
+  // Use userCompanies directly from context for the dropdown (temporarily remove filter)
+  const suppliers = userCompanies; 
+  
+  // Update selected supplier when props change (Keep this)
   useEffect(() => {
     if (supplierId) {
       setSelectedSupplierId(supplierId);
@@ -161,8 +123,8 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Find supplier email from companies
-    const supplier = companies.find(company => company.id === selectedSupplierId);
+    // Find supplier email from userCompanies (context)
+    const supplier = userCompanies.find(company => company.id === selectedSupplierId);
     
     if (!supplier || !supplier.contactEmail) {
       toast.error("Could not find supplier email address");
@@ -192,11 +154,11 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       
       // Get the actual supplier ID from form values
       const finalSupplierId = values.supplierId;
-      
-      // Find supplier name
-      const supplier = companies.find(company => company.id === finalSupplierId);
-      if (!supplier) {
-        toast.error("Invalid supplier selected");
+    
+    // Find supplier name from userCompanies (context)
+    const supplier = userCompanies.find(company => company.id === finalSupplierId);
+    if (!supplier) {
+      toast.error("Invalid supplier selected");
         return;
       }
       
@@ -265,10 +227,10 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
         questions: relevantQuestions.length > 0 ? relevantQuestions : [],
         description: values.note || ""
       });
-      
-      // Find supplier email
-      if (supplier && supplier.contactEmail) {
-        // Send email notification
+    
+    // Find supplier email (already found supplier above)
+    if (supplier && supplier.contactEmail) {
+      // Send email notification
         await sendEmailNotification(supplier.contactEmail, finalProductName);
       }
       
@@ -311,7 +273,8 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       return;
     }
     
-    const supplier = companies.find(c => c.id === supplierId);
+    // Find supplier from userCompanies (context)
+    const supplier = userCompanies.find(c => c.id === supplierId);
     setSelectedSupplierId(supplierId);
     setSelectedSupplierName(supplier?.name || "");
     
@@ -329,7 +292,8 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
           <DialogTitle>Create Product Information Request (PIR)</DialogTitle>
           <DialogDescription>
             Request product information from your suppliers.
-            {selectedSupplierId && companies.find(c => c.id === selectedSupplierId)?.contactEmail && (
+            {/* Check the suppliers array derived from userCompanies context */}
+            {selectedSupplierId && suppliers.find(c => c.id === selectedSupplierId)?.contactEmail && ( 
               <div className="flex items-center mt-2 text-xs text-muted-foreground">
                 <Mail className="h-3 w-3 mr-1" />
                 <span>An email notification will be sent to the supplier.</span>
@@ -359,18 +323,16 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                       >
                         <FormControl>
                           <SelectTrigger className="pl-10">
-                            <SelectValue placeholder={loadingSuppliers ? "Loading suppliers..." : "Select a supplier"} />
+                            {/* Use suppliers derived from context */}
+                            <SelectValue placeholder={suppliers.length === 0 && !currentCompany ? "Select your company first" : "Select a supplier"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {loadingSuppliers ? (
-                            <div className="p-2 text-center text-sm text-muted-foreground">
-                              Loading suppliers...
-                            </div>
-                          ) : suppliers.length > 0 ? (
+                          {/* Use suppliers derived from context */}
+                          {suppliers.length > 0 ? ( 
                             suppliers.map((supplier) => (
                               <SelectItem key={supplier.id} value={supplier.id}>
-                                {supplier.name}
+                                {supplier.name} 
                               </SelectItem>
                             ))
                           ) : (

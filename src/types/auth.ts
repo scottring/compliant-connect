@@ -23,7 +23,7 @@ export interface SupplierRelationship {
 export interface Company {
   id: string;
   name: string;
-  role: "supplier" | "customer" | "both";
+  // role: "supplier" | "customer" | "both"; // <-- Removed this line
   contactName: string;
   contactEmail: string;
   contactPhone: string;
@@ -47,4 +47,4 @@ export interface ExtendedUser extends SupabaseUser {
   companies?: Company[];
   currentCompany?: Company | null;
   role?: string;
-} 
+}

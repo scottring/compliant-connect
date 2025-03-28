@@ -1,937 +1,371 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase"; // Ensure this is the correct client
 import { toast } from "sonner";
-import { Tables } from "@/integrations/supabase/types";
-import { Company, UserCompany, ExtendedUser } from '@/types/auth';
-import { Database } from "@/integrations/supabase/types";
+import { Company, UserCompany, ExtendedUser, UserRole } from '@/types/auth'; 
 
-// Add structured error types
-interface AuthError {
-  code: 'AUTH_ERROR' | 'PROFILE_ERROR' | 'COMPANY_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN_ERROR';
-  message: string;
-  originalError?: any;
-  recoverable: boolean;
-}
-
-interface LoadingState {
+// Simplified loading state
+export interface LoadingState {
   auth: boolean;
-  profile: boolean;
-  company: boolean;
   global: boolean;
 }
 
-type CompanyRole = 'supplier' | 'customer' | 'both';
-type UserRole = 'owner' | 'admin' | 'member';
-
-const COMPANY_STORAGE_KEY = 'lastActiveCompany';
-const LOADING_TIMEOUT = 10000; // 10 seconds
-
-interface CompanyContextState {
-  companies: UserCompany[];
-  currentCompany: Company | null;
-  role: UserRole;
-  permissions: string[];
-  lastUpdated: number;
-}
-
-interface AuthContextType {
+export interface AuthContextType {
   user: ExtendedUser | null;
   session: Session | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   loading: LoadingState;
   userCompanies: UserCompany[];
   currentCompany: Company | null;
   setCurrentCompany: (company: Company | null) => void;
-  userRole: UserRole | null;
   refreshUserData: () => Promise<void>;
-  hasPermission: (permission: string) => boolean;
-  error: AuthError | null;
-  clearError: () => void;
-  switchCompanyContext: (companyId: string) => Promise<void>;
-  getAvailableRoutes: () => string[];
-  companyContext: CompanyContextState;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Define permission constants
-const PERMISSIONS = {
-  SUPPLIER: {
-    OWNER: [
-      'supplier.manage',
-      'supplier.view',
-      'supplier.edit',
-      'pir.respond',
-      'pir.view',
-      'company.manage',
-      'users.manage'
-    ],
-    ADMIN: [
-      'supplier.view',
-      'supplier.edit',
-      'pir.respond',
-      'pir.view',
-      'users.view'
-    ],
-    MEMBER: [
-      'supplier.view',
-      'pir.respond',
-      'pir.view'
-    ]
-  },
-  CUSTOMER: {
-    OWNER: [
-      'customer.manage',
-      'customer.view',
-      'customer.edit',
-      'pir.create',
-      'pir.manage',
-      'pir.view',
-      'company.manage',
-      'users.manage',
-      'questions.manage'
-    ],
-    ADMIN: [
-      'customer.view',
-      'customer.edit',
-      'pir.create',
-      'pir.manage',
-      'pir.view',
-      'questions.edit',
-      'users.view'
-    ],
-    MEMBER: [
-      'customer.view',
-      'pir.view',
-      'questions.view'
-    ]
-  }
-};
-
-// Define route permissions mapping
-const ROUTE_PERMISSIONS: Record<string, string[]> = {
-  '/dashboard': ['pir.view'],
-  '/questions': ['questions.view'],
-  '/questions/manage': ['questions.manage'],
-  '/pir/create': ['pir.create'],
-  '/pir/manage': ['pir.manage'],
-  '/pir/respond': ['pir.respond'],
-  '/company/settings': ['company.manage'],
-  '/users': ['users.view'],
-  '/users/manage': ['users.manage']
-};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<ExtendedUser | null>(null);
   const [loading, setLoading] = useState<LoadingState>({
-    auth: false,
-    profile: false,
-    company: false,
+    auth: false,  // Start with loading state as false
     global: false
   });
   const [userCompanies, setUserCompanies] = useState<UserCompany[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [loadingStartTime, setLoadingStartTime] = useState(Date.now());
-  const [error, setError] = useState<AuthError | null>(null);
-  const [companyContext, setCompanyContext] = useState<CompanyContextState>({
-    companies: [],
-    currentCompany: null,
-    role: 'member',
-    permissions: [],
-    lastUpdated: Date.now()
-  });
 
-  const clearError = () => setError(null);
-
-  const handleAuthError = (error: any, context: string): AuthError => {
-    console.error(`Error in ${context}:`, error);
-    
-    let authError: AuthError = {
-      code: 'UNKNOWN_ERROR',
-      message: 'An unexpected error occurred',
-      originalError: error,
-      recoverable: false
-    };
-
-    if (error.message?.includes('auth')) {
-      authError = {
-        code: 'AUTH_ERROR',
-        message: error.message,
-        originalError: error,
-        recoverable: true
-      };
-    } else if (error.message?.includes('profile')) {
-      authError = {
-        code: 'PROFILE_ERROR',
-        message: error.message,
-        originalError: error,
-        recoverable: true
-      };
-    } else if (error.message?.includes('company')) {
-      authError = {
-        code: 'COMPANY_ERROR',
-        message: error.message,
-        originalError: error,
-        recoverable: true
-      };
-    } else if (error.message?.includes('network')) {
-      authError = {
-        code: 'NETWORK_ERROR',
-        message: 'Network connection error',
-        originalError: error,
-        recoverable: true
-      };
-    }
-
-    setError(authError);
-    return authError;
-  };
-
-  // Update loading state helper
-  const updateLoading = (key: keyof LoadingState, value: boolean) => {
-    setLoading(prev => {
-      const newState = { ...prev, [key]: value };
-      // Update global loading if any state is loading
-      newState.global = Object.values(newState).some(v => v && v !== newState.global);
-      return newState;
-    });
-  };
-
-  // Format company data to match UserCompany type
-  const formatCompanyData = (companyData: any, userRole: UserRole): UserCompany => ({
-    id: companyData.id,
-    name: companyData.name,
-    role: companyData.role as CompanyRole,
-    contactName: companyData.contact_name || '',
-    contactEmail: companyData.contact_email || '',
-    contactPhone: companyData.contact_phone || '',
-    progress: companyData.progress || 0,
-    address: companyData.address || '',
-    city: companyData.city || '',
-    state: companyData.state || '',
-    country: companyData.country || '',
-    zipCode: companyData.zip_code || '',
-    createdAt: companyData.created_at || new Date().toISOString(),
-    updatedAt: companyData.updated_at || new Date().toISOString(),
-    userRole: userRole
-  });
-
-  // Update companies data transformation
-  const transformCompaniesData = (companyUsers: any[]): UserCompany[] => {
-    return companyUsers.map(cu => formatCompanyData(cu, cu.role as UserRole));
-  };
-
-  // Fetch user data with proper typing
-  const fetchUserData = async (userId: string): Promise<{
-    error?: string;
-    profile: any;
-    companies: UserCompany[];
-    currentCompany: UserCompany | null;
-  }> => {
+  // --- Refactored Company Association Logic ---
+  const _ensureUserCompanyAssociation = async (userId: string, email: string): Promise<boolean> => {
+    console.log("AuthContext: Entering _ensureUserCompanyAssociation for user:", userId);
+    let associationCreated = false;
     try {
-      console.log("Fetching user data for:", userId);
-      
+      // Profile Check
+      console.log("AuthContext: [_ensure] Checking for profile...");
       const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
         .single();
 
-      if (profileError) throw profileError;
-
-      const { data: companyUsers, error: companyUsersError } = await supabase
-        .from("company_users")
-        .select(`
-          role,
-          id,
-          companies (
-            id,
-            name,
-            role,
-            contact_name,
-            contact_email,
-            contact_phone,
-            progress,
-            created_at,
-            updated_at,
-            address,
-            city,
-            state,
-            country,
-            zip_code
-          )
-        `)
-        .eq("user_id", userId);
-
-      if (companyUsersError) throw companyUsersError;
-
-      console.log("Raw company users data:", companyUsers);
-
-      // Transform company data
-      const companies = (companyUsers || []).map((cu: any) => {
-        return formatCompanyData(cu.companies, cu.role as UserRole);
-      });
-      
-      console.log("Transformed companies:", companies);
-      
-      // Find the first company that is a customer or both
-      const currentCompany = companies.find(c => c.role === "customer" || c.role === "both") || companies[0] || null;
-      console.log("Selected current company:", currentCompany);
-
-      return {
-        profile: profileData,
-        companies,
-        currentCompany
-      };
-
-    } catch (error: any) {
-      console.error("Error fetching user data:", error);
-      return {
-        error: error.message,
-        profile: null,
-        companies: [],
-        currentCompany: null
-      };
-    }
-  };
-
-  // Refresh user data
-  const refreshUserData = async () => {
-    if (!user?.id) return;
-    
-    setLoading(prev => ({ ...prev, company: true }));
-    try {
-      const userData = await fetchUserData(user.id);
-      if (userData) {
-        // Update user object with new data
-        setUser({
-          ...user,
-          profile: userData.profile,
-          companies: userData.companies,
-          currentCompany: userData.currentCompany
-        });
-        
-        // Update company lists
-        if (userData.companies && userData.companies.length > 0) {
-          setUserCompanies(userData.companies);
-          
-          // Set current company if not already set
-          if (!currentCompany && userData.currentCompany) {
-            setCurrentCompany(userData.currentCompany);
-          }
-        }
+      if (profileError && profileError.code === 'PGRST116') {
+        console.log('Profile not found, creating one...');
+        const { data: userData } = await supabase.auth.getUser();
+        const firstName = userData?.user?.user_metadata?.first_name || email.split('@')[0];
+        const lastName = userData?.user?.user_metadata?.last_name || '';
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ id: userId, first_name: firstName, last_name: lastName });
+        if (insertError) throw new Error('Failed to create user profile');
+        console.log('AuthContext: [_ensure] Profile created successfully');
+      } else if (profileError) {
+        console.error("AuthContext: [_ensure] Error checking for profile:", profileError);
+        // Continue even if profile check fails, maybe it exists but query failed
+      } else {
+        console.log('AuthContext: [_ensure] Profile already exists');
       }
+
+      // Existing Association Check
+      console.log("AuthContext: [_ensure] Checking for existing company associations...");
+      const { data: existingCompanies, error: checkError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', userId)
+        .limit(1);
+
+      if (checkError) {
+        console.error("AuthContext: Error checking for existing companies:", checkError);
+        return false; // Cannot proceed
+      }
+
+      if (existingCompanies && existingCompanies.length > 0) {
+        console.log("AuthContext: [_ensure] User already has company associations. Skipping creation.");
+        return false; // No new association needed
+      }
+
+      // Company Creation
+      console.log("AuthContext: [_ensure] No existing company found, attempting to create test company...");
+      const companyName = email.split('@')[0] + "'s Test Company";
+      // Remove created_by, contact_email, and status from insert as they don't exist in schema
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .insert({ name: companyName }) // Removed status, contact_email, created_by
+        .select()
+        .single();
+      if (companyError) {
+        console.error("AuthContext: [_ensure] Error creating company:", companyError);
+        return false; // Cannot proceed
+      }
+      console.log("AuthContext: [_ensure] Created company:", company);
+
+      // Association Creation
+      console.log("AuthContext: [_ensure] Attempting to associate user with company...");
+      // Remove comment from company_users insert as well
+      const { data: companyUser, error: userError } = await supabase
+        .from('company_users')
+        .insert({ user_id: userId, company_id: company.id, role: 'admin' }) 
+        .select()
+        .single();
+      if (userError) {
+        console.error("AuthContext: [_ensure] Error associating user with company:", userError);
+        // Consider cleanup if company was created but association failed
+        return false; // Association failed
+      }
+      console.log("AuthContext: [_ensure] User granted admin access:", companyUser);
+      associationCreated = true; // Mark that we created one
+
     } catch (error) {
-      console.error("Error refreshing user data:", error);
-    } finally {
-      setLoading(prev => ({ ...prev, company: false }));
+      console.error("AuthContext: [_ensure] CATCH BLOCK Error in _ensureUserCompanyAssociation:", error); // Log errors caught here
+      associationCreated = false; // Ensure flag is false on error
     }
+    console.log("AuthContext: Exiting _ensureUserCompanyAssociation for user:", userId, "Association created:", associationCreated);
+    return associationCreated; // Return whether a new association was made
   };
+  // --- End Refactored Logic ---
 
-  // Initial loading of user
+  // Set up auth state listener
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        console.log("AuthProvider: Initial user loading started");
-        setLoading(prev => ({ ...prev, auth: true }));
-
-        // Get current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error("AuthProvider: Session retrieval error", sessionError);
-          setError(handleAuthError(sessionError, 'initial load'));
-          setLoading(prev => ({ ...prev, auth: false }));
-          return;
-        }
-
-        if (!session) {
-          console.log("AuthProvider: No session found, user is not authenticated");
-          setUser(null);
-          setLoading(prev => ({ ...prev, auth: false }));
-          return;
-        }
-
-        console.log("AuthProvider: Session found, retrieving user data");
-        
-        // Get user from auth
-        const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError || !authUser) {
-          console.error("AuthProvider: User retrieval error", userError);
-          setError(handleAuthError(userError, 'initial load'));
-          setUser(null);
-          setLoading(prev => ({ ...prev, auth: false }));
-          return;
-        }
-
-        // Fetch additional user data from the database
-        const response = await fetchUserData(authUser.id);
-        
-        if (response.error) {
-          console.error("AuthProvider: User data fetch error", response.error);
-          setError(handleAuthError(new Error(response.error), 'initial load'));
-          
-          // Try again with a fresh session if it looks like an auth issue
-          if (response.error.includes("auth") || response.error.includes("permission")) {
-            console.log("AuthProvider: Auth issue detected, refreshing session");
-            await supabase.auth.refreshSession();
-            const retryResponse = await fetchUserData(authUser.id);
-            
-            if (retryResponse.error) {
-              console.error("AuthProvider: Retry user data fetch failed", retryResponse.error);
-              setUser(null);
-              setLoading(prev => ({ ...prev, auth: false }));
-              return;
-            }
-            
-            // Success after retry
-            setUser({
-              ...authUser,
-              profile: retryResponse.profile,
-              companies: retryResponse.companies,
-              currentCompany: retryResponse.currentCompany,
-              role: "user", // Default role
-            });
-            setLoading(prev => ({ ...prev, auth: false }));
-            return;
-          }
-          
-          // Non-auth related error
-          setUser(null);
-          setLoading(prev => ({ ...prev, auth: false }));
-          return;
-        }
-
-        // Set user with database data
-        setUser({
-          ...authUser,
-          profile: response.profile,
-          companies: response.companies,
-          currentCompany: response.currentCompany,
-          role: "user", // Default role
-        });
-      } catch (error: any) {
-        console.error("AuthProvider: Unexpected error during initial load", error);
-        setError(handleAuthError(error, 'initial load'));
-        setUser(null);
-      } finally {
-        setLoading(prev => ({ ...prev, auth: false }));
-        console.log("AuthProvider: Initial user loading completed");
-      }
-    };
-
-    loadUser();
-    
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event);
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Fetch and set user data
-        const userData = await fetchUserData(session.user.id);
-        if (!userData.error) {
-          setUser({
-            ...session.user,
-            profile: userData.profile,
-            companies: userData.companies,
-            currentCompany: userData.currentCompany,
-            role: "user"
-          });
-          setUserCompanies(userData.companies);
-          if (userData.currentCompany) {
-            setCurrentCompany(userData.currentCompany);
-          }
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setUserCompanies([]);
-        setCurrentCompany(null);
+      if (session?.user) {
+        setUser({ ...session.user, profile: null, companies: [], currentCompany: null, role: "user" });
       }
     });
-    
-    // Set up a periodic check for loading state getting stuck
-    const loadingCheckInterval = setInterval(() => {
-      console.log("AuthProvider: Loading state check...");
-      
-      // Check if loading state has been true for too long (10+ seconds)
-      if (loading.global && Date.now() - loadingStartTime > 10000) {
-        console.log("AuthProvider: Force resetting loading state");
-        setLoading(prev => ({ ...prev, global: false }));
-      }
-    }, 5000);
 
-    return () => {
-      subscription.unsubscribe();
-      clearInterval(loadingCheckInterval);
-    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth state changed:", event);
+        setSession(session);
+        if (session?.user) {
+          setUser({ ...session.user, profile: null, companies: [], currentCompany: null, role: "user" });
+        } else {
+          setUser(null);
+          setUserCompanies([]);
+          setCurrentCompany(null);
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Update role when current company changes
+  // Add useEffect to run refreshUserData when user state changes
   useEffect(() => {
-    if (user?.companies && currentCompany) {
-      // Find the company in the user's companies array to get the user's role in that company
-      const userCompanyData = userCompanies.find(c => c.id === currentCompany.id);
-      
-      if (userCompanyData) {
-        setUserRole(userCompanyData.userRole);
-      } else {
-        setUserRole(null);
-      }
-    } else {
-      setUserRole(null);
+    if (user) {
+      console.log("AuthContext: User state updated, calling refreshUserData.");
+      refreshUserData();
     }
-  }, [currentCompany, userCompanies]);
+  }, [user]);
 
-  // Update loadingStartTime whenever loading changes to true
-  useEffect(() => {
-    if (loading.auth || loading.profile || loading.company) {
-      setLoadingStartTime(Date.now());
+  // Refresh user data using two-step query
+  const refreshUserData = async (isRetry = false) => {
+    console.log(`AuthContext: Entering refreshUserData (Retry: ${isRetry})`);
+    console.log("AuthContext: User state before check:", user);
+    if (!user || !user.email) { // Ensure user and email exist
+      console.log("AuthContext: Exiting refreshUserData because user or user.email is null.");
+      return;
     }
-  }, [loading.auth, loading.profile, loading.company]);
+    console.log("AuthContext: User exists, proceeding...");
 
-  // Force-reset loading state if needed (fallback safety mechanism)
-  useEffect(() => {
-    // Check every second if loading has been going on too long
-    const forceResetInterval = setInterval(() => {
-      if (loading.global) {
-        console.log("AuthProvider: Loading state check...");
-        const now = Date.now();
-        // After 5 seconds of loading, force reset
-        if (now - loadingStartTime > 5000) {
-          console.log("AuthProvider: Force resetting loading state");
-          setLoading(prev => ({ ...prev, global: false }));
-        }
-      }
-    }, 1000);
+    let userCompanyLinks: { company_id: string; role: string }[] | null = null; // Define variable outside try
 
-    return () => clearInterval(forceResetInterval);
-  }, [loading.global, loadingStartTime]);
-
-  // Create initial company for user
-  const createInitialCompany = async (userId: string, email: string) => {
     try {
-      console.log("Creating initial company for user:", userId);
-      
-      // Create the company
-      const { data: company, error: companyError } = await supabase
-        .from("companies")
-        .insert({
-          name: "My Company",
-          role: "customer",
-          contact_name: "Admin User",
-          contact_email: email,
-          contact_phone: "",
-          progress: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+      console.log("AuthContext: Setting loading state...");
+      setLoading({ auth: true, global: true });
 
-      if (companyError) {
-        console.error("Error creating company:", companyError);
-        throw new Error(`Failed to create company: ${companyError.message}`);
+      // Step 1: Fetch company_id and user's role from company_users
+      const { data, error: linksError } = await supabase
+        .from('company_users')
+        .select('company_id, role')
+        .eq('user_id', user.id);
+      
+      userCompanyLinks = data; // Assign fetched data
+
+      if (linksError) {
+        console.error('Error loading user company links:', linksError);
+        toast.error('Failed to load your company associations');
+        setLoading({ auth: false, global: false }); // Ensure loading is unset on error
+        return;
       }
+      console.log("AuthContext: Fetched userCompanyLinks:", userCompanyLinks);
 
-      if (!company) {
-        throw new Error("Company creation succeeded but no company data returned");
-      }
+      if (!userCompanyLinks || userCompanyLinks.length === 0) {
+        console.log("AuthContext: User has no company associations. Attempting to ensure association...");
+        setUserCompanies([]); // Set empty first
 
-      console.log("Company created successfully:", company);
-
-      // Create the company_user relationship
-      const { data: relationship, error: relationError } = await supabase
-        .from("company_users")
-        .insert({
-          company_id: company.id,
-          user_id: userId,
-          role: "owner",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (relationError) {
-        console.error("Error creating company relationship:", relationError);
-        // Clean up the company if relationship creation fails
-        await supabase.from("companies").delete().eq("id", company.id);
-        throw new Error(`Failed to create company relationship: ${relationError.message}`);
-      }
-
-      if (!relationship) {
-        // Clean up the company if relationship data is missing
-        await supabase.from("companies").delete().eq("id", company.id);
-        throw new Error("Company relationship creation succeeded but no data returned");
-      }
-
-      console.log("Company relationship created successfully:", relationship);
-      return company;
-    } catch (error) {
-      console.error("Error in createInitialCompany:", error);
-      throw error;
-    }
-  };
-
-  const signIn = async (email: string, password: string) => {
-    try {
-      updateLoading('auth', true);
-      clearError();
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) throw error;
-      
-      setSession(data.session);
-      
-      if (data.user) {
-        updateLoading('profile', true);
-        const userData = await fetchUserData(data.user.id);
-        
-        if (userData.error) {
-          throw new Error(`profile:${userData.error}`);
+        // Attempt to create association if this isn't already a retry
+        if (!isRetry) {
+            const created = await _ensureUserCompanyAssociation(user.id, user.email);
+            if (created) {
+                console.log("AuthContext: Association created, retrying refreshUserData...");
+                // Don't await, let the retry handle loading state
+                refreshUserData(true); 
+                return; // Exit this execution
+            } else {
+                 console.log("AuthContext: Ensure association did not create a new one or failed.");
+            }
+        } else {
+             console.log("AuthContext: Already retried, still no companies found.");
         }
-        
-        setUser({
-          ...data.user,
-          profile: userData.profile,
-          companies: userData.companies,
-          currentCompany: userData.currentCompany,
-          role: "user"
-        });
-        
-        setUserCompanies(userData.companies);
-        if (userData.currentCompany) {
-          setCurrentCompany(userData.currentCompany);
+
+        // If still no companies after check/creation attempt, log and exit
+        // Check the state variable userCompanies which might have been updated by the retry
+        const finalUserCompanies = userCompanies; // Capture current state
+        if (finalUserCompanies.length === 0) { 
+             if (currentCompany) console.log("AuthContext: Default company not set because user has no companies (after check).");
+             setLoading({ auth: false, global: false }); // Ensure loading is unset
+             return; 
         }
+        // If retry populated userCompanies, continue below
       }
-      
-      toast.success("Signed in successfully");
-    } catch (error: any) {
-      const authError = handleAuthError(error, 'signIn');
-      toast.error(authError.message);
-      throw error;
-    } finally {
-      updateLoading('auth', false);
-      updateLoading('profile', false);
-    }
-  };
 
-  // Modify signUp to create initial company
-  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    try {
-      setLoading(prev => ({ ...prev, auth: true }));
-      console.log("Starting signup process for:", email);
-
-      // Sign up with Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-          },
-        },
-      });
-
-      if (error) throw error;
-      console.log("Auth signup successful:", data.user?.id);
-
-      if (data.user) {
-        try {
-          console.log("Creating profile for user:", data.user.id);
-          // Create profile first
-          const { error: profileError } = await supabase
-            .from("profiles")
-            .insert({
-              id: data.user.id,
-              first_name: firstName,
-              last_name: lastName,
-              email: email,
-            });
-
-          if (profileError) {
-            console.error("Error creating profile:", profileError);
-            throw profileError;
-          }
-          console.log("Profile created successfully");
-
-          // Sign in to get session
-          console.log("Signing in after signup");
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          });
-          
-          if (signInError) throw signInError;
-          console.log("Sign in successful");
-
-          // Create initial company
-          console.log("Creating initial company");
-          const company = await createInitialCompany(data.user.id, email);
-          console.log("Initial company created:", company);
-
-          // Transform the company data to match UserCompany type
-          const userCompany = formatCompanyData(company, 'owner');
-          
-          // Set the session and user data
-          setSession(signInData.session);
-          setUser({
-            ...data.user,
-            profile: {
-              firstName,
-              lastName
-            },
-            companies: [userCompany],
-            currentCompany: userCompany,
-            role: "user"
-          });
-
-          // Update userCompanies state
-          setUserCompanies([userCompany]);
-          setCurrentCompany(userCompany);
-
-          toast.success("Account created successfully!");
+      // Ensure userCompanyLinks is not null before proceeding (TypeScript check)
+      if (!userCompanyLinks) {
+          console.error("AuthContext: userCompanyLinks is unexpectedly null after checks.");
+          setLoading({ auth: false, global: false });
           return;
-
-        } catch (setupError: any) {
-          console.error("Error in post-signup setup:", setupError);
-          toast.error("Account created but there was an error setting up your profile. Please try signing in.");
-          throw setupError;
-        }
       }
 
-      toast.success("Account created! Please check your email to confirm your account.");
-    } catch (error: any) {
-      console.error("Sign up error:", error);
-      toast.error(error.message);
-      throw error;
-    } finally {
-      setLoading(prev => ({ ...prev, auth: false }));
-    }
-  };
+      // Step 2: Extract company IDs and create a map of companyId -> userRole
+      const companyIds = userCompanyLinks.map(link => link.company_id);
+      const userRoleMap = new Map(userCompanyLinks.map(link => [link.company_id, link.role as UserRole]));
 
-  const signOut = async () => {
-    try {
-      setLoading(prev => ({ ...prev, global: true }));
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      toast.success("Signed out successfully");
-    } catch (error: any) {
-      console.error("Sign out error:", error);
-      toast.error(error.message || "Error signing out");
-    } finally {
-      setLoading(prev => ({ ...prev, global: false }));
-    }
-  };
-
-  // Update the switchCompanyContext function
-  const switchCompanyContext = async (companyId: string) => {
-    try {
-      updateLoading('company', true);
-      
-      // Validate company ID
-      if (!companyId) {
-        throw new Error('Invalid company ID');
-      }
-
-      // Find target company in user's companies
-      const targetCompany = userCompanies.find(c => c.id === companyId);
-      if (!targetCompany) {
-        throw new Error('Company not found in user\'s companies');
-      }
-
-      // Fetch fresh company data
-      const { data: companyData, error: companyError } = await supabase
+      // Step 3: Fetch full company details for those IDs
+      const { data: companiesData, error: companiesError } = await supabase
         .from('companies')
         .select('*')
-        .eq('id', companyId)
-        .single();
+        .in('id', companyIds);
 
-      if (companyError) throw companyError;
+      if (companiesError) {
+        console.error('Error loading company details:', companiesError);
+        toast.error('Failed to load company details');
+        setLoading({ auth: false, global: false }); // Ensure loading is unset on error
+        return;
+      }
+      console.log("AuthContext: Fetched companiesData:", companiesData);
 
-      // Validate company data
-      if (!companyData) {
-        throw new Error('Company data not found');
+      // Step 4: Combine company details with the user's role for that company
+      const combinedUserCompanies = companiesData.map(company => ({
+        ...company,
+        contactName: company.contact_name || "",
+        contactEmail: company.contact_email || "",
+        contactPhone: company.contact_phone || "",
+        progress: company.progress || 0,
+        userRole: userRoleMap.get(company.id) || 'member',
+      })) as UserCompany[];
+
+      setUserCompanies(combinedUserCompanies);
+      console.log("AuthContext: Set userCompanies:", combinedUserCompanies);
+
+      // Set default company (Using combined data)
+      // Check combinedUserCompanies directly here
+      if (!currentCompany && combinedUserCompanies.length > 0) { 
+        const firstCompany: Company = {
+          id: combinedUserCompanies[0].id,
+          name: combinedUserCompanies[0].name,
+          contactName: combinedUserCompanies[0].contactName,
+          contactEmail: combinedUserCompanies[0].contactEmail,
+          contactPhone: combinedUserCompanies[0].contactPhone,
+          progress: combinedUserCompanies[0].progress,
+          createdAt: combinedUserCompanies[0].createdAt,
+          updatedAt: combinedUserCompanies[0].updatedAt
+        };
+        console.log("AuthContext: Setting default company:", firstCompany);
+        setCurrentCompany(firstCompany);
+      } else {
+        if (currentCompany) console.log("AuthContext: Default company not set because currentCompany already exists:", currentCompany);
+        // Use combinedUserCompanies for the check here too
+        if (combinedUserCompanies.length === 0) console.log("AuthContext: Default company not set because user has no companies."); 
       }
 
-      // Format company data
-      const formattedCompany = formatCompanyData(companyData, targetCompany.userRole);
-
-      // Calculate permissions
-      const permissions = calculatePermissions(targetCompany.userRole, formattedCompany.role);
-
-      // Update company context
-      const newContext: CompanyContextState = {
-        companies: userCompanies,
-        currentCompany: formattedCompany,
-        role: targetCompany.userRole,
-        permissions,
-        lastUpdated: Date.now()
-      };
-
-      setCompanyContext(newContext);
-      setCurrentCompany(formattedCompany);
-
-      // Persist company selection
-      localStorage.setItem(COMPANY_STORAGE_KEY, companyId);
-
-      // Notify success
-      toast.success('Company context updated successfully');
-
-    } catch (error: any) {
-      const authError = handleAuthError(error, 'switchCompanyContext');
-      toast.error(authError.message);
+    } catch (error) {
+      console.error('Error in refreshUserData:', error);
+      toast.error('Failed to refresh user data');
     } finally {
-      updateLoading('company', false);
-    }
-  };
-
-  // Initialize company context from storage
-  useEffect(() => {
-    const initializeCompanyContext = async () => {
-      try {
-        // Only initialize if we have user companies
-        if (userCompanies.length === 0) return;
-
-        // Get last active company from storage
-        const lastActiveCompanyId = localStorage.getItem(COMPANY_STORAGE_KEY);
-        
-        // If we have a stored company ID and it's in user's companies, use it
-        if (lastActiveCompanyId && userCompanies.some(c => c.id === lastActiveCompanyId)) {
-          await switchCompanyContext(lastActiveCompanyId);
-        } else {
-          // Otherwise use first company
-          await switchCompanyContext(userCompanies[0].id);
-        }
-      } catch (error: any) {
-        handleAuthError(error, 'initializeCompanyContext');
+      // Only set loading false if not a retry that triggered another refresh
+      // Check userCompanyLinks here, as userCompanies might be empty before the retry finishes
+      if (!isRetry || (userCompanyLinks && userCompanyLinks.length > 0)) { // Corrected variable name check
+          console.log("AuthContext: currentCompany state before finally:", currentCompany);
+          setLoading({ auth: false, global: false });
+          console.log("AuthContext: Exiting refreshUserData (finally block)");
       }
-    };
+    }
+  };
 
-    initializeCompanyContext();
-  }, [userCompanies]);
-
-  // Handle loading timeouts
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const currentTime = Date.now();
-      const loadingDuration = currentTime - loadingStartTime;
-
-      if (loadingDuration >= LOADING_TIMEOUT) {
-        // Reset loading states if they've been active too long
-        setLoading({
-          auth: false,
-          profile: false,
-          company: false,
-          global: false
-        });
-        
-        handleAuthError(
-          new Error('Loading timeout - operation took too long'),
-          'loadingTimeout'
-        );
+  // Sign in function - simplified
+  const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
+    try {
+      setLoading({ auth: true, global: true });
+      const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (data.user) {
+        // Ensure association exists or is created *before* user state update triggers refresh
+        await _ensureUserCompanyAssociation(data.user.id, email); 
       }
-    }, LOADING_TIMEOUT);
-
-    return () => clearTimeout(timeoutId);
-  }, [loading, loadingStartTime]);
-
-  const calculatePermissions = (role: UserRole, companyType: CompanyRole): string[] => {
-    let permissions: string[] = [];
-
-    // Handle 'both' company type
-    if (companyType === 'both') {
-      // For 'both', combine permissions from supplier and customer roles
-      permissions = [
-        ...PERMISSIONS.SUPPLIER[role.toUpperCase() as keyof typeof PERMISSIONS.SUPPLIER],
-        ...PERMISSIONS.CUSTOMER[role.toUpperCase() as keyof typeof PERMISSIONS.CUSTOMER]
-      ];
-    } else {
-      // Get permissions for specific company type
-      const typePermissions = companyType === 'supplier' ? PERMISSIONS.SUPPLIER : PERMISSIONS.CUSTOMER;
-      permissions = typePermissions[role.toUpperCase() as keyof typeof PERMISSIONS.SUPPLIER];
+      return { error: null };
+    } catch (error: any) {
+      console.error("Sign in error:", error);
+      return { error: error as Error };
+    } finally {
+      setLoading({ auth: false, global: false }); // Loading state handled here
     }
-
-    // Add common permissions that everyone should have
-    permissions.push('auth.logout', 'profile.view', 'profile.edit');
-
-    // Remove duplicates
-    return [...new Set(permissions)];
   };
 
-  const getAvailableRoutes = (): string[] => {
-    if (!companyContext.currentCompany || !companyContext.permissions) {
-      return ['/auth/login', '/auth/signup'];
+  // Sign up function - simplified
+  const signUp = async (email: string, password: string, firstName: string, lastName: string): Promise<{ error: Error | null }> => {
+    try {
+      setLoading({ auth: true, global: true });
+      const { error, data } = await supabase.auth.signUp({
+        email, password, options: { data: { first_name: firstName, last_name: lastName }, emailRedirectTo: `${window.location.origin}/email-confirmation` }
+      });
+      if (error) throw error;
+      if (data.user) {
+         // Ensure association exists or is created *before* user state update triggers refresh
+        await _ensureUserCompanyAssociation(data.user.id, email);
+      }
+      return { error: null };
+    } catch (error: any) {
+      console.error("Sign up error:", error);
+      return { error: error as Error };
+    } finally {
+      setLoading({ auth: false, global: false }); // Loading state handled here
     }
-
-    const availableRoutes = Object.entries(ROUTE_PERMISSIONS)
-      .filter(([_, requiredPermissions]) => 
-        requiredPermissions.some(permission => companyContext.permissions.includes(permission))
-      )
-      .map(([route]) => route);
-
-    // Add routes that don't require specific permissions
-    availableRoutes.push(
-      '/profile',
-      '/auth/logout',
-      '/'
-    );
-
-    return availableRoutes;
   };
 
-  const hasPermission = (permission: string): boolean => {
-    if (!companyContext.permissions) {
-      return false;
+  // Sign out function - simplified
+  const signOut = async () => {
+    try {
+      setLoading({ auth: true, global: true });
+      await supabase.auth.signOut();
+    } catch (error: any) {
+      console.error("Sign out error:", error);
+      toast.error("Error signing out");
+    } finally {
+      setLoading({ auth: false, global: false });
     }
+  };
 
-    // Handle permission wildcards (e.g., 'pir.*' matches all PIR permissions)
-    if (permission.endsWith('.*')) {
-      const prefix = permission.slice(0, -2);
-      return companyContext.permissions.some(p => p.startsWith(prefix));
-    }
-
-    return companyContext.permissions.includes(permission);
+  // Original function signature kept, calls refactored logic
+  const ensureUserHasAdminCompany = async (userId: string, email: string) => {
+     await _ensureUserCompanyAssociation(userId, email);
   };
 
   return (
-    <div id="auth-provider" data-loading={loading.global}>
-      <AuthContext.Provider
-        value={{
-          user,
-          session,
-          signIn,
-          signUp,
-          signOut,
-          loading,
-          error,
-          clearError,
-          userCompanies,
-          currentCompany,
-          setCurrentCompany,
-          userRole,
-          refreshUserData,
-          hasPermission,
-          switchCompanyContext,
-          getAvailableRoutes,
-          companyContext
-        }}
-      >
-        {children}
-      </AuthContext.Provider>
-    </div>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        signIn,
+        signUp,
+        signOut,
+        loading,
+        userCompanies,
+        currentCompany,
+        setCurrentCompany,
+        refreshUserData
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 }
 
@@ -940,19 +374,5 @@ export const useAuth = () => {
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
-  
-  // Get a reference to the original loading state
-  const { loading: originalLoading, ...rest } = context;
-  
-  // Check if we should force the loading state to false
-  const authProvider = document.getElementById('auth-provider');
-  const forceLoaded = authProvider?.dataset.forceLoaded === 'true';
-  const loading = forceLoaded ? false : originalLoading;
-  
-  // Log if we're forcing the loading state
-  if (forceLoaded && originalLoading) {
-    console.log('useAuth: Force loading state to false');
-  }
-  
-  return { ...rest, loading };
+  return context;
 };

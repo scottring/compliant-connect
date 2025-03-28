@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { QuestionBankProvider } from "./context/QuestionBankContext";
 import Sidebar from "./components/Sidebar";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -24,50 +25,22 @@ import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Unauthorized from "./pages/Unauthorized";
 import CompanySelector from "./components/CompanySelector";
-import AuthDebug from "./components/AuthDebug";
-import LoadingDebug from "./components/LoadingDebug";
-import AuthStateDebug from "./components/AuthStateDebug";
 import Onboarding from "./pages/Onboarding";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState } from "react";
 import UserSwitcher from "./components/UserSwitcher";
 import AdminSettings from "@/pages/AdminSettings";
 
-// Component to check if user has a company association
+// Simplified CheckCompany component
 const CheckCompany = () => {
-  const { userCompanies, loading, user } = useAuth();
+  const { user } = useAuth();
   
-  console.log("CheckCompany:", { 
-    loading, 
-    userLoggedIn: !!user, 
-    companyCount: userCompanies.length,
-    currentPath: window.location.pathname
-  });
-  
-  // Wait until loading is done
-  if (loading) {
-    console.log("CheckCompany: Still loading");
-    return <Outlet />;
-  }
-  
-  // Check if user exists first
+  // If no user, redirect to auth
   if (!user) {
-    console.log("CheckCompany: No user, redirecting to auth");
     return <Navigate to="/auth" replace />;
   }
   
-  // TEMPORARILY DISABLED: Allow access to all routes even without companies
-  // This allows us to test navigation after company creation
-  /*
-  // If user has no companies, redirect to onboarding
-  if (userCompanies.length === 0) {
-    console.log("CheckCompany: User has no companies, redirecting to onboarding");
-    return <Navigate to="/onboarding" replace />;
-  }
-  */
-  
-  console.log("CheckCompany: User has companies or check bypassed, rendering children");
-  // Otherwise, render the children
+  // Render the children components
   return <Outlet />;
 };
 
@@ -81,74 +54,69 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AppProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/email-confirmation" element={<EmailConfirmation />} />
-                <Route path="/unauthorized" element={<Unauthorized />} />
-                
-                {/* Protected Routes */}
-                <Route element={<ProtectedRoute />}>
-                  {/* Onboarding route - for users with no company */}
-                  <Route path="/onboarding" element={<Onboarding />} />
+          <QuestionBankProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/email-confirmation" element={<EmailConfirmation />} />
+                  <Route path="/unauthorized" element={<Unauthorized />} />
                   
-                  {/* Main Routes - including Dashboard */}
-                  <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
-                    {/* Dashboard - accessible to all authenticated users */}
-                    <Route path="/dashboard" element={<Dashboard />} />
+                  {/* Protected Routes */}
+                  <Route element={<ProtectedRoute />}>
+                    {/* Onboarding route */}
+                    <Route path="/onboarding" element={<Onboarding />} />
                     
-                    {/* The rest of routes in MainLayout */}
-                    <Route element={<CheckCompany />}>
-                      {/* Supplier Routes */}
-                      <Route path="/suppliers" element={<Suppliers />} />
-                      <Route path="/suppliers/:id" element={<SupplierDetail />} />
-                      <Route path="/supplier-products" element={<SupplierProducts />} />
-                      <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
+                    {/* Main Routes */}
+                    <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
+                      {/* Dashboard */}
+                      <Route path="/dashboard" element={<Dashboard />} />
                       
-                      {/* Customer Routes */}
-                      <Route path="/customers" element={<Customers />} />
-                      <Route path="/customer-review/:id" element={<CustomerReview />} />
-                      
-                      {/* Product Routes */}
-                      <Route path="/product-sheets" element={<ProductSheets />} />
-                      <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
-                      <Route path="/our-products" element={<OurProducts />} />
-                      
-                      {/* Admin Routes - require admin permissions */}
-                      <Route element={<ProtectedRoute requiredPermission="admin:access" />}>
+                      {/* Routes that require company check */}
+                      <Route element={<CheckCompany />}>
+                        {/* Supplier Routes */}
+                        <Route path="/suppliers" element={<Suppliers />} />
+                        <Route path="/suppliers/:id" element={<SupplierDetail />} />
+                        <Route path="/supplier-products" element={<SupplierProducts />} />
+                        <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
+                        
+                        {/* Customer Routes */}
+                        <Route path="/customers" element={<Customers />} />
+                        <Route path="/customer-review/:id" element={<CustomerReview />} />
+                        
+                        {/* Product Routes */}
+                        <Route path="/product-sheets" element={<ProductSheets />} />
+                        <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
+                        <Route path="/our-products" element={<OurProducts />} />
+                        
+                        {/* Admin Routes - temporarily removed permission check for MVP */}
+                        {/* TODO: Re-enable permission check after MVP */}
                         <Route path="/question-bank" element={<QuestionBank />} />
                         <Route path="/tags" element={<Tags />} />
                       </Route>
                     </Route>
                   </Route>
-                </Route>
-                
-                {/* Admin Settings Route */}
-                <Route
-                  path="/admin/settings"
-                  element={
-                    <ProtectedRoute requiredPermission="admin:access">
-                      <AdminSettings />
-                    </ProtectedRoute>
-                  }
-                />
-                
-                {/* Fallback Route */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              
-              {/* Debug Panels - visible in development mode */}
-              {/* Removing debug panels as they're no longer needed */}
-              {/* <AuthDebug />
-              <LoadingDebug />
-              <AuthStateDebug /> */}
-            </BrowserRouter>
-          </TooltipProvider>
+                  
+                  {/* Admin Settings Route */}
+                  <Route
+                    path="/admin/settings"
+                    element={
+                      <ProtectedRoute requiredPermission="admin:access">
+                        <AdminSettings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  
+                  {/* Fallback Route */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </QuestionBankProvider>
         </AppProvider>
       </AuthProvider>
     </QueryClientProvider>

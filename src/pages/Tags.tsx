@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
@@ -21,14 +20,49 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 
 const Tags = () => {
-  const { tags, questions, addTag, updateTag } = useApp();
+  const { tags, questions, addTag, updateTag, refreshTags, dbTags, tagsLoading } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddTagDialogOpen, setIsAddTagDialogOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3B82F6");
   const [newTagDescription, setNewTagDescription] = useState("");
+  const [directDbTags, setDirectDbTags] = useState([]);
+  const [dbLoading, setDbLoading] = useState(false);
+
+  useEffect(() => {
+    // Direct database query for debugging
+    const fetchTagsDirectly = async () => {
+      setDbLoading(true);
+      try {
+        const { data, error } = await supabase.from('tags').select('*');
+        if (error) {
+          console.error("Direct query error:", error);
+          toast.error("Failed to directly query tags");
+        } else {
+          console.log("Tags directly from DB:", data);
+          setDirectDbTags(data || []);
+        }
+      } catch (err) {
+        console.error("Error in direct query:", err);
+      } finally {
+        setDbLoading(false);
+      }
+    };
+    
+    fetchTagsDirectly();
+  }, []);
+
+  // Debug function to force refresh
+  const handleForceRefresh = async () => {
+    toast.info("Forcing tags refresh...");
+    await refreshTags();
+    // Also refresh direct query
+    const { data } = await supabase.from('tags').select('*');
+    setDirectDbTags(data || []);
+  };
 
   const filteredTags = tags.filter((tag) =>
     tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,6 +105,48 @@ const Tags = () => {
 
   return (
     <div className="space-y-6">
+      {/* Debug Panel */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-lg font-bold text-yellow-800">Tag Debug Panel</h3>
+          <Button variant="outline" onClick={handleForceRefresh} disabled={tagsLoading || dbLoading}>
+            {(tagsLoading || dbLoading) ? 'Refreshing...' : 'Force Refresh Tags'}
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <h4 className="font-medium mb-1">App Context Tags ({tags.length}):</h4>
+            <pre className="bg-white p-2 rounded text-xs overflow-auto max-h-40">
+              {JSON.stringify(tags, null, 2)}
+            </pre>
+          </div>
+          
+          <div>
+            <h4 className="font-medium mb-1">Direct DB Tags ({directDbTags.length}):</h4>
+            <pre className="bg-white p-2 rounded text-xs overflow-auto max-h-40">
+              {JSON.stringify(directDbTags, null, 2)}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-medium mb-1">DB Tags from Context ({dbTags?.length || 0}):</h4>
+            <pre className="bg-white p-2 rounded text-xs overflow-auto max-h-40">
+              {JSON.stringify(dbTags, null, 2)}
+            </pre>
+          </div>
+          
+          <div>
+            <h4 className="font-medium mb-1">State:</h4>
+            <ul className="bg-white p-2 rounded text-xs">
+              <li>Tags Loading: {tagsLoading ? 'Yes' : 'No'}</li>
+              <li>DB Direct Loading: {dbLoading ? 'Yes' : 'No'}</li>
+              <li>Filtered Tags Count: {filteredTags.length}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <PageHeader
         title="Tags"
         description="Manage compliance tags and regulations"

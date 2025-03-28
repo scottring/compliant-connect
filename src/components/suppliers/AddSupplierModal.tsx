@@ -30,6 +30,7 @@ import {
 import { Company } from "@/types/auth";
 import { RelationshipType } from "@/types/auth";
 
+// Restore validation schema
 const formSchema = z.object({
   name: z.string().min(1, "Company name is required"),
   contactName: z.string().min(1, "Contact name is required"),
@@ -55,6 +56,7 @@ export const AddSupplierModal = ({
 }: AddSupplierModalProps) => {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
+    // Restore default values
     defaultValues: {
       name: "",
       contactName: "",
@@ -97,6 +99,7 @@ export const AddSupplierModal = ({
                 </FormItem>
               )}
             />
+            {/* Restore contact fields */}
             <FormField
               control={form.control}
               name="contactName"

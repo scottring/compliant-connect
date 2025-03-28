@@ -1,7 +1,6 @@
-
 import React, { useState } from "react";
 import { Section, Subsection } from "@/types";
-import { Plus, Pencil, Trash } from "lucide-react";
+import { Plus, Pencil, Trash, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +19,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 interface SectionSelectorProps {
   sections: Section[];
@@ -155,13 +161,24 @@ export const SectionSelector: React.FC<SectionSelectorProps> = ({
                 <SelectValue placeholder="Select a section" />
               </SelectTrigger>
               <SelectContent>
-                {sections.map((section) => (
-                  <SelectItem key={section.id} value={section.id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span>{getSectionLabel(section)}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {sections.length === 0 ? (
+                  <div className="px-2 py-4 text-center">
+                    <p className="text-sm text-red-500">No sections available</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Create a section first using the + button
+                    </p>
+                  </div>
+                ) : (
+                  sections
+                    .sort((a, b) => (a.order || 0) - (b.order || 0))
+                    .map((section) => (
+                      <SelectItem key={section.id} value={section.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{getSectionLabel(section)}</span>
+                        </div>
+                      </SelectItem>
+                    ))
+                )}
               </SelectContent>
             </Select>
             

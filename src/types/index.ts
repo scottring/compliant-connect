@@ -33,7 +33,9 @@ export interface Tag {
 
 export interface Question {
   id: string;
+  dbId?: string; // Database ID for integration with Supabase
   text: string;
+  description?: string; // Add description field
   tags: Tag[];
   type: "text" | "number" | "boolean" | "select" | "multi-select" | "table" | "file";
   options?: string[];
@@ -46,6 +48,7 @@ export interface Question {
 
 export interface Section {
   id: string;
+  dbId?: string; // Database ID for integration with Supabase
   name: string;
   description?: string;
   order: number;
@@ -53,6 +56,7 @@ export interface Section {
 
 export interface Subsection {
   id: string;
+  dbId?: string; // Database ID for integration with Supabase
   name: string;
   description?: string;
   sectionId: string;

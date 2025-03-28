@@ -9,8 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { Plus, UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resetAllData } from "@/utils/resetData";
-import { supabase } from "@/integrations/supabase/client";
-import { Database } from '@/integrations/supabase/types';
+import { supabase } from "@/lib/supabase"; // Use the correct client directly
+import { Database } from '@/integrations/supabase/types'; // Keep this type import if needed elsewhere
 import {
   AlertDialog,
   AlertDialogContent,
@@ -30,12 +30,13 @@ type CompanyRow = Database['public']['Tables']['companies']['Row'];
 type RelationshipRow = Database['public']['Tables']['company_relationships']['Row'];
 
 const Suppliers = () => {
-  const { user, currentCompany, refreshUserData, userCompanies } = useAuth();
+  // Rename loading from useAuth to avoid conflict
+  const { user, currentCompany, refreshUserData, userCompanies, loading: authLoading } = useAuth(); 
   const { companies } = useApp();
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [filteredSuppliers, setFilteredSuppliers] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Local loading state for supplier list
   const navigate = useNavigate();
 
   const loadSuppliers = useCallback(async () => {
@@ -88,11 +89,11 @@ const Suppliers = () => {
         return {
           id: supplier.id,
           name: supplier.name,
-          role: supplier.role as "supplier" | "customer" | "both",
+          // role: supplier.role as "supplier" | "customer" | "both", // Role removed from Company type
           contactName: supplier.contact_name || "",
           contactEmail: supplier.contact_email || "",
           contactPhone: supplier.contact_phone || "",
-          progress: supplier.progress,
+          progress: supplier.progress || 0, // Assuming progress exists
           createdAt: supplier.created_at,
           updatedAt: supplier.updated_at,
           relationship: relationship
@@ -109,7 +110,7 @@ const Suppliers = () => {
         };
       });
 
-      setFilteredSuppliers(suppliersWithRelationships);
+      setFilteredSuppliers(suppliersWithRelationships as Company[]); // Cast as Company[]
     } catch (error) {
       console.error("Error in loadSuppliers:", error);
       toast.error("Failed to load suppliers");
@@ -134,9 +135,15 @@ const Suppliers = () => {
   };
   
   const handleAddSupplier = () => {
+    // Re-add check for currentCompany as a safeguard after loading
+    if (!currentCompany) { 
+      toast.error("Please select a company first before adding a supplier.");
+      return;
+    }
     setIsAddModalOpen(true);
   };
   
+  // Restore function signature
   const handleAddSupplierSubmit = async (data: {
     name: string;
     contactName: string;
@@ -155,17 +162,19 @@ const Suppliers = () => {
 
     try {
       setLoading(true);
+      
+      // No need for explicit client definition here, top-level import is correct
+      // console.log("Using Supabase client with URL:", supabase.supabaseUrl); // REMOVED - Accessing protected property
 
-      // Insert the new supplier
+      // Insert the new supplier - Restore contact fields
       const { data: newSupplier, error: supplierError } = await supabase
         .from("companies")
         .insert({
           name: data.name,
-          role: "supplier",
-          contact_name: data.contactName,
-          contact_email: data.contactEmail,
-          contact_phone: data.contactPhone,
-          progress: 0,
+          contact_name: data.contactName, 
+          contact_email: data.contactEmail, 
+          contact_phone: data.contactPhone, 
+          // Assuming role, progress etc. are not needed or handled by DB defaults/triggers
         })
         .select()
         .single();
@@ -176,7 +185,7 @@ const Suppliers = () => {
         throw supplierError;
       }
 
-      // Create the relationship
+      // Create the relationship (using the same explicitly defined supabase client)
       const { error: relationshipError } = await supabase
         .from("company_relationships")
         .insert({
@@ -189,7 +198,7 @@ const Suppliers = () => {
       if (relationshipError) {
         toast.error("Error creating relationship");
         console.error("Error:", relationshipError);
-        // Try to clean up the supplier
+        // Try to clean up the supplier (using the same explicitly defined supabase client)
         await supabase.from("companies").delete().eq("id", newSupplier.id);
         throw relationshipError;
       }
@@ -251,6 +260,7 @@ const Suppliers = () => {
                 label="Add New Supplier"
                 onClick={handleAddSupplier}
                 icon={<Plus className="h-4 w-4" />}
+                disabled={authLoading.global} // Disable while auth context is loading
               />
             )}
           </>
@@ -276,7 +286,11 @@ const Suppliers = () => {
               Add your first supplier to get started with supplier management.
             </p>
             {canManageSuppliers && (
-              <Button onClick={handleAddSupplier} className="gap-2">
+              <Button 
+                onClick={handleAddSupplier} 
+                className="gap-2"
+                disabled={authLoading.global} // Disable while auth context is loading
+              >
                 <Plus className="h-4 w-4" />
                 Add Supplier
               </Button>
