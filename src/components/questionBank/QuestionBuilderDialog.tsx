@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuestionBankContext } from "@/context/QuestionBankContext";
-import { Question, Tag } from "@/types";
+import { Question, Tag } from "@/types"; // Revert to alias
 import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload, Loader2 } from "lucide-react";
 // Import DialogDescription
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; 
@@ -156,7 +156,7 @@ export function QuestionBuilderDialog({
         setSelectedTags([]);
       }
     }
-  }, [open, editingQuestion, sections, form, subsectionId]);
+  }, [open, editingQuestion, sections, form, subsectionId, allSubsections]); // Added allSubsections
 
   const toggleTag = (tag: Tag) => {
     if (selectedTags.some((t) => t.id === tag.id)) {
