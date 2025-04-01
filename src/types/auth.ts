@@ -12,29 +12,27 @@ export interface Profile {
 
 export interface SupplierRelationship {
   id: string;
-  customerId: string;
-  supplierId: string;
+  customer_id: string;
+  supplier_id: string;
   status: RelationshipStatus;
   type: RelationshipType;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Company {
   id: string;
   name: string;
-  // role: "supplier" | "customer" | "both"; // <-- Removed this line
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-  progress: number;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
   address?: string;
   city?: string;
   state?: string;
   country?: string;
-  zipCode?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  zip_code?: string;
+  created_at?: string;
+  updated_at?: string;
   relationship?: SupplierRelationship;
 }
 

@@ -1,6 +1,6 @@
-
 import React, { useEffect, useState } from "react";
 import { Question, SupplierResponse, Comment } from "@/types";
+import { DBQuestion } from "@/hooks/use-question-bank";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +32,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface QuestionItemProps {
-  question: Question;
+  question: Question | DBQuestion;
   answer?: SupplierResponse;
   productSheetId: string;
   onAnswerUpdate: (value: string | boolean | number | string[]) => void;

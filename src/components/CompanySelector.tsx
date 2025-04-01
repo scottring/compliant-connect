@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useCompanyData } from "@/hooks/use-company-data"; // Import the new hook
 import {
   Select,
   SelectContent,
@@ -10,17 +10,24 @@ import {
 import { Tables } from "@/integrations/supabase/types";
 
 const CompanySelector = () => {
-  const { userCompanies, currentCompany, setCurrentCompany } = useAuth();
+  // Use the new hook to get company data and functions
+  const { userCompanies, currentCompany, setCurrentCompany, isLoadingCompanies, errorCompanies } = useCompanyData();
 
-  // Automatically set the current company if there's only one
-  useEffect(() => {
-    if (userCompanies.length === 1 && !currentCompany) {
-      setCurrentCompany(userCompanies[0]);
-    }
-  }, [userCompanies, currentCompany, setCurrentCompany]);
+  // useEffect for auto-selection is removed as it's handled within useCompanyData
 
   // If user has only one company, don't show the selector
-  if (userCompanies.length <= 1) {
+  // Handle loading and error states
+  if (isLoadingCompanies) {
+    return <div className="text-sm text-muted-foreground">Loading companies...</div>; // Or a spinner
+  }
+
+  if (errorCompanies) {
+    return <div className="text-sm text-red-500">Error loading companies</div>;
+  }
+
+  // If user has no companies or only one, don't show the selector
+  // (The default selection logic is now inside useCompanyData)
+  if (!userCompanies || userCompanies.length <= 1) {
     return null;
   }
 

@@ -11,6 +11,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useCompanyData } from "@/hooks/use-company-data"; // Import the new hook
 
 interface NavigationItem {
   title: string;
@@ -62,7 +63,29 @@ const navigationItems: NavigationItem[] = [
 
 export function Navigation() {
   const location = useLocation();
-  const { hasPermission } = useAuth();
+  const { user } = useAuth(); // Still need user to check if logged in
+  const { userCompanies, currentCompany, isLoadingCompanies } = useCompanyData(); // Get company data
+
+  // Define permission checking logic based on current company role
+  const hasPermission = (permission: string): boolean => {
+    if (!user || !currentCompany || isLoadingCompanies || !userCompanies) {
+      return false; // Not logged in, no company selected, or data still loading
+    }
+
+    // Find the user's role in the currently selected company
+    const currentUserCompany = userCompanies.find(uc => uc.id === currentCompany.id);
+    const userRole = currentUserCompany?.userRole;
+
+    // Implement permission logic (example: admin/owner has admin access)
+    if (permission === "admin:access") {
+      return userRole === 'admin' || userRole === 'owner';
+    }
+
+    // Add other permission checks as needed
+    // e.g., if (permission === "billing:manage") { ... }
+
+    return false; // Default to no permission if check not implemented
+  };
 
   return (
     <nav className="grid items-start gap-2">

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useApp } from "@/context/AppContext";
-import PageHeader from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
+import { useCompanyData } from "@/hooks/use-company-data";
+import { useTags } from "@/hooks/use-tags";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button"; // Keep Button import
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,351 +14,205 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import TagBadge from "@/components/tags/TagBadge";
 import RequestSheetModal from "@/components/suppliers/RequestSheetModal";
-import { ProductSheet } from "@/types";
+// Import types from Supabase generated types and PIR types
+import { Database } from '@/types/supabase';
+import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse, PIRSummary } from "@/types/pir"; // Import PIRSummary
+import QuestionItem from "@/components/supplierResponse/QuestionItem";
+import { Eye, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Company } from "@/types";
+import TaskProgress from "@/components/ui/progress/TaskProgress";
 
-// Define the database record type for product sheets
-interface ProductSheetRecord {
-  id: string;
-  name: string;
-  supplier_id: string;
-  requested_by_id: string;
-  updated_at: string;
-  status?: string;
-  tags?: string[];
-  [key: string]: any; // Allow for additional fields that may exist
+// Type for Supplier Details Query
+type Company = Database['public']['Tables']['companies']['Row'] & { address?: string | null }; // Add optional address
+type Tag = Database['public']['Tables']['tags']['Row'];
+// Define Section and Subsection if needed, or remove if unused
+// type Section = Database['public']['Tables']['sections']['Row'];
+// type Subsection = Database['public']['Tables']['subsections']['Row'];
+
+// Type for PIRs associated with this supplier, extending PIRSummary
+interface SupplierPIRSummary extends PIRSummary { // Extend PIRSummary
+    tags: Tag[]; // Use the full Tag type
+    responseCount: number;
+    customerName?: string;
+    totalQuestions?: number; // Optional: Add totalQuestions if calculated
 }
 
-// Helper function to map database status to ProductSheet status type
-const mapStatus = (status: string | undefined): "draft" | "submitted" | "reviewing" | "approved" | "rejected" => {
-  if (!status) return "draft";
-  
-  switch(status) {
-    case "submitted": return "submitted";
-    case "reviewing": return "reviewing";
-    case "approved": return "approved";
-    case "rejected": return "rejected";
-    case "draft": return "draft";
-    default: return "draft"; // Default to draft for any unrecognized status
-  }
+// Type definition for DBQuestion
+export type QuestionType = 'text' | 'number' | 'boolean' | 'select' | 'multi-select' | 'file' | 'table';
+export type DBQuestion = {
+  id: string;
+  subsection_id: string;
+  text: string;
+  description: string | null;
+  type: QuestionType;
+  required: boolean;
+  options: any | null;
+  created_at: string;
+  updated_at: string;
+  tags: Tag[];
 };
+// End DBQuestion definition
 
 const SupplierDetail = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: supplierId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { companies, productSheets: appProductSheets, tags } = useApp();
-  const [comment, setComment] = useState("");
-  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const [supplierProductSheets, setSupplierProductSheets] = useState<ProductSheet[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [supplier, setSupplier] = useState<Company | null>(null);
-  const [loadingSupplier, setLoadingSupplier] = useState(true);
+  const { tags: globalTags, isLoadingTags } = useTags();
+  const { currentCompany } = useCompanyData();
+  const queryClient = useQueryClient();
 
-  // Load supplier data directly from Supabase
-  useEffect(() => {
-    const loadSupplier = async () => {
-      if (!id) return;
-      
-      setLoadingSupplier(true);
-      try {
-        const { data, error } = await supabase
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+
+  // --- Fetch Supplier Details Query ---
+  const fetchSupplierDetails = async (id: string): Promise<Company> => {
+      const { data, error } = await supabase
           .from('companies')
           .select('*')
           .eq('id', id)
           .single();
-          
-        if (error) {
-          console.error('Error loading supplier:', error);
-          toast.error('Failed to load supplier details');
-          return;
-        }
-        
-        if (!data) {
-          toast.error('Supplier not found');
-          return;
-        }
-        
-        // Transform to Company type
-        const supplierData: Company = {
-          id: data.id,
-          name: data.name,
-          role: data.role as "supplier" | "customer" | "both",
-          contactName: data.contact_name,
-          contactEmail: data.contact_email,
-          contactPhone: data.contact_phone,
-          progress: data.progress || 0
-        };
-        
-        setSupplier(supplierData);
-      } catch (err) {
-        console.error('Unexpected error loading supplier:', err);
-        toast.error('An unexpected error occurred');
-      } finally {
-        setLoadingSupplier(false);
-      }
-    };
-    
-    loadSupplier();
-  }, [id]);
-
-  // Load product sheets for this supplier from Supabase
-  useEffect(() => {
-    const loadProductSheets = async () => {
-      if (!id) return;
-      
-      setLoading(true);
-      try {
-        // Fetch product sheets for this supplier
-        const { data, error } = await supabase
-          .from('product_sheets')
-          .select('*')
-          .eq('supplier_id', id);
-          
-        if (error) {
-          console.error('Error loading product sheets for supplier:', error);
-          toast.error('Failed to load product sheets');
-          return;
-        }
-        
-        if (!data || data.length === 0) {
-          setSupplierProductSheets([]);
-          return;
-        }
-        
-        // Transform data to match our interface
-        const transformedSheets: ProductSheet[] = (data as ProductSheetRecord[]).map(sheet => ({
-          id: sheet.id,
-          name: sheet.name,
-          supplierId: sheet.supplier_id,
-          requestedById: sheet.requested_by_id,
-          progress: 0, // Use a default progress of 0 for now
-          updatedAt: new Date(sheet.updated_at), // Convert to Date object
-          status: mapStatus(sheet.status), // Use the mapper function
-          tags: sheet.tags || [],
-          createdAt: new Date(),
-          answers: [],
-          questions: []
-        }));
-        
-        setSupplierProductSheets(transformedSheets);
-      } catch (err) {
-        console.error('Unexpected error loading product sheets for supplier:', err);
-        toast.error('An unexpected error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadProductSheets();
-    
-    // Also set up a real-time subscription to product sheets changes
-    const productSheetsSubscription = supabase
-      .channel('product-sheets-changes')
-      .on(
-        'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'product_sheets',
-          filter: `supplier_id=eq.${id}`
-        },
-        (payload) => {
-          console.log('Product sheets changed:', payload);
-          // Reload the product sheets when changes occur
-          loadProductSheets();
-        }
-      )
-      .subscribe();
-      
-    // Clean up the subscription when the component unmounts
-    return () => {
-      supabase.removeChannel(productSheetsSubscription);
-    };
-  }, [id]);
-
-  // Merge in any product sheets from the app context that might not be in Supabase yet
-  const allSupplierProductSheets = useMemo(() => {
-    // Get sheets from app context
-    const contextSheets = appProductSheets.filter(sheet => sheet.supplierId === id);
-    
-    // Create a map of existing sheets by ID
-    const existingSheetIds = new Set(supplierProductSheets.map(sheet => sheet.id));
-    
-    // Add any sheets from the app context that aren't in the Supabase results
-    const additionalSheets = contextSheets.filter(sheet => !existingSheetIds.has(sheet.id));
-    
-    return [...supplierProductSheets, ...additionalSheets];
-  }, [appProductSheets, supplierProductSheets, id]);
-
-  if (!supplier && !loadingSupplier) {
-    return (
-      <div className="py-12 text-center">
-        <h2 className="text-2xl font-bold mb-4">Supplier not found</h2>
-        <Button onClick={() => navigate("/suppliers")}>Back to Suppliers</Button>
-      </div>
-    );
-  }
-
-  if (loadingSupplier) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
-
-  // Mock tasks data
-  const mockTasks = [
-    { id: "t1", name: "Contact Supplier", status: "pending", dueDate: "2023-11-10", assignee: "John Doe" },
-    { id: "t2", name: "Review Documents", status: "pending", dueDate: "2023-11-15", assignee: "Jane Smith" },
-    { id: "t3", name: "Verify Compliance", status: "completed", dueDate: "2023-10-25", assignee: "Michael Brown" },
-    { id: "t4", name: "Update Profile", status: "completed", dueDate: "2023-10-20", assignee: "Emily Clark" },
-  ];
-
-  // Mock comments data
-  const mockComments = [
-    { id: "c1", author: "Alice Smith", date: "2023-10-15", text: "Great supplier, always delivers on time." },
-    { id: "c2", author: "Alice Smith", date: "2023-09-20", text: "Great supplier, always delivers on time." },
-    { id: "c3", author: "Alice Smith", date: "2023-08-05", text: "Great supplier, always delivers on time." },
-    { id: "c4", author: "Alice Smith", date: "2023-07-12", text: "Great supplier, always delivers on time." },
-  ];
-
-  const handlePostComment = () => {
-    if (comment.trim()) {
-      toast.success("Comment posted successfully");
-      setComment("");
-      // In a real application, this would add the comment to the database
-    }
+      if (error || !data) throw new Error(`Failed to load supplier details: ${error?.message ?? 'Not found'}`);
+      return data as Company;
   };
 
-  const handleRequestSheet = () => {
-    setIsRequestModalOpen(true);
+  const {
+      data: supplier,
+      isLoading: loadingSupplier,
+      error: errorSupplier,
+  } = useQuery<Company, Error>({
+      queryKey: ['supplierDetails', supplierId],
+      queryFn: () => fetchSupplierDetails(supplierId!),
+      enabled: !!supplierId,
+  });
+  // --- End Fetch Supplier Details ---
+
+  // --- Fetch PIRs for this Supplier Query ---
+  const fetchSupplierPirs = async (id: string): Promise<SupplierPIRSummary[]> => {
+      const { data: pirData, error: pirError } = await supabase
+          .from('pir_requests')
+          .select(`
+              id, customer_id, supplier_company_id, product_id, updated_at, status,
+              products ( name ),
+              customer:companies!pir_requests_customer_id_fkey ( name ),
+              pir_tags!inner ( tags ( * ) ), /* Select all tag columns */
+              supplier_responses ( id )
+          `)
+          .eq('supplier_company_id', id);
+
+      if (pirError) throw new Error(`Failed to load PIRs for supplier: ${pirError.message}`);
+      if (!pirData) return [];
+
+      const transformedPirs: SupplierPIRSummary[] = pirData.map((pir: any) => {
+          // Type should be inferred correctly now due to the updated interface
+          const tags = pir.pir_tags?.map((pt: { tags: Tag | null }) => pt.tags).filter(Boolean).flat() || [];
+          const responseCount = (pir.supplier_responses || []).length;
+          return {
+              id: pir.id,
+              productName: pir.products?.name ?? 'N/A',
+              supplierId: pir.supplier_company_id,
+              supplierName: supplier?.name, // Use supplier name from the other query
+              customerId: pir.customer_id,
+              customerName: pir.customer?.name ?? 'N/A',
+              updatedAt: pir.updated_at,
+              status: pir.status || 'draft',
+              tags: tags, // Assign fetched tags
+              responseCount: responseCount,
+              // totalQuestions: Needs calculation
+          };
+      });
+      return transformedPirs;
   };
 
-  const getStatusStyle = (status: string) => {
-    const statusColors = {
-      submitted: { bg: "bg-red-100", text: "text-red-800" },
-      reviewing: { bg: "bg-amber-100", text: "text-amber-800" },
+   const {
+      data: supplierPirs,
+      isLoading: loadingPirs,
+      error: errorPirs,
+  } = useQuery<SupplierPIRSummary[], Error>({ // Use correct return type
+      queryKey: ['supplierPirs', supplierId],
+      queryFn: () => fetchSupplierPirs(supplierId!),
+      enabled: !!supplierId,
+  });
+  // --- End Fetch PIRs ---
+
+  // --- Event Handlers ---
+  const handleRequestSheet = () => { setIsRequestModalOpen(true); };
+  const handlePirClick = (pirId: string) => { navigate(`/supplier-response-form/${pirId}`); };
+  // --- End Event Handlers ---
+
+  // --- Helper Functions ---
+  const formattedDate = (dateStr: string | null | undefined) => { /* ... */
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+  const getStatusStyle = (status: PIRStatus) => { /* ... */
+    // Use only statuses defined in the PIRStatus enum
+    const statusColors: Record<PIRStatus, { bg: string; text: string }> = {
+      // pending: { bg: "bg-amber-100", text: "text-amber-800" }, // 'pending' is not in the enum
+      in_review: { bg: "bg-blue-100", text: "text-blue-800" },
       approved: { bg: "bg-green-100", text: "text-green-800" },
       rejected: { bg: "bg-red-100", text: "text-red-800" },
+      flagged: { bg: "bg-yellow-100", text: "text-yellow-800" }, // Added flagged
+      submitted: { bg: "bg-purple-100", text: "text-purple-800" }, // Added submitted
       draft: { bg: "bg-gray-100", text: "text-gray-800" },
     };
-    
-    return statusColors[status as keyof typeof statusColors] || { bg: "bg-blue-100", text: "text-blue-800" };
+    return statusColors[status] || statusColors.draft;
   };
+  const getStatusLabel = (status: PIRStatus) => { /* ... */
+    return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+  // --- End Helper Functions ---
 
-  const getStatusLabel = (sheet: ProductSheet) => {
-    const status = sheet.status || "";
-    
-    if (status === "submitted") {
-      return "New Request";
-    } else if (status === "reviewing") {
-      return "In Review";
-    } else if (status === "approved") {
-      return "Compliant";
-    } else if (status === "rejected") {
-      return "Rejected";
-    } else if (status === "draft") {
-      return "Draft";
-    }
-    return status.charAt(0).toUpperCase() + status.slice(1);
-  };
-
-  const getTagBadge = (tagId: string) => {
-    const tag = tags.find(t => t.id === tagId);
-    if (tag) {
-      return <TagBadge key={tag.id} tag={tag} />;
-    }
-    return null;
-  };
-
-  const formattedDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+  // --- Render Logic ---
+  if (loadingSupplier) { return <div className="p-12 text-center">Loading Supplier...</div>; }
+  if (errorSupplier || !supplier) { return <div className="py-12 text-center"><h2 className="text-2xl font-bold mb-4">Supplier not found</h2><p className="text-red-500 mb-4">{errorSupplier?.message}</p><Button onClick={() => navigate("/suppliers")}>Back to Suppliers</Button></div>; }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader 
+      <PageHeader
         title={`Supplier Detail - ${supplier.name}`}
-        actions={
-          <Button variant="default" className="bg-brand hover:bg-brand-700">
-            Edit
-          </Button>
-        }
+        actions={ <Button variant="default" className="bg-brand hover:bg-brand-700"> Edit </Button> }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Supplier Information */}
         <Card>
-          <CardHeader>
-            <CardTitle>Supplier Information</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Supplier Information</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Supplier Name:</span>
-              <p>{supplier.name}</p>
-            </div>
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Primary Contact:</span>
-              <p>{supplier.contactName}</p>
-            </div>
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Status:</span>
-              <p>Active</p>
-            </div>
+            <div><span className="text-sm font-medium text-muted-foreground">Supplier Name:</span><p>{supplier.name}</p></div>
+            <div><span className="text-sm font-medium text-muted-foreground">Primary Contact:</span><p>{supplier.contact_name || 'N/A'}</p></div>
           </CardContent>
         </Card>
 
         {/* General Information */}
         <Card>
-          <CardHeader>
-            <CardTitle>General Information</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Address:</span>
-              <p>123 Supplier Lane</p>
-            </div>
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Phone:</span>
-              <p>{supplier.contactPhone || "(123) 456-7890"}</p>
-            </div>
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Email:</span>
-              <p>{supplier.contactEmail}</p>
-            </div>
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Notes:</span>
-              <p>Preferred supplier for electronics.</p>
-            </div>
+            <div><span className="text-sm font-medium text-muted-foreground">Address:</span><p>{supplier.address || 'N/A'}</p></div>
+            <div><span className="text-sm font-medium text-muted-foreground">Phone:</span><p>{supplier.contact_phone || "N/A"}</p></div>
+            <div><span className="text-sm font-medium text-muted-foreground">Email:</span><p>{supplier.contact_email || 'N/A'}</p></div>
           </CardContent>
         </Card>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Product Sheets for {supplier.name}</h2>
-          <Button variant="default" className="bg-brand hover:bg-brand-700" onClick={handleRequestSheet}>
-            Create PIR
-          </Button>
+          <h2 className="text-xl font-bold">Product Information Requests Received</h2>
+          {currentCompany && (
+             <Button variant="default" className="bg-brand hover:bg-brand-700" onClick={handleRequestSheet}>
+               New PIR
+             </Button>
+          )}
         </div>
-        
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-          </div>
+
+        {loadingPirs ? (
+          <div className="text-center p-8">Loading PIRs...</div>
+        ) : errorPirs ? (
+           <div className="text-center p-8 text-red-500">Error loading PIRs: {errorPirs.message}</div>
         ) : (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product ID</TableHead>
                   <TableHead>Product Name</TableHead>
+                  <TableHead>Requesting Customer</TableHead>
                   <TableHead>Info Categories</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Updated</TableHead>
@@ -364,35 +220,26 @@ const SupplierDetail = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allSupplierProductSheets.length > 0 ? (
-                  allSupplierProductSheets.map((sheet) => (
-                    <TableRow 
-                      key={sheet.id}
-                      className={sheet.status === "submitted" ? "bg-red-50" : ""}
-                    >
-                      <TableCell>{sheet.id}</TableCell>
-                      <TableCell>{sheet.name}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {sheet.tags.map((tagId) => getTagBadge(tagId))}
+                {(supplierPirs ?? []).length > 0 ? (
+                  supplierPirs!.map((pir) => ( // Use SupplierPIRSummary type here
+                    <TableRow key={pir.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handlePirClick(pir.id)}>
+                      <TableCell className="font-medium">{pir.productName}</TableCell>
+                      <TableCell>{pir.customerName}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        <div className="flex flex-wrap gap-1" title={pir.tags.map(t => t.name).join(', ')}>
+                            {pir.tags.map(tag => <TagBadge key={tag.id} tag={tag} size="sm" />)}
+                            {pir.tags.length === 0 && '—'}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge 
-                          className={`${getStatusStyle(sheet.status).bg} ${getStatusStyle(sheet.status).text} border-none`}
-                        >
-                          {getStatusLabel(sheet)}
+                        <Badge className={`${getStatusStyle(pir.status).bg} ${getStatusStyle(pir.status).text} border-none`}>
+                          {getStatusLabel(pir.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>{sheet.updatedAt ? formattedDate(new Date(sheet.updatedAt)) : "N/A"}</TableCell>
+                      <TableCell>{formattedDate(pir.updatedAt)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="bg-brand hover:bg-brand-700 text-white"
-                          onClick={() => navigate(`/product-sheets/${sheet.id}`)}
-                        >
-                          View Details
+                        <Button onClick={(e) => { e.stopPropagation(); handlePirClick(pir.id); }} size="sm" variant="outline" className="ml-auto">
+                          <Eye className="h-4 w-4 mr-2" /> View/Respond
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -400,7 +247,7 @@ const SupplierDetail = () => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                      No product sheets available for this supplier
+                      No product information requests received by this supplier yet.
                     </TableCell>
                   </TableRow>
                 )}
@@ -410,105 +257,18 @@ const SupplierDetail = () => {
         )}
       </div>
 
-      {/* PIR Modal */}
-      <RequestSheetModal 
-        open={isRequestModalOpen} 
-        onOpenChange={setIsRequestModalOpen} 
-        supplierId={supplier.id} 
-        supplierName={supplier.name}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Compliance Documents */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Compliance Documents</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="doc1" />
-              <label htmlFor="doc1" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Financial Reports (4)
-              </label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="doc2" />
-              <label htmlFor="doc2" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Safety Certificates (3)
-              </label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="doc3" />
-              <label htmlFor="doc3" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Environmental Compliance (2)
-              </label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="doc4" />
-              <label htmlFor="doc4" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Quality Assurance (5)
-              </label>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tasks */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Tasks</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {mockTasks.map((task) => (
-              <div key={task.id} className="flex items-center space-x-2">
-                <Checkbox id={task.id} checked={task.status === "completed"} />
-                <label htmlFor={task.id} className="flex-1 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  <span className={task.status === "completed" ? "line-through" : ""}>
-                    {task.name} - Due: {task.dueDate}, Assignee: {task.assignee}
-                  </span>
-                </label>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold">Comments</h2>
-        
-        <div className="border rounded-md p-4">
-          <Textarea 
-            placeholder="Here is a sample placeholder" 
-            className="min-h-[100px] mb-2"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
+      {/* PIR Modal - Pass supplier ID/Name */}
+      {supplier && (
+          <RequestSheetModal
+            open={isRequestModalOpen}
+            onOpenChange={setIsRequestModalOpen}
+            supplierId={supplier.id}
+            supplierName={supplier.name}
           />
-          <div className="flex justify-end">
-            <Button 
-              onClick={handlePostComment} 
-              className="bg-brand hover:bg-brand-700"
-            >
-              Post
-            </Button>
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          {mockComments.map((comment) => (
-            <div key={comment.id} className="border rounded-md p-4 bg-muted/40">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                  {comment.author.charAt(0)}
-                </div>
-                <div>
-                  <p className="font-medium">{comment.author}</p>
-                  <p className="text-xs text-muted-foreground">Posted on {comment.date}</p>
-                </div>
-              </div>
-              <p>{comment.text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
+
+      {/* Removed Mock Tasks/Comments Sections */}
+
     </div>
   );
 };

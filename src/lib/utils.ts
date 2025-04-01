@@ -1,7 +1,7 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase"; // Corrected import
+import { supabase } from "@/integrations/supabase/client"; // Updated import path
 import { v4 as uuidv4 } from 'uuid'
 import { env } from "@/config/env" // Assuming this is still needed for other parts
 
@@ -112,7 +112,6 @@ export async function createTablesWithSupabaseAPI() {
 export async function createCompanyDirectly(userData: {
   userId: string;
   companyName: string;
-  // role: string; // Role doesn't exist on companies table
   contactName: string;
   contactEmail: string;
   contactPhone: string;
@@ -120,32 +119,25 @@ export async function createCompanyDirectly(userData: {
   try {
     console.log("Attempting to create company with Supabase client...");
     
-    // Use the Supabase client directly
-    console.log("Trying with standard Supabase client...");
-    
-    // Create company first
+    // Create company first with minimal fields
     const { data: companyData, error: companyError } = await supabase
       .from('companies')
       .insert({
-        // Let DB generate ID
-        name: userData.companyName,
-        contact_name: userData.contactName, 
-        contact_email: userData.contactEmail, 
-        contact_phone: userData.contactPhone, 
-        // Other columns like 'status' might need defaults or be added here if required by DB
+        name: userData.companyName
       })
       .select()
       .single(); 
       
     if (companyError) {
-      console.log("Standard approach failed (company insert):", companyError);
+      console.log("Company creation failed:", companyError);
       throw new Error(`Company insert failed: ${companyError.message}`);
     }
     
     if (!companyData || !companyData.id) {
-        console.error("Company insert succeeded but no data returned or ID missing.");
-        throw new Error("Failed to retrieve created company ID.");
+      console.error("Company insert succeeded but no data returned or ID missing.");
+      throw new Error("Failed to retrieve created company ID.");
     }
+
     const newCompanyId = companyData.id; 
     console.log("Company inserted successfully:", companyData);
     
@@ -153,28 +145,37 @@ export async function createCompanyDirectly(userData: {
     const { data: userAssocData, error: userAssocError } = await supabase
       .from('company_users')
       .insert({
-        // Let DB generate ID
         company_id: newCompanyId, 
         user_id: userData.userId,
-        role: 'owner', // Assuming 'owner' is the correct default role
+        role: 'owner'
       })
       .select()
-      .single(); 
+      .single();
       
     if (userAssocError) {
       console.log("Association creation failed:", userAssocError);
-      
-      // Try to clean up company
-      console.log("Attempting cleanup: Deleting company", newCompanyId);
       await supabase.from('companies').delete().eq('id', newCompanyId);
       throw new Error(`Association creation failed: ${userAssocError.message}`);
     }
     
-    console.log("Association created successfully");
+    // Update company with contact info after association is created
+    const { error: updateError } = await supabase
+      .from('companies')
+      .update({
+        contact_name: userData.contactName,
+        contact_email: userData.contactEmail,
+        contact_phone: userData.contactPhone
+      })
+      .eq('id', newCompanyId);
+
+    if (updateError) {
+      console.log("Contact info update failed:", updateError);
+      // Don't throw, we already have the basic company and association
+    }
     
     return {
       success: true,
-      message: "Company created successfully with standard approach",
+      message: "Company created successfully",
       data: {
         company: companyData,
         association: userAssocData

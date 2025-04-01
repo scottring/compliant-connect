@@ -1,0 +1,6 @@
+packages:
+  # Include all packages in the workspace
+  - '.'
+  # Exclude test directories and node_modules
+  - '!**/test/**'
+  - '!**/node_modules/**' 

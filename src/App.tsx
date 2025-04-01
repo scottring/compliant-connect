@@ -2,10 +2,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { QuestionBankProvider } from "./context/QuestionBankContext";
+import { useCompanyData } from "./hooks/use-company-data";
 import Sidebar from "./components/Sidebar";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -27,26 +28,62 @@ import Unauthorized from "./pages/Unauthorized";
 import CompanySelector from "./components/CompanySelector";
 import Onboarding from "./pages/Onboarding";
 import { useIsMobile } from "./hooks/use-mobile";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import UserSwitcher from "./components/UserSwitcher";
 import AdminSettings from "@/pages/AdminSettings";
+import { supabase } from '@/integrations/supabase/client'
+import { useToast } from '@/components/ui/use-toast'
 
 // Simplified CheckCompany component
 const CheckCompany = () => {
-  const { user } = useAuth();
-  
-  // If no user, redirect to auth
-  if (!user) {
-    return <Navigate to="/auth" replace />;
+  const { user, loading: authLoading } = useAuth();
+  const { userCompanies, isLoadingCompanies, errorCompanies } = useCompanyData();
+  const location = useLocation();
+
+  console.log('CheckCompany: State', {
+    hasUser: !!user,
+    authLoading,
+    userCompanies,
+    isLoadingCompanies,
+    errorCompanies,
+    currentPath: location.pathname
+  });
+
+  // Show loading state while checking auth or company data
+  if (authLoading.auth || isLoadingCompanies) {
+    console.log('CheckCompany: Loading...', { authLoading, isLoadingCompanies });
+    return <div>Loading user data...</div>;
   }
-  
-  // Render the children components
+
+  // If no user after loading, redirect to auth
+  if (!user) {
+    console.log('CheckCompany: No user, redirecting to auth');
+    return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // If user exists but has no companies after loading, redirect to onboarding
+  if (!isLoadingCompanies && (!userCompanies || userCompanies.length === 0)) {
+    // Prevent redirect loop if already on onboarding
+    if (location.pathname !== '/onboarding') {
+      console.log("CheckCompany: No companies found, redirecting to onboarding");
+      return <Navigate to="/onboarding" state={{ from: location }} replace />;
+    }
+  }
+
+  // If there was an error loading companies, show an error message or redirect
+  if (errorCompanies) {
+    console.error("CheckCompany: Error loading company data:", errorCompanies);
+    return <div>Error loading company information. Please try again later.</div>;
+  }
+
+  console.log('CheckCompany: All checks passed, rendering outlet');
   return <Outlet />;
 };
 
 const queryClient = new QueryClient();
 
 const App = () => {
+  const { toast } = useToast()
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
 
@@ -56,8 +93,6 @@ const App = () => {
         <AppProvider>
           <QuestionBankProvider>
             <TooltipProvider>
-              <Toaster />
-              <Sonner />
               <BrowserRouter>
                 <Routes>
                   {/* Public Routes */}
@@ -93,8 +128,7 @@ const App = () => {
                         <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
                         <Route path="/our-products" element={<OurProducts />} />
                         
-                        {/* Admin Routes - temporarily removed permission check for MVP */}
-                        {/* TODO: Re-enable permission check after MVP */}
+                        {/* Admin Routes */}
                         <Route path="/question-bank" element={<QuestionBank />} />
                         <Route path="/tags" element={<Tags />} />
                       </Route>
@@ -115,6 +149,8 @@ const App = () => {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </BrowserRouter>
+              <Toaster />
+              <Sonner />
             </TooltipProvider>
           </QuestionBankProvider>
         </AppProvider>

@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Tag } from "@/types";
 import { cn } from "@/lib/utils";
@@ -22,28 +21,23 @@ const TagBadge: React.FC<TagBadgeProps> = ({
     lg: "text-sm px-3 py-1.5",
   };
 
+  const style = {
+    backgroundColor: selected ? '#e2e8f0' : '#f8fafc', // Light gray when selected, lighter gray when not
+    color: '#1e293b', // Dark gray text
+    borderColor: '#cbd5e1', // Medium gray border
+  };
+
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full font-medium transition-all",
-        sizeClasses[size],
-        onClick ? "cursor-pointer hover:opacity-80" : "",
-        selected 
-          ? "ring-2 ring-offset-1"
-          : "ring-0"
-      )}
-      style={{ 
-        backgroundColor: `${tag.color}20`, // Apply 20% opacity to the tag color
-        color: tag.color,
-        borderColor: tag.color,
-        borderWidth: "1px",
-        borderStyle: "solid",
-        // Remove the ringColor property and use CSS classes for ring color
-      }}
+    <button
+      type="button"
       onClick={onClick}
+      className={`inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-medium border ${
+        selected ? 'ring-2 ring-offset-2 ring-blue-500' : ''
+      }`}
+      style={style}
     >
       {tag.name}
-    </span>
+    </button>
   );
 };
 

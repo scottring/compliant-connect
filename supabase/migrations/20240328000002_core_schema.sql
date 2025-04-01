@@ -113,8 +113,12 @@ CREATE TABLE public.pir_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
     customer_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
+    supplier_company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE, -- Added supplier FK
+    title TEXT, -- Added title
+    description TEXT, -- Added description
     status pir_status NOT NULL DEFAULT 'draft',
     due_date TIMESTAMPTZ,
+    -- created_by UUID REFERENCES auth.users(id), -- Optional: Add if needed
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

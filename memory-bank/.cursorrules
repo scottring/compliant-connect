@@ -17,21 +17,25 @@
 - Support multiple roles per company
 
 ### 3. State Management
-- Centralize auth context
-- Handle loading states consistently
-- Implement proper error handling
-- Maintain state consistency
-- Support cross-tab synchronization
+- **Server State:** Use `@tanstack/react-query` (`useQuery`, `useMutation`) for fetching/updating backend data. Utilize query keys effectively and query invalidation for synchronization.
+- **Auth State:** Centralize core Supabase auth state (`user`, `session`) in `AuthContext`.
+- **Company Context:** Manage user's associated companies and currently selected company via `useCompanyData` hook (uses `useQuery`).
+- **UI State:** Use local `useState` for component-specific UI state (e.g., modal open/close, form input).
+- **Loading/Error States:** Primarily rely on states provided by `useQuery`/`useMutation` results (`isLoading`, `isPending`, `error`). Minimize manual loading/error state variables.
 
 ### 4. Data Model Dependencies
 - Company relationships are foundational
 - Product sheets depend on company and product data
 - PIRs link everything together
+- Questions organized by sections and subsections
+- Tags associate with questions for filtering
 
 ### 5. User Workflows
 - Question bank → PIR creation → Supplier response → Review process
 - Each step must maintain proper state
 - Email notifications at key points
+- Section/subsection organization for questions
+- Status tracking throughout workflow
 
 ## User Preferences
 
@@ -40,12 +44,14 @@
 - Need bulk import capabilities for efficiency
 - Toast notifications should be minimal
 - Status changes must be clear and accurate
+- Section/subsection organization for clarity
 
 ### 2. Data Entry
 - Support for copying/pasting from Excel
 - Auto-save during form completion
 - Clear progress indicators
 - Efficient filtering and search
+- Hierarchical organization of data
 
 ### 3. Error Handling
 - Clear error messages
@@ -53,6 +59,7 @@
 - Consistent error display
 - Helpful resolution steps
 - Proper loading indicators
+- Console logging for debugging
 
 ### 4. Authentication UX
 - Smooth sign-in process
@@ -63,12 +70,11 @@
 
 ## Project-Specific Patterns
 
-### 1. Authentication Patterns
-- Use AuthContext for central state
-- Implement proper loading states
-- Handle errors consistently
-- Support role-based access
-- Manage company state
+### 1. Authentication & Company Patterns
+- Use `AuthContext` for central Supabase auth state (`user`, `session`).
+- Use `useCompanyData` hook for accessing `userCompanies` and `currentCompany`.
+- Implement role-based access checks using data from `useCompanyData`.
+- Handle loading/error states primarily via React Query results.
 
 ### 2. Company Patterns
 - Clear role definitions
@@ -82,12 +88,14 @@
 - "Product Sheet" is the master document
 - "In Progress" vs "Partially Submitted" for status
 - Clear distinction between suppliers and customers
+- "Sections" and "Subsections" for question organization
 
 ### 4. Data Organization
 - Questions organized by sections/subsections
 - Tags for compliance categories
 - Support for nested tables
 - Smart answer reuse across tags
+- RPC functions for complex operations
 
 ## Known Challenges
 
@@ -110,12 +118,14 @@
 - Multi-tenant data isolation
 - Real-time updates and notifications
 - Answer history tracking
+- Question-tag associations
 
 ### 4. UX Considerations
 - Balance between auto-save and notifications
 - Clear status progression
 - Efficient review process
 - Intuitive navigation between views
+- Hierarchical data presentation
 
 ## Tool Usage Patterns
 
@@ -132,45 +142,49 @@
 - Handle relationships
 - Manage permissions
 - Track changes
+- Use RPC for complex operations
 
 ### 3. Form Handling
 - React Hook Form for form state
 - Zod for validation
 - Progressive saving
 - Proper error handling
+- Hierarchical field organization
 
-### 4. Data Management
-- Supabase for real-time features
-- Optimistic updates for better UX
-- Smart caching where appropriate
+### 4. Data Management (Server State)
+- Use `@tanstack/react-query` for fetching (`useQuery`) and mutations (`useMutation`).
+- Define reusable query/mutation hooks where appropriate (e.g., `useCreateTagMutation`).
+- Use query keys that reflect dependencies (e.g., `['suppliers', currentCompany?.id]`).
+- Use `queryClient.invalidateQueries` in mutation `onSuccess` callbacks to refetch stale data.
+- Handle loading and error states primarily through React Query's returned values.
+- Use Supabase RPC functions within mutations for atomic operations (e.g., `create_question_with_tags`).
 
 ## Evolution Notes
 
-### 1. Authentication Improvements
-- Enhanced error handling
-- Improved state management
-- Better loading states
-- Clearer user feedback
-- Robust invitation flow
+### 1. State Management Refactoring (Completed - Core)
+- Integrated `@tanstack/react-query` for server state.
+- Separated Auth state (`AuthContext`) from Company data (`useCompanyData`).
+- Refactored core hooks (`use-question-bank`, `use-tags`, `use-company-data`) and related components.
+- Established pattern for using `useQuery`/`useMutation`.
 
-### 2. Company Management
-- Enhanced relationship tracking
-- Improved context switching
-- Better role validation
-- Stronger access controls
-- Clearer user feedback
+### 2. Company Management (Updated)
+- Company data fetched via `useCompanyData` hook (`useQuery`).
+- Default company selection logic moved into `useCompanyData`.
+- Role validation logic updated in `Navigation`/`ProtectedRoute` to use `useCompanyData`.
 
 ### 3. UI Improvements
 - Moved from grid to table views
 - Enhanced filtering capabilities
 - Improved status indicators
 - Added bulk import features
+- Implemented section/subsection structure
 
 ### 4. Workflow Refinements
 - Streamlined review process
 - Enhanced communication features
 - Improved answer reuse
 - Better progress tracking
+- More intuitive organization
 
 ## Implementation Guidelines
 
@@ -263,6 +277,40 @@ const recoverFromError = async (
 };
 ```
 
+### 4. Question Bank Implementation
+```typescript
+// RPC for atomic operations
+const createQuestion = async (question: QuestionInputData): Promise<DBQuestion | null> => {
+  try {
+    setLoading(true);
+    
+    // Extract tags from the question data
+    const { tags: selectedTags, ...questionData } = question;
+    const tagIds = selectedTags?.map(tag => tag.id) || [];
+
+    // Call the create_question_with_tags RPC function
+    const { data: newQuestionData, error: rpcError } = await supabase
+      .rpc('create_question_with_tags', {
+        p_subsection_id: questionData.subsection_id,
+        p_text: questionData.text,
+        p_description: questionData.description || null,
+        p_type: questionData.type,
+        p_required: questionData.required,
+        p_options: questionData.options || null,
+        p_tag_ids: tagIds
+      });
+
+    if (rpcError) throw rpcError;
+    
+    // Handle response and update state
+  } catch (err) {
+    // Error handling
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
 ## Testing Requirements
 
 ### 1. Authentication Tests
@@ -312,10 +360,11 @@ describe('Data Model', () => {
     // Check data access
   });
 
-  test('handles product sheets', async () => {
-    // Setup product sheets
-    // Verify data consistency
-    // Check data integrity
+  test('handles question bank', async () => {
+    // Setup sections, subsections, and questions
+    // Verify hierarchical structure
+    // Check tag associations
+    // Test CRUD operations
   });
 });
 ```
@@ -359,24 +408,17 @@ describe('Error Handling', () => {
     // Check recovery
   });
 
-  test('handles company management errors', async () => {
+  test('handles database operation errors', async () => {
     // Setup with error condition
     // Execute
     // Verify error handling
-    // Check recovery
+    // Check recovery and retries
   });
 
-  test('handles data model errors', async () => {
-    // Setup with error condition
-    // Execute
+  test('handles RPC errors', async () => {
+    // Setup with RPC error condition
+    // Execute complex operation
     // Verify error handling
-    // Check recovery
-  });
-
-  test('handles user workflow errors', async () => {
-    // Setup with error condition
-    // Execute
-    // Verify error handling
-    // Check recovery
+    // Check state consistency
   });
 }); 

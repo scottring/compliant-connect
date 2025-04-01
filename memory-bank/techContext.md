@@ -10,6 +10,7 @@
 - ShadcnUI
 - React Hook Form
 - Zod validation
+- @tanstack/react-query (React Query v5) for server state management
 
 ### Backend
 - Supabase
@@ -19,6 +20,7 @@
   - Real-time subscriptions
   - Storage
   - Edge Functions
+  - RPC Functions
 
 ### Development Tools
 - VS Code / Cursor IDE
@@ -26,6 +28,7 @@
 - ESLint for code quality
 - Prettier for code formatting
 - Model Context Protocol (MCP) for database operations
+- Vite for fast development
 
 ## Authentication Implementation
 
@@ -72,6 +75,9 @@ CREATE TABLE public.companies (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   name TEXT NOT NULL,
   role TEXT CHECK (role IN ('supplier', 'customer', 'both')),
+  email TEXT,
+  phone TEXT,
+  contact_name TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -96,6 +102,70 @@ CREATE TABLE public.company_relationships (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(customer_company_id, supplier_company_id)
+);
+
+-- Sections for question organization
+CREATE TABLE public.sections (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  order_index INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Subsections for question organization
+CREATE TABLE public.subsections (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  section_id UUID REFERENCES public.sections(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  order_index INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Questions
+CREATE TABLE public.questions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  subsection_id UUID REFERENCES public.subsections(id),
+  text TEXT NOT NULL,
+  description TEXT,
+  type TEXT CHECK (type IN ('text', 'number', 'boolean', 'select', 'multi-select', 'file', 'table')),
+  required BOOLEAN DEFAULT false,
+  options JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tags for compliance categories
+CREATE TABLE public.tags (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Question-Tag Association
+CREATE TABLE public.question_tags (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  question_id UUID REFERENCES public.questions(id) ON DELETE CASCADE,
+  tag_id UUID REFERENCES public.tags(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(question_id, tag_id)
+);
+
+-- PIR Requests
+CREATE TABLE public.pir_requests (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  customer_company_id UUID REFERENCES public.companies(id),
+  supplier_company_id UUID REFERENCES public.companies(id),
+  product_id UUID,
+  status TEXT DEFAULT 'new',
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
@@ -139,6 +209,144 @@ CREATE POLICY "Users can view relationships for their companies"
       AND user_id = auth.uid()
     )
   );
+
+-- Sections
+ALTER TABLE public.sections ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view sections"
+  ON public.sections FOR SELECT
+  USING (true);
+CREATE POLICY "Admin users can create sections"
+  ON public.sections FOR INSERT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.company_users
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Subsections
+ALTER TABLE public.subsections ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view subsections"
+  ON public.subsections FOR SELECT
+  USING (true);
+CREATE POLICY "Admin users can create subsections"
+  ON public.subsections FOR INSERT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.company_users
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Questions
+ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view questions"
+  ON public.questions FOR SELECT
+  USING (true);
+CREATE POLICY "Admin users can manage questions"
+  ON public.questions FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.company_users
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Tags
+ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view tags"
+  ON public.tags FOR SELECT
+  USING (true);
+CREATE POLICY "Admin users can manage tags"
+  ON public.tags FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.company_users
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Question Tags
+ALTER TABLE public.question_tags ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view question tags"
+  ON public.question_tags FOR SELECT
+  USING (true);
+CREATE POLICY "Admin users can manage question tags"
+  ON public.question_tags FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.company_users
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
+```
+
+### 4. RPC Functions
+```sql
+-- Create a question with tags in a single transaction
+CREATE OR REPLACE FUNCTION create_question_with_tags(
+  p_subsection_id UUID,
+  p_text TEXT,
+  p_description TEXT,
+  p_type TEXT,
+  p_required BOOLEAN,
+  p_options JSONB,
+  p_tag_ids UUID[]
+) RETURNS JSON AS $$
+DECLARE
+  v_question_id UUID;
+  v_tag_id UUID;
+  v_result JSON;
+BEGIN
+  -- Insert the question first
+  INSERT INTO public.questions (
+    subsection_id,
+    text,
+    description,
+    type,
+    required,
+    options
+  ) VALUES (
+    p_subsection_id,
+    p_text,
+    p_description,
+    p_type,
+    p_required,
+    p_options
+  ) RETURNING id INTO v_question_id;
+  
+  -- Then insert the question-tag associations
+  IF p_tag_ids IS NOT NULL AND array_length(p_tag_ids, 1) > 0 THEN
+    FOREACH v_tag_id IN ARRAY p_tag_ids
+    LOOP
+      INSERT INTO public.question_tags (question_id, tag_id)
+      VALUES (v_question_id, v_tag_id);
+    END LOOP;
+  END IF;
+  
+  -- Return the new question as JSON
+  SELECT json_build_object(
+    'id', q.id,
+    'subsection_id', q.subsection_id,
+    'text', q.text,
+    'description', q.description,
+    'type', q.type,
+    'required', q.required,
+    'options', q.options,
+    'created_at', q.created_at,
+    'updated_at', q.updated_at
+  ) INTO v_result
+  FROM public.questions q
+  WHERE q.id = v_question_id;
+  
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
 ## Development Setup
@@ -552,4 +760,208 @@ interface ErrorHandling {
     restoreState: () => void;
   };
 }
-``` 
+```
+
+## Question Bank Implementation
+
+### 1. Data Structure
+```typescript
+// Section Type
+export type Section = {
+  id: string;
+  name: string;
+  description: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// Subsection Type
+export type Subsection = {
+  id: string;
+  section_id: string;
+  name: string;
+  description: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// Question Types
+export type QuestionType = 'text' | 'number' | 'boolean' | 'select' | 'multi-select' | 'file' | 'table';
+
+// Database Question Structure
+export type DBQuestion = {
+  id: string;
+  subsection_id: string;
+  text: string;
+  description: string | null;
+  type: QuestionType;
+  required: boolean;
+  options: any | null;
+  created_at: string;
+  updated_at: string;
+  tags: Tag[];
+};
+```
+
+### 2. Hook Implementation
+```typescript
+// Question Bank Hook
+export const useQuestionBank = (): UseQuestionBankReturn => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<DBQuestion[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [subsections, setSubsections] = useState<Subsection[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+
+  // Load all question bank data
+  const loadQuestions = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('questions')
+        .select('id, subsection_id, text, description, type, required, options, created_at, updated_at');
+
+      if (error) throw error;
+      
+      // Load tags for these questions
+      // Process and return questions with tags
+    } catch (err) {
+      // Error handling
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load sections and subsections
+  const loadSectionsAndSubsections = useCallback(async () => {
+    try {
+      // Fetch sections
+      // Fetch subsections
+      // Update state
+    } catch (err) {
+      // Error handling
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Create question with tags using RPC
+  const createQuestion = async (question: QuestionInputData): Promise<DBQuestion | null> => {
+    try {
+      // Extract tags from the question data
+      const { tags: selectedTags, ...questionData } = question;
+      const tagIds = selectedTags?.map(tag => tag.id) || [];
+
+      // Call the create_question_with_tags RPC function
+      const { data: newQuestionData, error: rpcError } = await supabase
+        .rpc('create_question_with_tags', {
+          p_subsection_id: questionData.subsection_id,
+          p_text: questionData.text,
+          p_description: questionData.description || null,
+          p_type: questionData.type,
+          p_required: questionData.required,
+          p_options: questionData.options || null,
+          p_tag_ids: tagIds
+        });
+
+      if (rpcError) throw rpcError;
+      
+      // Process response and update state
+      return processedQuestion;
+    } catch (err) {
+      // Error handling
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Return hook interface
+  return {
+    questions,
+    sections,
+    subsections,
+    tags,
+    loading,
+    error,
+    // Methods
+  };
+};
+```
+
+## Best Practices and Patterns
+
+### 1. RPC Usage
+- Use RPC functions for complex database operations
+- Implement atomic transactions in PostgreSQL functions
+- Handle errors properly in RPC calls
+- Use type-safe parameters
+- Return structured responses
+
+### 2. Error Handling
+- Implement consistent error handling patterns
+- Log errors to console in development
+- Provide user-friendly error messages
+- Use toast notifications for user feedback
+- Track loading states alongside error states
+
+### 3. State Management
+- **Server State:** Use `@tanstack/react-query` (`useQuery`, `useMutation`). Define reusable hooks for mutations. Use query invalidation for updates. Handle loading/error via hook results.
+- **Client State:** Use `useState` for local component state. Use React Context (`AuthContext`, potentially others) for global client state if necessary (avoiding duplication of server state).
+- **Persisted State:** `usePersistedState` hook used for some state in `AppContext` (NOTE: This conflicts with React Query for server state and should be refactored/removed).
+
+### 4. Data Fetching & Mutations (React Query Pattern)
+- Define async fetch/mutation functions that interact with Supabase.
+- Wrap these functions with `useQuery` or `useMutation`.
+- Use descriptive query keys, including dependencies (e.g., `['suppliers', companyId]`).
+- Invalidate relevant queries in `onSuccess` callbacks of mutations.
+- Handle loading/error states provided by the hooks in the UI.
+- Use RPC functions within mutations for atomic backend operations.
+
+# Development Environment
+
+## Supabase Configuration
+- **Production Environment**: Cloud-based Supabase project (eu-central-1)
+- **Development Environment**: Cloud-based Supabase project (eu-central-1)
+  - Project ID: oecravfbvupqgzfyizsi
+  - Project Name: stacks-2025.03.25
+  - Region: eu-central-1
+
+## DEPRECATED: Local Docker Environment
+The local Docker-based development environment is deprecated and should not be used.
+All development should use the cloud-based Supabase project.
+
+## Environment Setup
+1. Copy `.env.example` to `.env`
+2. Update Supabase configuration with cloud project credentials
+3. Never use local Docker for database - always connect to cloud environment
+
+## Development Tools
+- Node.js v18+
+- pnpm (package manager)
+- Vite (build tool)
+- React + TypeScript
+- TailwindCSS
+- ShadcnUI Components
+
+## Key Dependencies
+- @supabase/supabase-js: Supabase client
+- @tanstack/react-query: Data fetching and caching
+- @hookform/resolvers: Form validation
+- shadcn/ui: UI components
+- tailwindcss: Styling
+
+## Authentication
+- Supabase Auth with email/password
+- JWT-based session management
+- Row Level Security (RLS) policies
+
+## Database
+- PostgreSQL (managed by Supabase)
+- Prisma for type generation
+- Row Level Security (RLS) for data access control
+- Real-time subscriptions where needed

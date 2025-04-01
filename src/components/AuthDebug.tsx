@@ -1,10 +1,19 @@
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useCompanyData } from "@/hooks/use-company-data"; // Import company data hook
 import { Button } from "@/components/ui/button";
 import { env } from "@/config/env";
 
 const AuthDebug = () => {
-  const { user, session, userCompanies, currentCompany, userRole, refreshUserData } = useAuth();
+  const { user, session } = useAuth(); // Get user/session from AuthContext
+  const { userCompanies, currentCompany, isLoadingCompanies, refetchCompanies } = useCompanyData(); // Get company data
+
+  // Determine user role in current company
+  const userRole = React.useMemo(() => {
+      if (!currentCompany || !userCompanies) return "None";
+      const companyData = userCompanies.find(uc => uc.id === currentCompany.id);
+      return companyData?.userRole || "None";
+  }, [currentCompany, userCompanies]);
 
   // Only show in development mode
   if (!env.features.enableDebugTools) {
@@ -19,16 +28,16 @@ const AuthDebug = () => {
         <p><strong>User ID:</strong> {user?.id || "None"}</p>
         <p><strong>Email:</strong> {user?.email || "None"}</p>
         <p><strong>Role:</strong> {userRole || "None"}</p>
-        <p><strong>Profile:</strong> {user?.profile ? "Exists" : "Missing"}</p>
+        {/* <p><strong>Profile:</strong> {user?.profile ? "Exists" : "Missing"}</p> // Profile not directly on user object */}
         <p><strong>Companies:</strong> {userCompanies?.length || 0}</p>
-        <p><strong>Current Company:</strong> {currentCompany?.name || "None"}</p>
+        <p><strong>Current Company:</strong> {isLoadingCompanies ? "Loading..." : (currentCompany?.name || "None")}</p>
       </div>
       <div className="mt-2 flex justify-end">
         <Button 
           size="sm" 
           variant="outline" 
           className="text-xs bg-transparent border-white text-white" 
-          onClick={refreshUserData}
+          onClick={refetchCompanies} // Call refetch from useCompanyData
         >
           Refresh
         </Button>

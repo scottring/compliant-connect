@@ -1,135 +1,73 @@
-import { Database } from '@/integrations/supabase/types';
+import { Database } from '@/types/supabase'; // Use generated types as source of truth
 
-export type QuestionType = 'text' | 'number' | 'boolean' | 'single_choice' | 'multiple_choice' | 'file_upload';
-export type PIRStatus = 'draft' | 'pending' | 'in_review' | 'approved' | 'rejected' | 'revision_requested';
+// Use generated Enums directly
+export type QuestionType = Database['public']['Enums']['question_type'];
+export type PIRStatus = Database['public']['Enums']['pir_status'];
+export type ResponseStatus = Database['public']['Enums']['response_status'];
+export type FlagStatus = Database['public']['Enums']['flag_status'];
+export type RelationshipStatus = Database['public']['Enums']['relationship_status'];
 
-// Validation rules for different question types
-export interface TextValidationRules {
-  minLength?: number;
-  maxLength?: number;
-  pattern?: string;
-  required?: boolean;
-}
+// Define local types based on generated Row types, adding relationships if needed
 
-export interface NumberValidationRules {
-  min?: number;
-  max?: number;
-  step?: number;
-  required?: boolean;
-}
+// Corresponds to public.questions table
+export type Question = Database['public']['Tables']['questions']['Row'] & {
+    // Add any frontend-specific properties if necessary, e.g., fetched tags
+    tags?: Tag[]; // Assuming Tag is defined in @/types/index.ts
+};
 
-export type ValidationRules = TextValidationRules | NumberValidationRules;
+// Corresponds to public.pir_requests table
+export type PIRRequest = Database['public']['Tables']['pir_requests']['Row'];
 
-// Question category with optional parent
-export interface QuestionCategory {
-  id: string;
-  name: string;
-  description: string | null;
-  parent_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
+// Corresponds to public.pir_responses table
+export type PIRResponse = Database['public']['Tables']['pir_responses']['Row'] & {
+    // Add related data fetched separately, like flags
+    response_flags?: FlagType[]; // Use response_flags based on schema
+};
 
-// Question definition
-export interface Question {
-  id: string;
-  category_id: string;
-  title: string;
-  description: string | null;
-  type: QuestionType;
-  is_required: boolean;
-  options: string[] | null; // For single_choice and multiple_choice
-  validation_rules: ValidationRules | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
+// Corresponds to public.response_flags table
+export type FlagType = Database['public']['Tables']['response_flags']['Row'];
 
-// PIR request
-export interface PIRRequest {
-  id: string;
-  title: string;
-  description: string | null;
-  customer_company_id: string;
-  supplier_company_id: string;
-  status: PIRStatus;
-  due_date: string | null;
-  created_by: string;
-  assigned_to: string | null;
-  created_at: string;
-  updated_at: string;
-}
+// Corresponds to public.pir_tags table (useful for joins)
+export type PIRTag = Database['public']['Tables']['pir_tags']['Row'];
 
-// Junction table for PIR questions
-export interface PIRQuestion {
-  id: string;
-  pir_id: string;
-  question_id: string;
-  order_index: number;
-  created_at: string;
-  updated_at: string;
-}
+// Corresponds to public.pir_questions table (useful for joins, if it exists)
+// Check if pir_questions exists in your supabase.ts, otherwise remove this
+// export type PIRQuestion = Database['public']['Tables']['pir_questions']['Row'];
 
-// Response data types based on question type
-export type ResponseData = {
-  text: string;
-  number: number;
-  boolean: boolean;
-  single_choice: string;
-  multiple_choice: string[];
-  file_upload: string[]; // Array of file IDs
-}
-
-// PIR response
-export interface PIRResponse {
-  id: string;
-  pir_id: string;
-  question_id: string;
-  response_data: ResponseData[keyof ResponseData];
-  notes: string | null;
-  created_by: string;
-  reviewed_by: string | null;
-  review_status: PIRStatus;
-  review_notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-// File attachment
-export interface PIRFile {
-  id: string;
-  pir_id: string;
-  question_id: string;
-  file_name: string;
-  file_type: string;
-  file_size: number;
-  storage_path: string;
-  uploaded_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// Helper type for PIR with its questions and responses
+// Helper type for PIR with details (adjust based on actual query structure)
 export interface PIRWithDetails extends PIRRequest {
-  questions: (PIRQuestion & {
-    question: Question;
-    response?: PIRResponse;
-    files?: PIRFile[];
-  })[];
+  questions: Question[]; // Array of Question objects
+  responses?: PIRResponse[]; // Array of PIRResponse objects
+  tags?: Tag[]; // Array of Tag objects
+  // Add product, supplier, customer if joined
+  product?: Database['public']['Tables']['products']['Row'] | null;
+  supplier?: Database['public']['Tables']['companies']['Row'] | null;
+  customer?: Database['public']['Tables']['companies']['Row'] | null;
 }
 
-// Database insert types
-export type InsertQuestionCategory = Omit<QuestionCategory, 'id' | 'created_at' | 'updated_at'>;
-export type InsertQuestion = Omit<Question, 'id' | 'created_at' | 'updated_at'>;
-export type InsertPIRRequest = Omit<PIRRequest, 'id' | 'created_at' | 'updated_at'>;
-export type InsertPIRQuestion = Omit<PIRQuestion, 'id' | 'created_at' | 'updated_at'>;
-export type InsertPIRResponse = Omit<PIRResponse, 'id' | 'created_at' | 'updated_at'>;
-export type InsertPIRFile = Omit<PIRFile, 'id' | 'created_at' | 'updated_at'>;
+// Type for displaying PIR summaries
+export interface PIRSummary {
+  id: string;
+  productName: string;
+  supplierId: string | null; // supplier_company_id is nullable
+  supplierName?: string;
+  customerId: string | null; // customer_id is nullable
+  updatedAt: string | null;
+  status: PIRStatus;
+  tags?: { id: string; name: string }[];
+  responseCount?: number;
+  totalQuestions?: number; // Needs calculation
+  customerName?: string;
+}
 
-// Database update types
-export type UpdateQuestionCategory = Partial<InsertQuestionCategory>;
-export type UpdateQuestion = Partial<InsertQuestion>;
-export type UpdatePIRRequest = Partial<InsertPIRRequest>;
-export type UpdatePIRQuestion = Partial<InsertPIRQuestion>;
-export type UpdatePIRResponse = Partial<InsertPIRResponse>;
-export type UpdatePIRFile = Partial<InsertPIRFile>; 
+// Use generated Insert/Update types directly where possible, or define specific input types
+export type InsertPIRRequest = Database['public']['Tables']['pir_requests']['Insert'];
+export type UpdatePIRRequest = Database['public']['Tables']['pir_requests']['Update'];
+export type InsertPIRResponse = Database['public']['Tables']['pir_responses']['Insert'];
+export type UpdatePIRResponse = Database['public']['Tables']['pir_responses']['Update'];
+export type InsertFlag = Database['public']['Tables']['response_flags']['Insert'];
+export type UpdateFlag = Database['public']['Tables']['response_flags']['Update'];
+// Add others as needed (e.g., InsertPIRTag)
+
+// Re-export Tag from main types if needed here, or import it where used
+import { Tag } from '@/types/index';

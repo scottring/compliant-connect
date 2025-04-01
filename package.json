@@ -1,26 +1,23 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "compliant-connect",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@8.15.4",
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8.15.4"
+  },
   "scripts": {
     "dev": "vite --mode development",
     "build": "vite build --mode production",
-    "build:dev": "vite build --mode development",
-    "build:staging": "vite build --mode staging",
     "preview": "vite preview",
-    "preview:staging": "vite preview --mode staging",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
-    "db:clear": "tsx scripts/clearDatabase.ts",
-    "db:clear:dev": "NODE_ENV=development tsx scripts/clearDatabase.ts --mode=development",
-    "db:clear:staging": "NODE_ENV=staging tsx scripts/clearDatabase.ts --mode=staging",
     "migration:apply": "tsx scripts/applyMigration.ts",
     "migration:print": "tsx scripts/applyMigration.ts",
-    "mcp:dev": "./scripts/mcp/start-dev.sh",
-    "mcp:staging": "./scripts/mcp/start-staging.sh",
-    "mcp:prod": "./scripts/mcp/start-prod.sh"
+    "mcp:dev": "./scripts/mcp/start-dev.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -88,6 +85,8 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
     "lovable-tagger": "^1.1.7",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
@@ -95,5 +94,11 @@
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   }
 }

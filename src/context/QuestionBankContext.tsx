@@ -1,22 +1,22 @@
 import React, { createContext, useContext } from 'react';
-import { useQuestionBank, UseQuestionBankReturn } from '@/hooks/useQuestionBank';
+import { useQuestionBank, UseQuestionBankReturn } from '@/hooks/use-question-bank';
 
-const QuestionBankContext = createContext<UseQuestionBankReturn | null>(null);
+const QuestionBankContext = createContext<UseQuestionBankReturn | undefined>(undefined);
 
-export const useQuestionBankContext = () => {
+export function useQuestionBankContext() {
   const context = useContext(QuestionBankContext);
   if (!context) {
     throw new Error('useQuestionBankContext must be used within a QuestionBankProvider');
   }
   return context;
-};
+}
 
-export const QuestionBankProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const questionBank = useQuestionBank();
+export function QuestionBankProvider({ children }: { children: React.ReactNode }) {
+  const questionBankData = useQuestionBank();
 
   return (
-    <QuestionBankContext.Provider value={questionBank}>
+    <QuestionBankContext.Provider value={questionBankData}>
       {children}
     </QuestionBankContext.Provider>
   );
-}; 
+} 

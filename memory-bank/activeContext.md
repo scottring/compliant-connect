@@ -1,196 +1,208 @@
 # Active Context
 
-## Current Focus: MVP Implementation by 3 PM Today
+## Current Focus: PIR System and User Flow Implementation
 
 ### Timeline and Implementation Plan
 
-#### 1. Authentication and Company Context (1.5 hours)
-- Fix company state management in AuthContext
-- Complete role-based access control
-- Improve company context switching
-- Enhance error handling and loading states
-- Verify company relationship validation
+#### 1. Question Bank System Enhancement (Current Focus)
+- Continue improving question organization with sections/subsections
+- Enhance question bank UI for better user experience
+- Implement bulk import capabilities for questions
+- Complete validation flows for question management
 
-#### 2. Question Bank and PIR System (2.5 hours)
-- Question bank setup and management
-- PIR creation and workflow
-- Response submission flow
-- Review process implementation
-- Basic validation and error handling
+#### 2. PIR System Development (Next Priority)
+- Complete PIR creation workflow
+- Finalize response submission interface
+- Implement review process dashboard
+- Add status tracking and notification system
 
-#### 3. Basic User Flows (2 hours)
-- PIR dashboard views by role
-- Question bank management UI
-- Response review interface
-- Core navigation
+#### 3. Authentication and Access Control (Ongoing)
+- Complete role-based access implementation
+- Finalize company relationship validation
+- Enhance error handling for edge cases
+- Optimize company context switching
 
-#### 4. Testing and Bug Fixes (1 hour)
+#### 4. Testing and Documentation (Parallel)
 - End-to-end PIR flow testing
-- Critical path validation
-- Bug fixes for core functionality
-- Basic performance optimization
+- Authentication system verification
+- Schema validation and documentation
+- Performance optimization
 
 ### Implementation Schedule
 
-1. **Immediate Focus (Next 30 mins)**
-   - Fix AuthContext company state
-   - Complete role-based access
-   - Verify company relationships
+1. **Current Phase (April 1-5)**
+   - Complete question bank enhancements
+   - Begin PIR creation workflow
+   - Continue role-based access implementation
+   - Start end-to-end testing for question bank
 
-2. **Morning Block (2.5 hours)**
-   - Question bank implementation
-   - PIR creation workflow
-   - Response submission system
-   - Review process setup
+2. **Phase 2 (April 6-10)**
+   - Finalize PIR system functionality
+   - Complete authentication enhancements
+   - Implement review process dashboard
+   - Continue testing and optimization
 
-3. **Early Afternoon (2.5 hours)**
-   - Role-based PIR dashboards
-   - Authentication refinement
-   - Company context integration
-   - State management implementation
-
-4. **Final Implementation (1.5 hours)**
-   - End-to-end testing
-   - Bug fixes and optimization
-   - Documentation updates
-   - Basic polish
+3. **Phase 3 (April 11-15)**
+   - Implement notification system
+   - Finalize role-based dashboards
+   - Complete documentation
+   - Final polish and optimization
 
 ### Critical Success Factors
-1. Solid authentication foundation
-2. Working company relationships
-3. Complete PIR workflow functionality
-4. Efficient question bank management
-5. Clear response submission process
+1. Functional question bank with proper organization
+2. Complete PIR workflow from creation to review
+3. Reliable authentication and company context
+4. Performant UI with proper loading states
+5. Clear error handling throughout the system
 
 ### Current Status
-- Authentication foundation needs fixes
-- Company state management incomplete
-- Role-based access control pending
-- Database schema needs PIR extension
+- **Server State Management Refactored:** Integrated `@tanstack/react-query` in core hooks (`use-question-bank`, `use-tags`, `use-company-data`) and related components/pages (`Suppliers`, `AdminSettings`, `RequestSheetModal`, `SupplierProducts`, `CompanySelector`, `Navigation`). Manual fetching (`useEffect`/`useState`) replaced with `useQuery`, manual mutations replaced with `useMutation`.
+- **AuthContext Simplified:** `AuthContext` now focuses solely on authentication state (`user`, `session`), company data management moved to `useCompanyData`.
+- Question bank implementation significantly improved (section/subsection structure, RPC for question-tag association).
+- Authentication system foundation stabilized.
 
 ### Next Immediate Steps
-1. Fix company state in AuthContext
-2. Implement role-based access
-3. Verify company relationships
-4. Define question bank schema
-5. Implement PIR creation flow
+1.  **Complete React Query Rollout:** Apply `useQuery`/`useMutation` pattern to remaining components/hooks with manual data fetching/mutations.
+2.  **Update Component Consumers:** Ensure components relying on old `AuthContext` company data or manual hook functions now use `useCompanyData` or the new query/mutation results correctly.
+3.  **Refactor/Remove `AppContext` Server State:** Address the conflict between `AppContext`'s persisted state and React Query's server state management.
+4.  Implement PIR creation workflow.
+5.  Finalize role-based access control.
+6.  Begin end-to-end testing.
 
 ### Risk Mitigation
-1. Fix authentication issues first
-2. Validate company relationships
-3. Test access controls thoroughly
-4. Focus on core PIR functionality
-5. Implement basic validation
+1. Continue improving error handling
+2. Enhance loading state management
+3. Implement incremental data loading
+4. Maintain detailed testing protocols
+5. Document schema changes clearly
 
 ### Notes
-- Deadline: 3 PM today
-- Total estimated time: 7 hours
-- Authentication fixes are blocking
-- PIR system depends on auth/company foundation
+- Recent work focused on question bank system
+- Fixed persistent issues with question-tag associations
+- Added better error handling throughout the application
+- Improved data models for questions, sections, and subsections
+- Enhanced loading state management in critical components
 
 ## Current Focus
-Completing authentication and company foundation:
-1. Fix company state management
-2. Complete role-based access
-3. Improve error handling
-4. Verify company relationships
-5. Test access controls
+Enhancing the question bank system and beginning PIR workflow implementation:
+1. Complete question bank UI organization
+2. Implement PIR creation interface
+3. Enhance role-based access control
+4. Optimize loading state management
+5. Begin end-to-end testing
 
 ## Recent Changes
-1. Reprioritized implementation focus:
-   - Authentication fixes as blocker
-   - Company relationship validation
-   - Role-based access completion
-   - Error handling improvements
+1.  **Server State Refactoring (React Query):**
+    *   Integrated `@tanstack/react-query` (`useQuery`, `useMutation`).
+    *   Refactored `use-question-bank`, `use-tags`, `use-company-data` hooks.
+    *   Refactored `Suppliers`, `AdminSettings`, `RequestSheetModal`, `SupplierProducts` pages/components.
+    *   Simplified `AuthContext`, created `useCompanyData`.
+    *   Updated `CompanySelector`, `Navigation`, `ProtectedRoute`, `AuthDebug`.
+2.  Major Question Bank Improvements (Previous):
+    *   Implemented section/subsection structure.
+    *   Fixed question-tag association with RPC.
+    *   Added error handling.
+    *   Improved schema consistency.
 
-2. Identified critical components:
-   - AuthContext company state
-   - Role-based access control
-   - Company relationship validation
-   - Error handling system
+2. Authentication Enhancements:
+   - Improved company context switching
+   - Enhanced error handling
+   - Better loading state management
+   - More reliable user state tracking
 
-3. Documentation updates:
-   - Updated implementation timeline
-   - Revised priority structure
-   - Enhanced auth requirements
-   - Updated risk mitigation
+3. PIR System Development:
+   - Refactored supplier product page
+   - Updated PIR request data model
+   - Improved status tracking
+   - Enhanced UI consistency
 
 ## Active Decisions
-1. Authentication Requirements
-   - Reliable company state management
-   - Complete role-based access
-   - Proper error handling
-   - Verified company relationships
-
-2. Access Control Requirements
-   - Role-based access implementation
-   - Company-specific views
-   - Proper data isolation
-   - Workflow permissions
-
-3. State Management
-   - Company state reliability
-   - Loading state improvements
-   - Error state handling
-   - Context switching fixes
+1.  **Server State Management:**
+    *   Adopted `@tanstack/react-query` as the standard for fetching and mutating server state.
+    *   Refactoring existing manual fetching (`useEffect`/`useState`) to use `useQuery`.
+    *   Refactoring existing manual mutations to use `useMutation`.
+    *   Utilizing query invalidation for data synchronization after mutations.
+2.  **Context Separation:**
+    *   `AuthContext` handles only authentication state.
+    *   `useCompanyData` hook handles fetching user's companies and managing the current company selection.
+3.  Question Bank Organization (Ongoing):
+    *   Using section/subsection hierarchy.
+    *   Implementing RPC for complex operations (e.g., `create_question_with_tags`).
+4.  Authentication Strategy (Ongoing):
+    *   Company context managed via `useCompanyData`.
+    *   Role-based access control implemented in `Navigation` and `ProtectedRoute` based on `useCompanyData`.
 
 ## Next Steps
-1. Authentication Completion
-   - [ ] Fix company state management
-   - [ ] Implement role-based access
-   - [ ] Improve error handling
-   - [ ] Test company relationships
-
-2. Question Bank Implementation
-   - [ ] Create question bank schema
-   - [ ] Build management interface
-   - [ ] Implement CRUD operations
-   - [ ] Add validation logic
-
-3. Testing & Validation
-   - [ ] Test authentication flows
-   - [ ] Validate company relationships
-   - [ ] Verify access controls
-   - [ ] Test PIR creation flow
+1.  **React Query Rollout & Cleanup**
+    *   [ ] Refactor remaining manual data fetching/mutations.
+    *   [ ] Update components using old context/hook patterns.
+    *   [ ] Address `AppContext` server state duplication.
+    *   [ ] Remove redundant loading/error states handled by React Query.
+2.  Question Bank Completion
+    *   [ ] Enhance question bank UI organization.
+    *   [ ] Implement bulk import capabilities.
+    *   [ ] Add advanced filtering and search.
+3.  PIR System Implementation
+    *   [ ] Complete PIR creation interface.
+    *   [ ] Implement response submission forms.
+    *   [ ] Develop review dashboard.
+4.  Testing & Validation
+    *   [ ] Test refactored hooks and components.
+    *   [ ] Test authentication flows thoroughly.
+    *   [ ] Test PIR workflow end-to-end.
 
 ## Known Issues
 1. Core Functionality
-   - Company state management unreliable
-   - Role-based access incomplete
-   - Error handling needs improvement
-   - Company relationships need validation
+   - Company state management has potential edge cases
+   - Role-based access needs completion
+   - PIR workflow requires further implementation
+   - Notification system not yet implemented
 
-2. Access Control
-   - Role-based access needed
-   - Company data isolation required
-   - Workflow permissions undefined
-   - Status tracking missing
+2. Technical Debt
+   - Utility functions contain hardcoded values
+   - Some components need refactoring for consistency
+   - Testing coverage needs improvement
+   - Documentation requires updating
 
 3. User Experience
-   - Loading states inconsistent
-   - Error messages unclear
-   - Context switching issues
-   - Status indicators needed
+   - Loading states could be more consistent
+   - Error messages need further enhancement
+   - Navigation flow needs optimization
+   - Bulk operations need implementation
 
 ## Implementation Status
 
-### Authentication System
-- 🔄 Company state management
-- 🔄 Role-based access
-- 🔄 Error handling
-- 🔄 Company relationships
+### Authentication & Company Context
+- ✅ Basic authentication (`AuthContext`)
+- ✅ Company data fetching (`useCompanyData` with `useQuery`)
+- ✅ Default company selection logic (in `useCompanyData`)
+- ✅ Company switching state management (in `useCompanyData`)
+- ✅ Role-based access (basic implementation in `Navigation`, `ProtectedRoute` using `useCompanyData`)
+
+### Server State Management (React Query)
+- ✅ Setup (`QueryClientProvider`)
+- ✅ `use-question-bank` hook refactored (`useQuery`, `useMutation`)
+- ✅ `use-tags` hook refactored (`useQuery`, `useMutation`)
+- ✅ `Suppliers` page refactored (`useQuery`, `useMutation`)
+- ✅ `AdminSettings` page refactored (`useQuery`, `useMutation`)
+- ✅ `RequestSheetModal` refactored (`useQuery`, `useMutation`)
+- ✅ `SupplierProducts` page refactored (`useQuery`)
+- 🔄 Apply pattern to remaining components/hooks
 
 ### Question Bank System
-- ❌ Question bank schema
-- ❌ Management interface
-- ❌ CRUD operations
-- ❌ Validation logic
+- ✅ Question CRUD operations (via `use-question-bank` mutations)
+- ✅ Tag management (via `use-tags` mutations)
+- ✅ Section/subsection structure (DB + `use-question-bank` queries/mutations)
+- ✅ Question-tag association (via RPC in `use-question-bank` mutation)
+- 🔄 UI organization
+- ❌ Bulk import/export
 
 ### PIR System
-- ❌ PIR creation flow
-- ❌ Response submission
+- 🔄 PIR creation flow
+- 🔄 Response submission
 - ❌ Review process
 - ❌ Status tracking
+- ❌ Notification system
 
 Legend:
 ✅ Complete
@@ -200,7 +212,7 @@ Legend:
 ## Directory Structure Status
 
 ### Current Structure Assessment
-The project currently has a solid foundation with clear separation of concerns, but some areas need optimization:
+The project structure is evolving with feature-based organization:
 
 #### Strengths
 - Clear separation of core concerns (components, pages, context, etc.)
@@ -210,33 +222,32 @@ The project currently has a solid foundation with clear separation of concerns, 
 
 #### Areas for Improvement
 1. **Components Directory**
-   - Need to reorganize into feature-based structure
-   - Move shared components to common directory
-   - Separate layout components
-   - Current Status: Partially organized, needs restructuring
+   - Implementing feature-based structure
+   - Moving shared components to common directory
+   - Separating layout components
+   - Current Status: In progress, need to continue restructuring
 
 2. **Pages Directory**
-   - Currently flat structure needs feature-based organization
-   - Missing proper lazy loading implementation
-   - Current Status: Functional but needs reorganization
+   - Moving toward feature-based organization
+   - Implementing proper lazy loading
+   - Current Status: Functional but needs further reorganization
 
 3. **Utils Directory**
-   - Needs better categorization
+   - Need better categorization
    - API utilities should be separated
-   - Current Status: Basic structure, needs expansion
-
-4. **Types Organization**
-   - Could benefit from domain-based organization
-   - Some types could be co-located with features
    - Current Status: Basic structure, needs enhancement
 
+4. **Types Organization**
+   - Implementing domain-based organization
+   - Co-locating types with features where appropriate
+   - Current Status: Improving with clearer type definitions
+
 ### Next Steps
-1. Create new directory structure according to systemPatterns.md guidelines
-2. Move components to feature-based organization
-3. Implement proper lazy loading for pages
-4. Reorganize utils and types directories
-5. Update import statements systematically
-6. Add README files to key directories
+1. Continue feature-based reorganization
+2. Implement clear patterns for new components
+3. Enhance import consistency
+4. Improve documentation in key directories
+5. Add README files to explain component purposes
 
 ### Migration Priority
 1. High: Component reorganization

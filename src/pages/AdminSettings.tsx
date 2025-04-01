@@ -1,71 +1,73 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext"; // Keep for user check?
+import { useCompanyData } from "@/hooks/use-company-data"; // Use for company context
 import PageHeader from "@/components/PageHeader";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client"; // Ensure correct client
 import { Tables } from "@/integrations/supabase/types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Search, Settings, Users, Shield } from "lucide-react";
+import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 
-interface UserWithProfile {
+// Interface for the combined user data fetched
+interface UserWithDetails {
   user_id: string;
   company_id: string;
   role: string;
-  user: {
-    email: string;
-    profile: {
-      first_name: string;
-      last_name: string;
-    };
-  };
-  company: {
-    name: string;
-    role: string;
-  };
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  // company_role: string | null; // company.role was removed from Company type
 }
 
+// --- Reusable Update User Role Mutation Hook ---
+const useUpdateUserRoleMutation = (
+    queryClient: ReturnType<typeof useQueryClient>
+): UseMutationResult<unknown, Error, { userId: string; companyId: string; newRole: string }> => {
+    return useMutation<unknown, Error, { userId: string; companyId: string; newRole: string }>({
+        mutationFn: async ({ userId, companyId, newRole }) => {
+            const { error } = await supabase
+                .from("company_users")
+                .update({ role: newRole })
+                .match({ user_id: userId, company_id: companyId });
+            if (error) throw new Error(`Failed to update role: ${error.message}`);
+            return null; // Or return updated data if needed
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['allUsersWithDetails'] }); // Invalidate the users query
+            toast.success("User role updated successfully");
+        },
+        onError: (error) => {
+            toast.error(`Failed to update user role: ${error.message}`);
+        },
+    });
+};
+// --- End Update User Role Mutation Hook ---
+
+
 const AdminSettings = () => {
-  const { user: currentUser, currentCompany } = useAuth();
-  const [users, setUsers] = useState<UserWithProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user: currentUser } = useAuth(); // Keep for potential future permission checks
+  const { currentCompany } = useCompanyData(); // Get current company context if needed elsewhere
+  const queryClient = useQueryClient();
+  // const [users, setUsers] = useState<UserWithDetails[]>([]); // Replaced by useQuery
+  // const [loading, setLoading] = useState(true); // Replaced by useQuery
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    loadUsers();
-  }, [currentCompany]);
-
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
+  // Fetch all users with their profile and company details
+  const fetchAllUsersWithDetails = async (): Promise<UserWithDetails[]> => {
       const { data, error } = await supabase
         .from("company_users")
         .select(`
-          *,
+          user_id,
+          company_id,
+          role,
           user:user_id (
             email,
             profile:profiles (
@@ -73,63 +75,59 @@ const AdminSettings = () => {
               last_name
             )
           ),
-          company:companies (*)
+          company:companies (
+            name
+          )
         `)
         .order("created_at", { ascending: false });
 
       if (error) {
-        throw error;
+        console.error("Error loading users:", error);
+        throw new Error(`Failed to load users: ${error.message}`);
       }
 
-      // Transform the data to match our UserWithProfile interface
-      const transformedData = data.map((item: any) => ({
+      // Transform the data
+      const transformedData = (data || []).map((item: any) => ({
         user_id: item.user_id,
         company_id: item.company_id,
         role: item.role,
-        user: {
-          email: item.user.email,
-          profile: {
-            first_name: item.user.profile.first_name,
-            last_name: item.user.profile.last_name,
-          },
-        },
-        company: {
-          name: item.company.name,
-          role: item.company.role,
-        },
+        email: item.user?.email ?? 'N/A',
+        first_name: item.user?.profile?.first_name ?? '',
+        last_name: item.user?.profile?.last_name ?? '',
+        company_name: item.company?.name ?? 'N/A',
       }));
 
-      setUsers(transformedData);
-    } catch (error: any) {
-      toast.error("Failed to load users: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+      return transformedData;
   };
 
-  const updateUserRole = async (userId: string, companyId: string, newRole: string) => {
-    try {
-      const { error } = await supabase
-        .from("company_users")
-        .update({ role: newRole })
-        .match({ user_id: userId, company_id: companyId });
+  const {
+      data: users,
+      isLoading: loadingUsers, // Use query loading state
+      error: errorUsers, // Use query error state
+      refetch: refetchUsers,
+  } = useQuery<UserWithDetails[], Error>({
+      queryKey: ['allUsersWithDetails'],
+      queryFn: fetchAllUsersWithDetails,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
+      // Removed onError - handle via errorUsers state
+  });
 
-      if (error) throw error;
+  // Update User Role Mutation
+  const updateUserRoleMutation = useUpdateUserRoleMutation(queryClient);
 
-      toast.success("User role updated successfully");
-      loadUsers(); // Reload the users list
-    } catch (error: any) {
-      toast.error("Failed to update user role: " + error.message);
-    }
+  const handleUpdateUserRole = (userId: string, companyId: string, newRole: string) => {
+      updateUserRoleMutation.mutate({ userId, companyId, newRole });
   };
 
-  const filteredUsers = users.filter(user => {
+
+  const filteredUsers = (users ?? []).filter(user => {
     const searchLower = searchTerm.toLowerCase();
     return (
-      user.user.email.toLowerCase().includes(searchLower) ||
-      user.user.profile.first_name.toLowerCase().includes(searchLower) ||
-      user.user.profile.last_name.toLowerCase().includes(searchLower) ||
-      user.company.name.toLowerCase().includes(searchLower)
+      user.email.toLowerCase().includes(searchLower) ||
+      (user.first_name && user.first_name.toLowerCase().includes(searchLower)) ||
+      (user.last_name && user.last_name.toLowerCase().includes(searchLower)) ||
+      (user.company_name && user.company_name.toLowerCase().includes(searchLower))
     );
   });
 
@@ -183,16 +181,22 @@ const AdminSettings = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loading ? (
+                    {loadingUsers ? (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center">
                           Loading users...
                         </TableCell>
                       </TableRow>
+                    ) : errorUsers ? (
+                       <TableRow>
+                        <TableCell colSpan={4} className="text-center text-red-500">
+                          Error loading users: {errorUsers.message}
+                        </TableCell>
+                      </TableRow>
                     ) : filteredUsers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center">
-                          No users found
+                          No users found {searchTerm && 'matching search'}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -201,19 +205,19 @@ const AdminSettings = () => {
                           <TableCell>
                             <div>
                               <div className="font-medium">
-                                {user.user.profile.first_name} {user.user.profile.last_name}
+                                {user.first_name} {user.last_name}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {user.user.email}
+                                {user.email}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
                             <div>
-                              <div className="font-medium">{user.company.name}</div>
-                              <Badge variant="secondary">
-                                {user.company.role}
-                              </Badge>
+                              <div className="font-medium">{user.company_name}</div>
+                              {/* <Badge variant="secondary">
+                                {user.company_role} // Removed
+                              </Badge> */}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -227,8 +231,10 @@ const AdminSettings = () => {
                             <Select
                               value={user.role}
                               onValueChange={(newRole) =>
-                                updateUserRole(user.user_id, user.company_id, newRole)
+                                handleUpdateUserRole(user.user_id, user.company_id, newRole)
                               }
+                              // Disable select while mutation is pending for this specific user? (More complex state needed)
+                              // disabled={updateUserRoleMutation.isPending}
                             >
                               <SelectTrigger className="w-[120px]">
                                 <SelectValue placeholder="Select role" />
@@ -251,6 +257,7 @@ const AdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="permissions" className="space-y-4">
+          {/* Permissions content remains the same */}
           <Card>
             <CardHeader>
               <CardTitle>Permission Settings</CardTitle>
@@ -298,4 +305,4 @@ const AdminSettings = () => {
   );
 };
 
-export default AdminSettings; 
+export default AdminSettings;

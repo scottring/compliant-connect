@@ -1,69 +1,120 @@
-# Welcome to your Lovable project
+# Compliant Connect
 
-## Project info
+A compliance management platform for supplier-customer relationships.
 
-**URL**: https://lovable.dev/projects/1f553a43-3f28-47f3-a7f9-b7e9887010c7
+## Development Environment Setup
 
-## How can I edit this code?
+### Prerequisites
 
-There are several ways of editing your application.
+1. Node.js 18+ - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+2. pnpm - [installation guide](https://pnpm.io/installation)
+3. Git
+4. A code editor (VS Code/Cursor recommended)
 
-**Use Lovable**
+### Environment Setup
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/1f553a43-3f28-47f3-a7f9-b7e9887010c7) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
+1. Clone the repository:
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+cd compliant-connect
 ```
 
-**Edit a file directly in GitHub**
+2. Install dependencies:
+```sh
+pnpm install
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+3. Configure environment variables:
+```sh
+# Copy the example environment file
+cp .env.example .env
 
-**Use GitHub Codespaces**
+# Edit .env with your Supabase credentials
+# Get these from the Supabase project dashboard (oecravfbvupqgzfyizsi)
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+4. Start the development server:
+```sh
+pnpm dev
+```
 
-## What technologies are used for this project?
+### Cloud Database Configuration
 
-This project is built with .
+This project uses a cloud-based Supabase instance for all environments:
 
+- **Project Name**: stacks-2025.03.25
+- **Project ID**: oecravfbvupqgzfyizsi
+- **Region**: eu-central-1
+- **Environment**: Development
+
+⚠️ Important Notes:
+- The local Docker development environment is deprecated
+- Always use the cloud database for development
+- Never commit sensitive credentials to version control
+- Keep your `.env` file secure and local
+
+## Technology Stack
+
+### Frontend
 - Vite
+- React 18
 - TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- TailwindCSS
+- ShadcnUI Components
+- React Query for data management
 
-## How can I deploy this project?
+### Backend (Supabase)
+- Authentication
+- PostgreSQL Database
+- Row Level Security
+- Real-time subscriptions
+- Storage
+- Edge Functions
 
-Simply open [Lovable](https://lovable.dev/projects/1f553a43-3f28-47f3-a7f9-b7e9887010c7) and click on Share -> Publish.
+## Development Workflow
 
-## I want to use a custom domain - is that possible?
+1. **Code Organization**
+   - Features are organized in feature-based directories
+   - Shared components in `src/components/common`
+   - Utilities in `src/utils`
+   - Types in `src/types`
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+2. **State Management**
+   - Server state: React Query
+   - Local state: React hooks
+   - Global state: React Context
+
+3. **Data Access**
+   - All database access through Supabase client
+   - Row Level Security enforces access control
+   - Real-time subscriptions for live updates
+
+4. **Authentication**
+   - Supabase Auth with email/password
+   - JWT-based session management
+   - Role-based access control
+
+## Available Scripts
+
+```sh
+# Development
+pnpm dev           # Start development server
+pnpm build         # Build for production
+pnpm preview       # Preview production build
+
+# Code Quality
+pnpm lint         # Run ESLint
+pnpm lint:fix     # Fix linting issues
+pnpm type-check   # Run TypeScript checks
+```
+
+## Documentation
+
+- [Technical Context](memory-bank/techContext.md)
+- [Project Brief](memory-bank/projectbrief.md)
+- [System Patterns](memory-bank/systemPatterns.md)
+- [Progress](memory-bank/progress.md)
+
+## Support
+
+For any technical issues or questions, please refer to the documentation in the `memory-bank` directory or contact the development team.

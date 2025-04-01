@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useCompanyData } from '@/hooks/use-company-data'; // Import company data hook
 
 interface ProtectedRouteProps {
   requiredPermission?: string;
@@ -14,20 +15,43 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   redirectTo = '/auth',
   children,
 }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // Get user and auth loading state
+  const { currentCompany, userCompanies, isLoadingCompanies } = useCompanyData(); // Get company data
   const location = useLocation();
 
-  // If no user, redirect to login
+  // Show loading indicator while auth or company data is loading
+  // Important to wait for company data before checking permissions
+  if (authLoading.auth || isLoadingCompanies) {
+    // TODO: Replace with a proper loading spinner/component
+    return <div>Loading...</div>;
+  }
+
+  // If no user after loading, redirect to login
   if (!user) {
-    console.log('ProtectedRoute: No user, redirecting to login');
+    console.log('ProtectedRoute: No user after loading, redirecting to login');
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-  // For MVP: Temporarily bypass role check to ensure access to all pages
-  // TODO: Re-enable proper permission checking after MVP
-  // if (requiredPermission && user.role !== 'admin') {
-  //   return <Navigate to="/unauthorized" replace />;
-  // }
+  // Check permissions if required
+  if (requiredPermission) {
+    let hasRequiredPermission = false;
+    if (currentCompany && userCompanies) {
+        const currentUserCompany = userCompanies.find(uc => uc.id === currentCompany.id);
+        const userRole = currentUserCompany?.userRole;
+
+        // Implement permission logic (example: admin/owner has admin access)
+        if (requiredPermission === "admin:access") {
+            hasRequiredPermission = userRole === 'admin' || userRole === 'owner';
+        }
+        // Add other permission checks here based on userRole and requiredPermission string
+    }
+
+    if (!hasRequiredPermission) {
+        console.log(`ProtectedRoute: User does not have permission '${requiredPermission}', redirecting.`);
+        // Redirect to an unauthorized page or back to dashboard/home
+        return <Navigate to="/unauthorized" replace />;
+    }
+  }
 
   // User is authenticated, render children or outlet
   return children ? <>{children}</> : <Outlet />;

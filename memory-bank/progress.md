@@ -1,6 +1,6 @@
 # Project Progress
 
-## MVP Development Status (Target: 3 PM Today)
+## MVP Development Status
 
 ### Completed Features
 - Initial UI components setup
@@ -10,39 +10,53 @@
 - Streamlined MCP configuration (using global settings)
 - Basic "Add Supplier" functionality (name only initially, then with contacts)
 - Basic "Create Tag" functionality
-- Basic "Create Question" functionality (excluding tag association persistence due to caching issue)
+- Basic "Create Question" functionality
+- Section/subsection structure implementation
+- RPC implementation for question-tag association
+- Enhanced question bank schema
+- Improved PIR workflow implementation (basic structure)
+- Company context management with default company logic (initial version)
+- **React Query Integration (Core):**
+    - Setup `QueryClientProvider`.
+    - Refactored `use-question-bank`, `use-tags`, `use-company-data` hooks.
+    - Refactored `Suppliers`, `AdminSettings`, `RequestSheetModal`, `SupplierProducts` pages/components.
+    - Simplified `AuthContext`, created `useCompanyData`.
+    - Updated `CompanySelector`, `Navigation`, `ProtectedRoute`, `AuthDebug`.
 
 ### In Progress
 1.  **Authentication and Company Management**
-    *   Company context switching/reliability (Addressed default company setting logic, but potential timing issues remain if `currentCompany` is needed immediately after state change)
-    *   Role-based access implementation (Basic RLS policies added, including tag creation)
-    *   Error handling improvements (Added specific error handling/logging in AuthContext)
-    *   Loading state refinement (Added `authLoading` check to Suppliers page)
+    *   Company context switching/reliability (Now handled via `useCompanyData` state)
+    *   Role-based access implementation (Basic implementation using `useCompanyData` in `Navigation`/`ProtectedRoute`)
+    *   Error handling improvements (Partially addressed by React Query error states)
+    *   Loading state refinement (Partially addressed by React Query loading states)
 
 2.  **Question Bank and PIR System**
-    *   Question bank schema design (Identified and fixed several schema mismatches in code vs. migrations)
-    *   PIR workflow implementation (Refactored SupplierProducts page to use `pir_requests` table)
-    *   Response submission system
-    *   Review process setup
-    *   Basic validation
-    *   **Fixing Question/Tag Association:** Implemented DB function `create_question_with_tags` and updated hook to use RPC. **Persistent caching issue** prevents this from working correctly in the running app.
+    *   Question bank UI refinement (Ongoing)
+    *   PIR workflow implementation (Basic fetching in `SupplierProducts`, creation in `RequestSheetModal` refactored)
+    *   Response submission system enhancement (Pending)
+    *   Review process setup improvements (Pending)
+    *   Validation implementation (Ongoing)
+    *   **Server State:** Core data fetching/mutations refactored to use React Query.
 
 ### Pending Work
 1.  **Core Authentication Flows**
-    *   Robust company context switching (Ensure `currentCompany` is reliably available when needed)
-    *   Refine Role-based access control (e.g., for tag/question creation)
+    *   Robust multi-company context switching
+    *   Complete role-based access control implementation
+    *   Enhanced role-based views
 
 2.  **PIR System Development**
-    *   Complete Question bank management UI (Fix persistent caching issue blocking question creation)
-    *   PIR creation interface
-    *   Response submission forms
-    *   Review dashboard
-    *   Status tracking (Refactor `SupplierProducts` status display)
+    *   Complete PIR creation interface
+    *   Enhance response submission forms
+    *   Develop review dashboard
+    *   Improve status tracking (Refactor `SupplierProducts` status display)
 
 3.  **Refactoring & Cleanup**
-    *   Refactor `utils.ts` functions using hardcoded URLs/project IDs (`checkAndFixRlsPolicies`, `checkAndCreateTables`, etc.)
-    *   Consolidate Supabase client usage (ensure only `@/lib/supabase` is used).
-    *   Review schema design (e.g., contact info on `companies` vs. `profiles`).
+    *   **Complete React Query Rollout:** Apply pattern to remaining components/hooks.
+    *   **Update Consumers:** Update components using old patterns.
+    *   **Address `AppContext`:** Refactor/remove duplicated server state management.
+    *   Refactor `utils.ts` functions using hardcoded URLs/project IDs.
+    *   Consolidate Supabase client usage.
+    *   Review schema design (contacts, roles).
 
 4.  **Testing and Optimization**
     *   Authentication flow testing
@@ -52,44 +66,48 @@
     *   Performance optimization
     *   Basic polish
 
-### Implementation Timeline (Needs Revision)
-*   Previous timeline outdated due to extensive debugging.
+### Implementation Timeline
+*   Continue implementing PIR workflow features
+*   Finish role-based access control
+*   Complete testing of key features
+*   Focus on stability and performance
 
 ### Known Issues
-1.  **Critical**
-    *   **Persistent Caching/Build Issue:** Application executes stale code for `addQuestion` despite file changes, cache clears, and restarts. Prevents saving questions with tags.
-    *   Company state management might still have timing issues (`currentCompany` update propagation).
-
-2.  **High Priority**
+1.  **High Priority**
     *   Need to refactor utility functions using hardcoded URLs/project IDs.
     *   Need to confirm correct Supabase client is used *everywhere*.
+    *   Company state management may have timing edge cases.
 
-3.  **Medium Priority**
+2.  **Medium Priority**
     *   Review schema design (contacts, roles).
     *   Implement remaining PIR workflow features.
+    *   Improve error handling in question bank management.
 
-### Next Steps (Revised)
-1.  **Resolve Caching/Build Issue:** Investigate why Vite/browser serves stale code for `useQuestionBank.ts`. (May require environment-specific debugging).
-2.  Verify `addQuestion` works correctly once caching issue is resolved.
+### Next Steps
+1.  Complete React Query rollout and associated cleanup/consumer updates.
+2.  Continue implementing PIR system features.
 3.  Refactor `utils.ts` to remove hardcoded URLs.
-4.  Continue implementing PIR system features.
+4.  Enhance testing coverage for critical features.
 
 ### Success Metrics
-- [x] Authentication system functional (with default company logic)
+- [x] Authentication system functional (`AuthContext`)
 - [x] Local development environment operational
-- [x] Basic Supplier creation working
-- [x] Basic Tag creation working
-- [ ] Question creation (with tags) working reliably
+- [x] Basic Supplier creation working (Refactored w/ React Query)
+- [x] Basic Tag creation working (Refactored w/ React Query)
+- [x] Question creation (with tags) working reliably (Refactored w/ React Query)
+- [x] Section/subsection organization implemented (DB + Refactored w/ React Query)
+- [x] Company data fetching/context management (via `useCompanyData`)
+- [x] Core Server State Management Refactored (React Query in key areas)
 - [ ] Company relationships validated
 - [ ] Role-based access working fully
-- [ ] PIR creation working
+- [ ] PIR creation working (Basic mutation exists, needs UI integration/testing)
 - [ ] Response submission functional
-- [ ] Critical features tested
+- [ ] Critical features tested (especially refactored areas)
 
 ### Notes
-- Extensive debugging performed on 2025-03-28 related to Supabase connection (SSL), environment variables, schema mismatches, RLS policies, and React state timing.
-- Switched to local Supabase dev environment.
-- Added contact columns to `companies` table via migration.
-- Refactored `AuthContext` to handle default company creation/association more robustly.
-- Refactored `useQuestionBank` to use RPC for question creation due to client library issues.
-- **Main Blocker:** Persistent caching/build issue preventing latest `useQuestionBank` code from running.
+- Significant progress with question bank implementation using section/subsection organization
+- Fixed question-tag association issue using RPC functions
+- Added extensive error handling and logging throughout the application
+- Improved data model with clearer relationships between sections, subsections, and questions
+- Enhanced loading state management across critical components
+- Fixed inconsistencies in schema references between code and migrations
