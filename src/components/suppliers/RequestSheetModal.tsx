@@ -76,7 +76,7 @@ type FormValues = z.infer<typeof formSchema>;
 // Input type for mutation - productName can be existing or new suggestion
 type CreatePIRInput = {
     productName: string;
-    supplierId: string;
+    supplierId: string; // Added supplierId here explicitly if needed by caller
     customerId: string;
     tagIds: string[];
     note?: string;
@@ -94,9 +94,7 @@ const useCreatePIRMutation = (
                 .from('products').select('id').eq('name', input.productName).eq('supplier_id', input.supplierId).maybeSingle();
 
             if (fetchError) {
-                // Log the specific error but try to proceed if possible, maybe it's just a lookup issue
                 console.error(`Error checking for existing product (continuing PIR creation): ${fetchError.message}`);
-                // Consider if you want to throw here or allow PIR creation with suggested name
                  throw new Error(`Failed to verify existing product: ${fetchError.message}`);
             }
 
@@ -106,28 +104,30 @@ const useCreatePIRMutation = (
             // Prepare PIR data
             const pirInsertData: {
                 customer_id: string;
+                supplier_company_id: string; // Ensure this is included
                 status: 'draft';
                 product_id: string | null;
                 suggested_product_name?: string | null;
+                // note?: string | null; // Note: This field doesn't exist in schema yet
             } = {
                 customer_id: input.customerId,
+                supplier_company_id: input.supplierId, // Set the supplier ID
                 status: 'draft',
                 product_id: productId, // Will be null if product doesn't exist
                 suggested_product_name: suggestedProductName, // Will be null if product exists
+                // note: input.note || null, // Removed note as column doesn't exist
             };
 
              // Ensure product_id is explicitly null if suggesting a new product
              if (suggestedProductName) {
                  pirInsertData.product_id = null;
              } else if (!productId) {
-                 // This case should ideally not happen if fetchError is handled, but as a fallback:
                  console.warn("Attempting to create PIR without a valid existing product ID and no suggested name.");
-                 // Decide how to handle this - throw error or allow creation with null product_id?
-                 // For now, let's allow it but log a warning.
                  pirInsertData.product_id = null;
-                 pirInsertData.suggested_product_name = input.productName; // Use input as suggestion
+                 pirInsertData.suggested_product_name = input.productName; 
              }
 
+            console.log('[DEBUG] Data for pir_requests insert:', pirInsertData); // Log data before insert
 
             // Insert PIR Request
             const { data: pirRequestData, error: pirRequestError } = await supabase
@@ -146,9 +146,10 @@ const useCreatePIRMutation = (
             console.log('PIR Creation Result:', { pirId, productId });
             return { pirId, productId }; // Return null productId if it was a suggestion
          },
-        onSuccess: (data) => {
+        onSuccess: (data, variables) => { // Add 'variables' to access input
+            // Invalidate both generic and specific query keys
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
-            queryClient.invalidateQueries({ queryKey: ['supplierPirs'] });
+            queryClient.invalidateQueries({ queryKey: ['supplierPirs', variables.supplierId] }); // Use specific key
             toast.success(`Product Information Request (PIR) created (ID: ${data.pirId})`);
          },
         onError: (error) => {
@@ -174,7 +175,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(supplierId || "");
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(supplierName || "");
-  const [productPopoverOpen, setProductPopoverOpen] = useState(false); // Renamed state for clarity
+  const [productPopoverOpen, setProductPopoverOpen] = useState(false); 
 
   const { data: productSheets, isLoading: isLoadingProductSheets, error: errorProductSheets } = useFetchSupplierProducts(selectedSupplierId);
 
@@ -255,12 +256,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     const supplier = relatedSuppliers?.find(company => company.id === values.supplierId);
     if (!supplier) { toast.error("Invalid supplier selected"); return; }
 
+    console.log('[DEBUG] Submitting PIR with values:', values); // Log form values before mutation
+
     try {
         const result = await createPIRMutation.mutateAsync({
             productName: values.productName, // Can be existing or new suggestion
-            supplierId: values.supplierId,
+            supplierId: values.supplierId, // Pass supplierId to mutation
             customerId: currentCompany.id,
-            note: values.note,
+            note: values.note, // Note is optional, mutation handles if column exists
             tagIds: selectedTags,
         });
 

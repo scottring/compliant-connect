@@ -22,9 +22,12 @@ SELECT
     c1.name as customer_name,
     c2.name as supplier_name
 FROM public.pir_requests pir
-JOIN public.products p ON pir.product_id = p.id
+LEFT JOIN public.products p ON pir.product_id = p.id -- Use LEFT JOIN in case product_id is null
 JOIN public.companies c1 ON pir.customer_id = c1.id
-JOIN public.companies c2 ON p.supplier_id = c2.id;
+-- JOIN public.companies c2 ON p.supplier_id = c2.id; -- Cannot join via product if product_id is null
+-- Fetch supplier name via supplier_company_id instead if needed in view
+JOIN public.companies c2 ON pir.supplier_company_id = c2.id; 
+
 
 -- Enable RLS on all tables
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
@@ -102,6 +105,10 @@ CREATE POLICY "Everyone can view questions"
 -- Drop existing tag policies
 DROP POLICY IF EXISTS "Everyone can view tags" ON public.tags;
 DROP POLICY IF EXISTS "Admin users can manage tags" ON public.tags;
+DROP POLICY IF EXISTS "Authenticated users can create tags" ON public.tags;
+DROP POLICY IF EXISTS "Authenticated users can update own tags" ON public.tags;
+DROP POLICY IF EXISTS "Authenticated users can delete own tags" ON public.tags;
+
 
 -- Create new tag policies
 CREATE POLICY "Everyone can view tags"
@@ -119,13 +126,13 @@ CREATE POLICY "Authenticated users can update own tags"
     ON public.tags
     FOR UPDATE
     TO authenticated
-    USING (true);
+    USING (true); -- Consider adding owner check if needed
 
 CREATE POLICY "Authenticated users can delete own tags"
     ON public.tags
     FOR DELETE
     TO authenticated
-    USING (true);
+    USING (true); -- Consider adding owner check if needed
 
 CREATE POLICY "Everyone can view sections"
     ON public.sections
@@ -194,22 +201,23 @@ CREATE POLICY "Customers can view approved answers from their suppliers"
     );
 
 -- PIR Policies
+DROP POLICY IF EXISTS "Users can view PIRs involving their company" ON public.pir_requests; -- Drop existing first
 CREATE POLICY "Users can view PIRs involving their company"
     ON public.pir_requests
-    FOR SELECT USING (
+    FOR SELECT USING ( -- Restored correct policy
         EXISTS (
             SELECT 1 FROM public.company_users cu
             WHERE cu.user_id = auth.uid()
             AND (
-                cu.company_id = pir_requests.customer_id
+                cu.company_id = pir_requests.customer_id -- User is customer
                 OR 
-                -- Check direct supplier ID on PIR request OR via product link
-                cu.company_id = pir_requests.supplier_company_id 
+                cu.company_id = pir_requests.supplier_company_id -- User is supplier (direct check)
                 OR 
-                cu.company_id = (
+                -- User is supplier (via product link, handles cases where product_id is not null)
+                (pir_requests.product_id IS NOT NULL AND cu.company_id = (
                     SELECT supplier_id FROM public.products 
                     WHERE id = pir_requests.product_id
-                )
+                ))
             )
         )
     );
@@ -225,6 +233,38 @@ CREATE POLICY "Customers can create PIRs"
         )
     );
 
+-- PIR Tags Policies (NEW)
+DROP POLICY IF EXISTS "Customers can link tags to their PIRs" ON public.pir_tags;
+CREATE POLICY "Customers can link tags to their PIRs"
+    ON public.pir_tags
+    FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.pir_requests pir
+            JOIN public.company_users cu ON cu.company_id = pir.customer_id
+            WHERE cu.user_id = auth.uid()
+            AND pir.id = pir_tags.pir_id -- Check link to the specific PIR being tagged
+        )
+    );
+-- Add SELECT policy for pir_tags if needed (e.g., using similar logic based on pir_requests access)
+DROP POLICY IF EXISTS "Users can view tags linked to accessible PIRs" ON public.pir_tags;
+CREATE POLICY "Users can view tags linked to accessible PIRs"
+    ON public.pir_tags
+    FOR SELECT USING (
+        EXISTS (
+             SELECT 1 FROM public.pir_requests pir
+             -- Re-use the complex logic from pir_requests SELECT policy to check access
+             JOIN public.company_users cu ON cu.user_id = auth.uid()
+             WHERE pir.id = pir_tags.pir_id -- Link to the current pir_tag row
+             AND (
+                 cu.company_id = pir.customer_id 
+                 OR cu.company_id = pir.supplier_company_id 
+                 OR (pir.product_id IS NOT NULL AND cu.company_id = (SELECT supplier_id FROM public.products WHERE id = pir.product_id))
+             )
+        )
+    );
+
+
 -- PIR Responses Policies
 CREATE POLICY "Suppliers can manage their responses"
     ON public.pir_responses
@@ -232,8 +272,8 @@ CREATE POLICY "Suppliers can manage their responses"
     USING (
         EXISTS (
             SELECT 1 FROM public.pir_requests pir
-            JOIN public.products p ON p.id = pir.product_id
-            JOIN public.company_users cu ON cu.company_id = p.supplier_id
+            -- Check supplier based on direct supplier_company_id on PIR
+            JOIN public.company_users cu ON cu.company_id = pir.supplier_company_id 
             WHERE cu.user_id = auth.uid()
             AND pir.id = pir_responses.pir_id
         )
@@ -259,15 +299,14 @@ CREATE POLICY "Users can view flags on their responses"
         EXISTS (
             SELECT 1 FROM public.pir_responses pr
             JOIN public.pir_requests pir ON pir.id = pr.pir_id
-            JOIN public.company_users cu ON (
-                cu.company_id = pir.customer_id
-                OR cu.company_id = (
-                    SELECT supplier_id FROM public.products 
-                    WHERE id = pir.product_id
-                )
-            )
-            WHERE cu.user_id = auth.uid()
-            AND pr.id = response_flags.response_id
+            JOIN public.company_users cu ON cu.user_id = auth.uid()
+             -- Re-use the complex logic from pir_requests SELECT policy
+             WHERE pr.id = response_flags.response_id
+             AND (
+                 cu.company_id = pir.customer_id 
+                 OR cu.company_id = pir.supplier_company_id 
+                 OR (pir.product_id IS NOT NULL AND cu.company_id = (SELECT supplier_id FROM public.products WHERE id = pir.product_id))
+             )
         )
     );
 
@@ -276,17 +315,16 @@ CREATE POLICY "Users can view comments on flags they can see"
     FOR SELECT
     USING (
         EXISTS (
-            SELECT 1 FROM public.response_flags rf
-            JOIN public.pir_responses pr ON pr.id = rf.response_id
-            JOIN public.pir_requests pir ON pir.id = pr.pir_id
-            JOIN public.company_users cu ON (
-                cu.company_id = pir.customer_id
-                OR cu.company_id = (
-                    SELECT supplier_id FROM public.products 
-                    WHERE id = pir.product_id
-                )
-            )
-            WHERE cu.user_id = auth.uid()
-            AND rf.id = response_comments.flag_id
+             SELECT 1 FROM public.response_flags rf
+             JOIN public.pir_responses pr ON pr.id = rf.response_id
+             JOIN public.pir_requests pir ON pir.id = pr.pir_id
+             JOIN public.company_users cu ON cu.user_id = auth.uid()
+             -- Re-use the complex logic from pir_requests SELECT policy
+             WHERE rf.id = response_comments.flag_id
+             AND (
+                 cu.company_id = pir.customer_id 
+                 OR cu.company_id = pir.supplier_company_id 
+                 OR (pir.product_id IS NOT NULL AND cu.company_id = (SELECT supplier_id FROM public.products WHERE id = pir.product_id))
+             )
         )
     );

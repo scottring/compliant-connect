@@ -32,7 +32,7 @@ type Tag = Database['public']['Tables']['tags']['Row'];
 // Type for PIRs associated with this supplier, extending PIRSummary
 interface SupplierPIRSummary extends PIRSummary { // Extend PIRSummary
     tags: Tag[]; // Use the full Tag type
-    responseCount: number;
+    // responseCount: number; // Removed as count is not fetched currently
     customerName?: string;
     totalQuestions?: number; // Optional: Add totalQuestions if calculated
 }
@@ -55,6 +55,7 @@ export type DBQuestion = {
 
 const SupplierDetail = () => {
   const { id: supplierId } = useParams<{ id: string }>();
+  console.log(`[DEBUG] SupplierDetail Page: ID from URL = ${supplierId}`); // Log ID from URL
   const navigate = useNavigate();
   const { tags: globalTags, isLoadingTags } = useTags();
   const { currentCompany } = useCompanyData();
@@ -86,6 +87,7 @@ const SupplierDetail = () => {
 
   // --- Fetch PIRs for this Supplier Query ---
   const fetchSupplierPirs = async (id: string): Promise<SupplierPIRSummary[]> => {
+      console.log(`[DEBUG] fetchSupplierPirs: Fetching PIRs for supplier_company_id = ${id}`); // Log the ID being used
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
           .select(`
@@ -94,17 +96,18 @@ const SupplierDetail = () => {
               customer:companies!customer_id ( name ), 
               pir_tags!inner ( tags ( * ) )
               /* Removed supplier_responses count for now */
-          `)
-          // Reverted filter to use direct column
+           `)
+           // Reverted filter to use direct column
            .eq('supplier_company_id', id); 
 
       if (pirError) throw new Error(`Failed to load PIRs for supplier: ${pirError.message}`);
+      console.log(`[DEBUG] fetchSupplierPirs: Raw data received for supplier ${id}:`, pirData); // Log raw data
       if (!pirData) return [];
 
       const transformedPirs: SupplierPIRSummary[] = pirData.map((pir: any) => {
           // Type should be inferred correctly now due to the updated interface
           const tags = pir.pir_tags?.map((pt: { tags: Tag | null }) => pt.tags).filter(Boolean).flat() || [];
-          const responseCount = (pir.supplier_responses || []).length;
+          // const responseCount = (pir.supplier_responses || []).length; // Count removed
           return {
               id: pir.id,
               // Use suggested name if product is null, otherwise use product name
@@ -116,7 +119,7 @@ const SupplierDetail = () => {
               updatedAt: pir.updated_at,
               status: pir.status || 'draft',
               tags: tags, // Assign fetched tags
-              responseCount: responseCount,
+              // responseCount: responseCount, // Count removed
               // totalQuestions: Needs calculation
           };
       });
