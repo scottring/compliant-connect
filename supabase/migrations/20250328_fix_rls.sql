@@ -26,4 +26,4 @@ USING (user_id = auth.uid());
 CREATE POLICY "users_delete_own_associations"
 ON public.company_users
 FOR DELETE
-USING (user_id = auth.uid()); 
+USING (user_id = auth.uid());

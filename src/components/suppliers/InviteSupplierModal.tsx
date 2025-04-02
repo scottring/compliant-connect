@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useForm } from "react-hook-form";
 import {
@@ -14,6 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { useCompanyData } from "@/hooks/use-company-data"; // Import useCompanyData
+import { supabase } from "@/integrations/supabase/client"; // Import supabase client for functions invoke
 
 interface InviteSupplierModalProps {
   open: boolean;
@@ -38,6 +40,9 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
     formState: { errors, isSubmitting },
   } = useForm<InviteFormData>();
 
+  const { user } = useAuth(); // Get current user
+  const { currentCompany } = useCompanyData(); // Get current company
+
   React.useEffect(() => {
     if (!open) {
       reset();
@@ -45,20 +50,37 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
   }, [open, reset]);
 
   const onSubmit = async (data: InviteFormData) => {
+    // Use isSubmitting from react-hook-form for loading state
     try {
-      // In a real application, this would send an API request to email the supplier
-      console.log("Sending invitation email to:", data);
-      
-      // Simulate API call with a timeout
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      toast.success(`Invitation sent to ${data.supplierName}`);
+      if (!user || !currentCompany) {
+        toast.error("User or company context is missing.");
+        return;
+      }
+
+      console.log("Invoking send-email function for invitation:", data);
+
+      // Invoke the Edge Function
+      const { error } = await supabase.functions.invoke('send-email', {
+        body: {
+          type: 'SUPPLIER_INVITATION',
+          invite_email: data.contactEmail,
+          inviter_name: user.user_metadata?.name || user.email || 'A user', // Use available user info
+          inviter_company_name: currentCompany.name,
+          // Optionally add note or signup link here if needed by function/template
+          // note: data.note 
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Invitation sent to ${data.supplierName} (${data.contactEmail})`);
       onOpenChange(false);
       reset();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to send invitation:", error);
-      toast.error("Failed to send invitation. Please try again.");
+      toast.error(`Failed to send invitation: ${error.message || 'Please try again.'}`);
     }
+    // No need to manually set loading state, react-hook-form handles isSubmitting
   };
 
   return (
@@ -81,6 +103,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
                 {...register("supplierName", {
                   required: "Supplier name is required",
                 })}
+                disabled={isSubmitting}
               />
               {errors.supplierName && (
                 <p className="text-sm text-red-500">{errors.supplierName.message}</p>
@@ -95,6 +118,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
                 {...register("contactName", {
                   required: "Contact name is required",
                 })}
+                disabled={isSubmitting}
               />
               {errors.contactName && (
                 <p className="text-sm text-red-500">{errors.contactName.message}</p>
@@ -114,6 +138,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
                     message: "Invalid email address",
                   },
                 })}
+                disabled={isSubmitting}
               />
               {errors.contactEmail && (
                 <p className="text-sm text-red-500">{errors.contactEmail.message}</p>
@@ -127,6 +152,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
                 placeholder="Add a personalized note to the invitation email"
                 className="min-h-[100px]"
                 {...register("note")}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -136,6 +162,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
