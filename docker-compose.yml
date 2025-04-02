@@ -9,9 +9,17 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+      POSTGRES_EXTENSIONS: uuid-ossp
+    volumes:
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   studio:
-    image: supabase/studio:20240320-4c3e9c6
+    image: supabase/studio:latest
     restart: always
     ports:
       - "3000:3000"
@@ -20,6 +28,9 @@ services:
       POSTGRES_PASSWORD: postgres
       DEFAULT_ORGANIZATION: Default Organization
       DEFAULT_PROJECT: Default Project
+    depends_on:
+      db:
+        condition: service_healthy
 
   kong:
     image: kong:2.8.1
@@ -34,6 +45,9 @@ services:
       KONG_PLUGINS: request-transformer,cors,key-auth,acl
     volumes:
       - ./kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      db:
+        condition: service_healthy
 
   auth:
     image: supabase/gotrue:v2.132.3
@@ -43,6 +57,7 @@ services:
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       PORT: 9999
+      DATABASE_URL: postgres://postgres:postgres@db:5432/postgres?sslmode=disable
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_HOST: db
       GOTRUE_DB_PORT: 5432
@@ -50,10 +65,30 @@ services:
       GOTRUE_DB_PASSWORD: postgres
       GOTRUE_DB_NAME: postgres
       GOTRUE_SITE_URL: http://localhost:8080
-      GOTRUE_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: 3600
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       API_EXTERNAL_URL: http://localhost:8000
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_SMTP_ADMIN_EMAIL: "admin@example.com"
+      GOTRUE_SMTP_HOST: "supabase"
+      GOTRUE_SMTP_PORT: "2500"
+      GOTRUE_SMTP_USER: "fake"
+      GOTRUE_SMTP_PASS: "fake"
+      GOTRUE_SMTP_SENDER_NAME: "fake"
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_INVITE: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_RECOVERY: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: "/auth/v1/verify"
+      GOTRUE_SMTP_MAX_FREQUENCY: 0s
+      GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: "false"
+      GOTRUE_SECURITY_EMAIL_CONFIRMATION_REQUIRED: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      kong:
+        condition: service_started
 
   rest:
     image: postgrest/postgrest:v11.2.0
@@ -64,35 +99,50 @@ services:
       PGRST_DB_URI: postgres://postgres:postgres@db:5432/postgres
       PGRST_DB_SCHEMA: public,storage
       PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters
+      PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_USE_LEGACY_GUCS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
 
   realtime:
     image: supabase/realtime:v2.25.50
-    restart: always
-    ports:
-      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
     environment:
-      PORT: 4000
+      APP_NAME: realtime
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: postgres
+      DB_SSL: "false"
+      PORT: 4000
+      JWT_SECRET: ${JWT_SECRET}
+      HOSTNAME: localhost
+      ENABLE_TAILSCALE: "false"
+      ERL_AFLAGS: "-proto_dist inet_tcp"
+      POSTGRES_PASSWORD: postgres
+      ENABLE_IPV6: "false"
+      DNS_NODES: ""
+      SECRET_KEY_BASE: ${JWT_SECRET}
       SECURE_CHANNELS: "true"
-      JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters
+    ports:
+      - "4000:4000"
 
   storage:
     image: supabase/storage-api:v0.40.4
     restart: always
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
-      ANON_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYwMDAwMDAwMCwiZXhwIjoxNjAwMDAwMDAwfQ.K4ZFrB0LQ9PAXE_3Hhg9k0gCeXXXXXXXXXXXXXXXXXXX
-      SERVICE_KEY: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjAwMDAwMDAwLCJleHAiOjE2MDAwMDAwMDB9.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+      ANON_KEY: ${SUPABASE_ANON_KEY}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       PROJECT_REF: default
       POSTGREST_URL: http://rest:3000
-      PGRST_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters
+      PGRST_JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://postgres:postgres@db:5432/postgres
       TENANT_ID: stub
       REGION: stub
@@ -102,4 +152,34 @@ services:
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       ENABLE_IMAGE_TRANSFORMATION: "true"
-      IMGPROXY_URL: http://imgproxy:8080 
+      IMGPROXY_URL: http://imgproxy:8080
+    volumes:
+      - storage_data:/var/lib/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+
+  functions:
+    build:
+      context: .
+      dockerfile: Dockerfile.functions
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - SUPABASE_URL=${VITE_SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${VITE_SUPABASE_SERVICE_ROLE_KEY}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SENDER_EMAIL=${SENDER_EMAIL}
+    ports:
+      - "9000:9000"
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+
+volumes:
+  storage_data:

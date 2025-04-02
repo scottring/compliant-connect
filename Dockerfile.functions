@@ -1,0 +1,7 @@
+FROM denoland/deno:1.41.3
+
+WORKDIR /app
+
+COPY supabase/functions/send-email/ .
+
+CMD ["deno", "run", "--allow-net", "--allow-read", "--allow-env", "index.ts"] 

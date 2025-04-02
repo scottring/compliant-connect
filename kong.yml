@@ -1,0 +1,87 @@
+# Basic Kong configuration for local Supabase development
+_format_version: "2.1"
+
+services:
+  - name: supabase-auth
+    url: http://auth:9999
+    routes:
+      - name: auth-route
+        paths:
+          - /auth/v1
+        strip_path: true
+    plugins:
+      - name: cors
+  - name: supabase-rest
+    url: http://rest:3000
+    routes:
+      - name: rest-route
+        paths:
+          - /rest/v1
+        strip_path: true
+    plugins:
+      - name: cors
+  - name: supabase-realtime
+    url: http://realtime:4000/socket
+    routes:
+      - name: realtime-route
+        paths:
+          - /realtime/v1/socket
+        strip_path: true
+    plugins:
+      - name: cors
+  - name: supabase-storage
+    url: http://storage:5000
+    routes:
+      - name: storage-route
+        paths:
+          - /storage/v1
+        strip_path: true
+    plugins:
+      - name: cors
+  - name: supabase-edge-runtime
+    url: http://functions:9999
+    routes:
+      - name: functions-route
+        paths:
+          - /functions/v1
+        strip_path: true
+    plugins:
+      - name: cors
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - http://localhost:8080
+        - http://localhost:3000
+        - http://127.0.0.1:8080
+        - http://127.0.0.1:3000
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+        - HEAD
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+        - X-Auth-Token
+        - X-CSRF-Token
+        - Token
+        - apikey
+        - X-Client-Info
+        - X-Client-Data
+        - Supabase-Client-Info
+      exposed_headers:
+        - Content-Range
+        - X-Request-Id
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
