@@ -27,7 +27,6 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Unauthorized from "./pages/Unauthorized";
 import CompanySelector from "./components/CompanySelector";
 import Onboarding from "./pages/Onboarding";
-import RequestPIR from "./pages/RequestPIR"; // Import the new PIR request page
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState, useEffect } from "react";
 import UserSwitcher from "./components/UserSwitcher";
@@ -117,8 +116,6 @@ const App = () => {
                         {/* Supplier Routes */}
                         <Route path="/suppliers" element={<Suppliers />} />
                         <Route path="/suppliers/:id" element={<SupplierDetail />} />
-                        {/* Route for initiating a PIR */}
-                        <Route path="/request-pir" element={<RequestPIR />} />
                         <Route path="/supplier-products" element={<SupplierProducts />} />
                         <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
                         

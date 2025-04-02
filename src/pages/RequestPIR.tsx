@@ -40,15 +40,6 @@ const RequestPIR: React.FC = () => {
         toast.error("Supplier and Product are required.");
         return;
     }
-     // --- MOCK DEMO VALIDATION ---
-    // Check if the user added ", Compliance" (or just "Compliance")
-    // Note: This simple check remains from the mock implementation
-    if (!tagsInput.toLowerCase().includes('compliance')) {
-        toast.error("Please add the 'Compliance' tag to proceed with the demo request.");
-        return;
-    }
-    // --- END MOCK DEMO VALIDATION ---
-
 
     setIsLoading(true);
     toast.info("Sending PIR request...");
@@ -77,13 +68,25 @@ const RequestPIR: React.FC = () => {
       if (error) throw error;
 
       // TODO: Associate selected tags with the new PIR request (pir_tags table)
-      // This likely requires another insert operation after getting the new PIR ID (data.id)
+      const newPirId = data.id;
+      const selectedTagNames = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+      
+      // TODO: Fetch actual tag IDs based on selectedTagNames
+      // For now, let's assume we have mock IDs or skip this step if tag fetching isn't implemented
+      const mockTagIds = selectedTagNames.map(name => `mock-tag-id-for-${name}`); // Placeholder
 
-      // --- MOCK DEMO FLAG ---
-      // Set flag to indicate mock request was sent (for ProductSheets page)
-      sessionStorage.setItem('mockRequestSent', 'true');
-      // --- END MOCK DEMO FLAG ---
-
+      if (mockTagIds.length > 0) {
+          const pirTagInserts = mockTagIds.map(tagId => ({
+              pir_id: newPirId,
+              tag_id: tagId
+          }));
+          const { error: tagError } = await supabase.from('pir_tags').insert(pirTagInserts);
+          if (tagError) {
+              // Maybe warn but don't fail the whole request? Or handle differently?
+              console.error("Error associating tags:", tagError);
+              toast.warning("PIR created, but failed to associate tags.");
+          }
+      }
 
       toast.success("PIR request sent successfully!");
       navigate('/product-sheets'); // Navigate back to the list

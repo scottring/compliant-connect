@@ -14,6 +14,11 @@ import { useNavigate } from "react-router-dom";
 import { Search, Filter, Eye, Calendar, Tag, ArrowUpDown, Plus } from "lucide-react"; // Added Plus
 import TaskProgress from "@/components/ui/progress/TaskProgress";
 import { PIRSummary, PIRStatus } from "@/types/pir"; // Import shared types
+import RequestSheetModal from "@/components/suppliers/RequestSheetModal"; // Import the modal
+import { Database } from '@/types/supabase'; // Import Database type for Tag definition if needed
+
+// Define Tag type locally if not correctly imported or needs adjustment for mock
+type MockTag = { id: string; name: string; created_at?: string; updated_at?: string }; // Added optional fields
 
 // Define the database record type for the query result (Adjusted)
 interface PirRequestRecord {
@@ -24,9 +29,10 @@ interface PirRequestRecord {
   updated_at: string;
   status: PIRStatus;
   products: { name: string; } | null;
-  companies: { name: string; } | null; // Assuming direct relation for supplier name if product join fails
+  // Use explicit relationship alias for supplier company
+  supplier: { name: string; } | null;
   pir_tags: { tags: { id: string; name: string; } | null }[]; // Fetch tags via join
-  supplier_responses: { id: string, question_id: string }[]; // Fetch response IDs to count answers
+  pir_responses: { id: string, question_id: string }[]; // Corrected table name
 }
 
 
@@ -37,6 +43,23 @@ const ProductSheets = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false); // State for modal
+
+  // --- MOCK DATA STATE FOR DEMO ---
+  // Removed mock data state as it's not needed when using the modal for creation
+  // const [mockRequest, setMockRequest] = useState<PIRSummary | null>(null);
+  // useEffect(() => { ... }, [currentCompany]);
+  // --- END MOCK DATA STATE ---
+
+  // --- Additional Static Mock Data for List ---
+  // Keep static mock data for display purposes
+  const staticMockPirs: PIRSummary[] = [
+      { id: 'mock-pir-456', productName: 'Component Alpha', supplierId: 'supp-abc', supplierName: 'Alpha Components', customerId: currentCompany?.id ?? 'mock-customer-789', updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(), status: 'approved', tags: [{ id: 'tag-3', name: 'Material' }], responseCount: 15, totalQuestions: 15 },
+      { id: 'mock-pir-789', productName: 'Assembly Beta', supplierId: 'supp-def', supplierName: 'Beta Assemblies Ltd', customerId: currentCompany?.id ?? 'mock-customer-789', updatedAt: new Date(Date.now() - 86400000 * 5).toISOString(), status: 'in_review', tags: [{ id: 'tag-4', name: 'Process' }, { id: 'tag-1', name: 'Compliance' }], responseCount: 10, totalQuestions: 12 },
+      { id: 'mock-pir-000', productName: 'Gadget Gamma', supplierId: 'supp-ghi', supplierName: 'Gamma Gadgets', customerId: currentCompany?.id ?? 'mock-customer-789', updatedAt: new Date(Date.now() - 86400000 * 10).toISOString(), status: 'rejected', tags: [{ id: 'tag-5', name: 'Obsolete' }], responseCount: 5, totalQuestions: 5 },
+  ];
+  // --- End Additional Static Mock Data ---
+
 
   // Fetch PIR Requests relevant to the current company (as customer)
   const fetchPirRequests = async (customerId: string): Promise<PIRSummary[]> => {
@@ -45,9 +68,9 @@ const ProductSheets = () => {
       .select(`
         id, customer_id, supplier_company_id, product_id, updated_at, status,
         products ( name ),
-        companies ( name ),
+        supplier:companies!pir_requests_supplier_company_id_fkey ( name ),
         pir_tags ( tags ( id, name ) ),
-        supplier_responses ( id, question_id )
+        pir_responses ( id, question_id ) // Corrected table name
       `)
       .eq('customer_id', customerId);
 
@@ -60,10 +83,10 @@ const ProductSheets = () => {
     // Transform data
     const transformedPirs: PIRSummary[] = pirData.map((pir: any) => {
       const productName = pir.products?.name ?? 'Unknown Product';
-      // Use direct company join for supplier name as fallback
-      const supplierName = pir.companies?.name ?? 'Unknown Supplier';
-      const tags = (pir.pir_tags?.map((pt: any) => pt.tags).filter(Boolean) || []) as { id: string; name: string }[];
-      const responses = (pir.supplier_responses || []) as { id: string, question_id: string }[];
+      // Use the aliased supplier join result
+      const supplierName = pir.supplier?.name ?? 'Unknown Supplier';
+      const tags = (pir.pir_tags?.map((pt: any) => pt.tags).filter(Boolean) || []) as MockTag[]; // Use MockTag type
+      const responses = (pir.pir_responses || []) as { id: string, question_id: string }[]; // Corrected property name
 
       return {
         id: pir.id,
@@ -86,7 +109,7 @@ const ProductSheets = () => {
     data: pirRequests,
     isLoading: loadingPirs,
     error: errorPirs,
-  } = useQuery<any[], Error>({ // Use 'any[]' temporarily, refine type later
+  } = useQuery<PIRSummary[], Error>({ // Use PIRSummary[] type
     queryKey: ['pirRequestsWithDetails', currentCompany?.id],
     queryFn: () => fetchPirRequests(currentCompany!.id),
     enabled: !!currentCompany,
@@ -94,35 +117,57 @@ const ProductSheets = () => {
     gcTime: 5 * 60 * 1000,
   });
 
+  // Combine fetched data with static mock data for demo purposes
+  const combinedPirRequests = [...(pirRequests ?? []), ...staticMockPirs];
+
   // Helper function (can be memoized)
-  const getTagNames = (tags: { id: string; name: string }[]) => {
+  const getTagNames = (tags: MockTag[] = []) => { // Use MockTag type and default value
     return tags.map(tag => tag.name).filter(Boolean).join(", ");
   };
 
   // Filter PIRs based on search term
-  const filteredProductSheets = (pirRequests ?? []).filter((sheet) =>
+  // Use combinedPirRequests for filtering
+  const filteredProductSheets = (combinedPirRequests).filter((sheet) =>
     sheet.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     sheet.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter by status
+  // Filter by status using only valid enum values
   const drafts = filteredProductSheets.filter((sheet) => sheet.status === "draft");
-  const pending = filteredProductSheets.filter((sheet) => sheet.status === "pending"); // Added pending
-  const submitted = filteredProductSheets.filter((sheet) => sheet.status === "submitted"); // This might not be used if pending covers it
+  const submitted = filteredProductSheets.filter((sheet) => sheet.status === "submitted");
   const reviewing = filteredProductSheets.filter((sheet) => sheet.status === "in_review");
   const approved = filteredProductSheets.filter((sheet) => sheet.status === "approved");
   const rejected = filteredProductSheets.filter((sheet) => sheet.status === "rejected");
-  const revisionRequested = filteredProductSheets.filter((sheet) => sheet.status === "revision_requested"); // Added revision
+  const flagged = filteredProductSheets.filter((sheet) => sheet.status === "flagged");
+  const pendingSupplier = filteredProductSheets.filter((sheet) => sheet.status === "pending_supplier");
+  const pendingReview = filteredProductSheets.filter((sheet) => sheet.status === "pending_review");
+  const accepted = filteredProductSheets.filter((sheet) => sheet.status === "accepted");
+
 
   const handleProductSheetClick = (pirId: string) => {
     // Navigate to the response form or review page based on role/status?
-    // For now, assume it goes to the response form for viewing/editing
-    navigate(`/supplier-response-form/${pirId}`);
+    // Find the request (could be real or mock)
+    const request = combinedPirRequests.find(r => r.id === pirId);
+
+    // Determine navigation based on status
+    if (request?.status === 'submitted' || request?.status === 'in_review' || request?.status === 'flagged' || request?.status === 'pending_review') {
+         console.log("Navigating PIR to Customer Review:", pirId);
+         navigate(`/customer-review/${pirId}`);
+    } else if (request?.status === 'pending_supplier') {
+         // If pending supplier, supplier should view it (adjust if customer needs read-only view)
+         console.log("Navigating PIR to Supplier Response Form:", pirId);
+         navigate(`/supplier-response-form/${pirId}`);
+    } else {
+        // Default or other statuses (draft, approved, accepted, rejected) - maybe a detail view?
+        // For now, let's default to supplier form view, adjust as needed
+        console.log("Default navigation to Supplier Response Form for PIR:", pirId);
+        navigate(`/supplier-response-form/${pirId}`);
+    }
   };
 
   const isLoading = isLoadingCompanies || loadingPirs;
 
-  const renderProductSheetTable = (sheets: any[]) => ( // Use any[] temporarily
+  const renderProductSheetTable = (sheets: PIRSummary[]) => ( // Use PIRSummary[] type
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -159,10 +204,13 @@ const ProductSheets = () => {
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs capitalize ${
                       sheet.status === "approved" ? "bg-green-100 text-green-800" :
+                      sheet.status === "accepted" ? "bg-green-100 text-green-800" : // Style accepted same as approved
                       sheet.status === "rejected" ? "bg-red-100 text-red-800" :
                       sheet.status === "in_review" ? "bg-blue-100 text-blue-800" :
-                      sheet.status === "pending" ? "bg-amber-100 text-amber-800" :
-                      sheet.status === "revision_requested" ? "bg-yellow-100 text-yellow-800" :
+                      sheet.status === "pending_review" ? "bg-cyan-100 text-cyan-800" : // Style pending_review
+                      sheet.status === "pending_supplier" ? "bg-orange-100 text-orange-800" : // Style pending_supplier
+                      sheet.status === "flagged" ? "bg-yellow-100 text-yellow-800" : // Style flagged
+                      sheet.status === "submitted" ? "bg-purple-100 text-purple-800" : // Style submitted
                       "bg-gray-100 text-gray-800" // Draft
                     }`}>
                       {sheet.status.replace('_', ' ')} {/* Replace underscore for display */}
@@ -202,7 +250,7 @@ const ProductSheets = () => {
         actions={
           <PageHeaderAction
             label="Request New Sheet" // Changed label
-            onClick={() => navigate('/request-sheet')} // Navigate to a dedicated request page/modal trigger
+            onClick={() => setIsRequestModalOpen(true)} // Open the modal
             disabled={isLoading || !currentCompany}
             icon={<Plus className="h-4 w-4" />}
           />
@@ -231,27 +279,35 @@ const ProductSheets = () => {
           <div className="text-center p-8 text-muted-foreground">Please select a company.</div>
       ) : (
           <Tabs defaultValue="all" className="w-full">
-            <TabsList className="grid w-full grid-cols-7"> {/* Adjusted grid cols */}
+            {/* Adjusted grid cols and included new statuses */}
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="all">All ({filteredProductSheets.length})</TabsTrigger>
               <TabsTrigger value="draft">Draft ({drafts.length})</TabsTrigger>
-              <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
-              {/* <TabsTrigger value="submitted">Submitted ({submitted.length})</TabsTrigger> */}
-              <TabsTrigger value="reviewing">In Review ({reviewing.length})</TabsTrigger>
-              <TabsTrigger value="revision">Needs Revision ({revisionRequested.length})</TabsTrigger>
-              <TabsTrigger value="approved">Approved ({approved.length})</TabsTrigger>
+              <TabsTrigger value="pending_supplier">Pending Supplier ({pendingSupplier.length})</TabsTrigger>
+              <TabsTrigger value="submitted">Submitted ({submitted.length})</TabsTrigger>
+              <TabsTrigger value="pending_review">Pending Review ({pendingReview.length})</TabsTrigger>
+              <TabsTrigger value="flagged">Flagged ({flagged.length})</TabsTrigger>
+              <TabsTrigger value="accepted">Accepted ({accepted.length})</TabsTrigger>
               <TabsTrigger value="rejected">Rejected ({rejected.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">{renderProductSheetTable(filteredProductSheets)}</TabsContent>
             <TabsContent value="draft" className="mt-6">{renderProductSheetTable(drafts)}</TabsContent>
-            <TabsContent value="pending" className="mt-6">{renderProductSheetTable(pending)}</TabsContent>
-            {/* <TabsContent value="submitted" className="mt-6">{renderProductSheetTable(submitted)}</TabsContent> */}
-            <TabsContent value="reviewing" className="mt-6">{renderProductSheetTable(reviewing)}</TabsContent>
-            <TabsContent value="revision" className="mt-6">{renderProductSheetTable(revisionRequested)}</TabsContent>
-            <TabsContent value="approved" className="mt-6">{renderProductSheetTable(approved)}</TabsContent>
+            <TabsContent value="pending_supplier" className="mt-6">{renderProductSheetTable(pendingSupplier)}</TabsContent>
+            <TabsContent value="submitted" className="mt-6">{renderProductSheetTable(submitted)}</TabsContent>
+            <TabsContent value="pending_review" className="mt-6">{renderProductSheetTable(pendingReview)}</TabsContent>
+            <TabsContent value="flagged" className="mt-6">{renderProductSheetTable(flagged)}</TabsContent>
+            <TabsContent value="accepted" className="mt-6">{renderProductSheetTable(accepted)}</TabsContent>
             <TabsContent value="rejected" className="mt-6">{renderProductSheetTable(rejected)}</TabsContent>
           </Tabs>
       )}
+
+      {/* Render the Modal */}
+      <RequestSheetModal
+        open={isRequestModalOpen}
+        onOpenChange={setIsRequestModalOpen}
+        // supplierId and supplierName can be omitted if selecting supplier within modal
+      />
     </div>
   );
 };

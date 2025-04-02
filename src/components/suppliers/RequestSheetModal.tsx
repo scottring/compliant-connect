@@ -28,6 +28,8 @@ import { useCompanyData } from "@/hooks/use-company-data";
 import { useTags } from "@/hooks/use-tags";
 import { useRelatedSuppliers } from "@/hooks/use-related-suppliers";
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
+import { Database } from '@/types/supabase'; // Import Database type
+import { PIRStatus } from '@/types/pir'; // Import PIRStatus enum
 
 interface RequestSheetModalProps {
   open: boolean;
@@ -102,20 +104,19 @@ const useCreatePIRMutation = (
             const suggestedProductName = !existingProduct ? input.productName : null;
 
             // Prepare PIR data
+            // Explicitly type the status property using the imported PIRStatus enum
             const pirInsertData: {
                 customer_id: string;
-                supplier_company_id: string; // Ensure this is included
-                status: 'draft';
+                supplier_company_id: string;
+                status: PIRStatus; // Use the imported enum type
                 product_id: string | null;
                 suggested_product_name?: string | null;
-                // note?: string | null; // Note: This field doesn't exist in schema yet
             } = {
                 customer_id: input.customerId,
-                supplier_company_id: input.supplierId, // Set the supplier ID
-                status: 'draft',
-                product_id: productId, // Will be null if product doesn't exist
-                suggested_product_name: suggestedProductName, // Will be null if product exists
-                // note: input.note || null, // Removed note as column doesn't exist
+                supplier_company_id: input.supplierId,
+                status: 'pending_supplier', // Set the initial status
+                product_id: productId,
+                suggested_product_name: suggestedProductName,
             };
 
              // Ensure product_id is explicitly null if suggesting a new product
@@ -124,7 +125,8 @@ const useCreatePIRMutation = (
              } else if (!productId) {
                  console.warn("Attempting to create PIR without a valid existing product ID and no suggested name.");
                  pirInsertData.product_id = null;
-                 pirInsertData.suggested_product_name = input.productName; 
+                 // Use the input name as suggestion if product doesn't exist
+                 pirInsertData.suggested_product_name = input.productName;
              }
 
             console.log('[DEBUG] Data for pir_requests insert:', pirInsertData); // Log data before insert
@@ -167,7 +169,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 }) => {
   const { currentCompany, isLoadingCompanies: isLoadingCurrentCompany } = useCompanyData();
   const { data: relatedSuppliers, isLoading: isLoadingSuppliers, error: errorSuppliers } = useRelatedSuppliers(currentCompany?.id);
-  const { tags: appTags, isLoadingTags, errorTags } = useLoggingTags();
+  const { tags: appTags, isLoadingTags, errorTags } = useLoggingTags(); // Use the logging wrapper
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -175,7 +177,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(supplierId || "");
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(supplierName || "");
-  const [productPopoverOpen, setProductPopoverOpen] = useState(false); 
+  const [productPopoverOpen, setProductPopoverOpen] = useState(false);
 
   const { data: productSheets, isLoading: isLoadingProductSheets, error: errorProductSheets } = useFetchSupplierProducts(selectedSupplierId);
 
@@ -207,6 +209,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     if (supplierName) {
       setSelectedSupplierName(supplierName);
     }
+    // Check if the pre-filled supplierId is actually in the fetched list
     if (supplierId && relatedSuppliers && !relatedSuppliers.find(s => s.id === supplierId)) {
         console.warn(`[DEBUG] Provided supplierId ${supplierId} not found in related suppliers. Clearing selection.`);
         setSelectedSupplierId("");
@@ -217,6 +220,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
 
   useEffect(() => {
+    // Sync form value if selectedSupplierId changes externally (e.g., from props)
     if (selectedSupplierId !== form.getValues("supplierId")) {
        console.log('[DEBUG] useEffect [selectedSupplierId, form]: Syncing form supplierId', { selectedSupplierId });
        form.setValue("supplierId", selectedSupplierId);
@@ -227,7 +231,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
   const sendEmailNotification = async (supplierEmail: string | null | undefined, productName: string) => {
     setIsSendingEmail(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
     if (!supplierEmail) {
       toast.error("Could not find supplier email address");
       setIsSendingEmail(false);

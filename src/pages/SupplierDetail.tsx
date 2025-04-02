@@ -138,7 +138,7 @@ const SupplierDetail = () => {
   // --- End Fetch PIRs ---
 
   // --- Event Handlers ---
-  const handleRequestSheet = () => { setIsRequestModalOpen(true); };
+  // Removed handleRequestSheet as it's replaced by direct call below
   const handlePirClick = (pirId: string) => { navigate(`/supplier-response-form/${pirId}`); };
   // --- End Event Handlers ---
 
@@ -203,7 +203,7 @@ const SupplierDetail = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">Product Information Requests Received</h2>
           {currentCompany && (
-             <Button variant="default" className="bg-brand hover:bg-brand-700" onClick={handleRequestSheet}>
+             <Button variant="default" className="bg-brand hover:bg-brand-700" onClick={() => setIsRequestModalOpen(true)}>
                New PIR
              </Button>
           )}
