@@ -14,15 +14,21 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { toast } from "sonner";
 // Import types from central location and generated types
-import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "@/types";
-import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse } from "@/types/pir";
+import { Tag } from "@/types"; // Assuming Tag is correctly exported from index
+// Import needed types from pir.ts
+import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse, Question as LocalQuestionType, FlagType as LocalFlagType } from "@/types/pir"; // Removed SupplierResponse import
 import { Database } from "@/types/supabase";
 type DBFlag = Database['public']['Tables']['response_flags']['Row'];
 type DBQuestionType = Database['public']['Enums']['question_type'];
 import TagBadge from "@/components/tags/TagBadge";
 import TaskProgress from "@/components/ui/progress/TaskProgress";
 
-// Type definition for DBQuestion used in this component
+// Define types locally based on Supabase schema
+type Company = Database['public']['Tables']['companies']['Row'];
+type Subsection = Database['public']['Tables']['subsections']['Row'];
+type Section = Database['public']['Tables']['sections']['Row'];
+
+// Type definition for DBQuestion used in this component (align with LocalQuestionType if possible)
 type DBQuestionForReview = {
   id: string;
   subsection_id: string | null;
@@ -51,6 +57,8 @@ interface PirDetailsForReview {
 
 
 // --- Reusable Submit Review Mutation Hook ---
+// This hook handles flagging and setting status to approved/flagged
+// We might need separate mutations for Accept / Request Revision actions
 type SubmitReviewInput = {
     pirId: string;
     userId: string;
@@ -92,7 +100,8 @@ const useSubmitReviewMutation = (
                 if (flagError) throw new Error(`Failed to save flags: ${flagError.message}`);
             }
 
-            const finalStatus: PIRStatus = hasFlags ? 'flagged' : 'approved'; // Use 'flagged' status
+            // Determine final status based on flags
+            const finalStatus: PIRStatus = hasFlags ? 'flagged' : 'approved'; // Use 'flagged' status if any flags exist
 
             const { error: pirUpdateError } = await supabase
                 .from('pir_requests')
@@ -122,7 +131,7 @@ const CustomerReview = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState("flagged");
+  const [activeTab, setActiveTab] = useState("all"); // Default to all
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [reviewStatus, setReviewStatus] = useState<Record<string, "approved" | "flagged" | "pending">>({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
@@ -185,18 +194,18 @@ const CustomerReview = () => {
                       updated_at: questionData.updated_at,
                       tags: [], // Placeholder
                       // Map section/subsection data, including order property
-                      subsection: subsection ? { ...subsection, order: subsection.order_index, section: section ? { ...section, order: section.order_index } : undefined } : undefined
+                      subsection: subsection ? { ...subsection, order_index: subsection.order_index, section: section ? { ...section, order_index: section.order_index } : undefined } : undefined
                   };
                   questionMap.set(questionData.id, structuredQuestion);
               }
           });
           questions = Array.from(questionMap.values());
           questions.sort((a, b) => {
-              const sectionOrderA = a.subsection?.section?.order || 0;
-              const sectionOrderB = b.subsection?.section?.order || 0;
+              const sectionOrderA = a.subsection?.section?.order_index || 0;
+              const sectionOrderB = b.subsection?.section?.order_index || 0;
               if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB;
-              const subsectionOrderA = a.subsection?.order || 0;
-              const subsectionOrderB = b.subsection?.order || 0;
+              const subsectionOrderA = a.subsection?.order_index || 0;
+              const subsectionOrderB = b.subsection?.order_index || 0;
               return subsectionOrderA - subsectionOrderB;
           });
       }
@@ -232,7 +241,7 @@ const CustomerReview = () => {
   });
   // --- End Fetch PIR Details Query ---
 
-  // Submit Review Mutation
+  // Submit Review Mutation (Handles flagging)
   const submitReviewMutation = useSubmitReviewMutation(queryClient);
 
   // Initialize review state
@@ -245,6 +254,7 @@ const CustomerReview = () => {
           initialStatus[response.id] = "flagged";
           initialNotes[response.id] = response.response_flags[response.response_flags.length - 1]?.description || "";
         } else {
+          // Default to pending
           initialStatus[response.id] = "pending";
           initialNotes[response.id] = "";
         }
@@ -273,6 +283,7 @@ const CustomerReview = () => {
   const sheetQuestions = pirDetails?.questions ?? [];
   const sheetTags = pirDetails?.tags ?? [];
   const sheetResponses = pirDetails?.responses ?? [];
+  // Determine if previously reviewed based on status
   const isPreviouslyReviewed = productSheet?.status === "flagged";
 
   // Grouping logic
@@ -296,35 +307,44 @@ const CustomerReview = () => {
       return acc;
     }, {} as Record<string, Record<string, DBQuestionForReview[]>>);
 
-  // Map DBPIRResponse to SupplierResponse for QuestionItem component
+  // Map DBPIRResponse for ReviewQuestionItem component
+  // Define a type for the structure ReviewQuestionItem expects for 'answer'
+  type AnswerForReviewItem = {
+      id: string;
+      value: any;
+      flags?: LocalFlagType[];
+      // Add other fields if ReviewQuestionItem needs them
+  };
+
   const answersMap = sheetResponses.reduce((acc, response) => {
-    acc[response.question_id!] = {
-        id: response.id,
-        questionId: response.question_id!,
-        value: response.answer as any,
-        comments: [], // Map to empty array
-        // Correctly map DBFlag to LocalFlagType
-        flags: (response.response_flags || []).map(flag => ({
-            id: flag.id,
-            answerId: flag.response_id || '', // Map response_id to answerId
-            comment: flag.description || '', // Map description to comment
-            createdBy: flag.created_by || '', // Map created_by
-            createdByName: '', // Not available directly
-            createdAt: flag.created_at ? new Date(flag.created_at) : new Date(), // Convert string to Date
-            // Ensure all required fields from LocalFlagType are present
-            response_id: flag.response_id, // Add missing fields from LocalFlagType
-            created_by: flag.created_by,
-            created_at: flag.created_at || new Date().toISOString(), // Use string for LocalFlagType
-        })) as LocalFlagType[],
-    } as SupplierResponse & { flags?: LocalFlagType[] };
+    if(response.question_id) {
+        acc[response.question_id] = {
+            id: response.id,
+            value: response.answer as any,
+            // Correctly map DBFlag to LocalFlagType, adding missing properties
+            flags: (response.response_flags || []).map(flag => ({
+                id: flag.id,
+                response_id: flag.response_id,
+                comment: flag.description || '', // Map description to comment
+                created_by: flag.created_by || '',
+                created_at: flag.created_at || new Date().toISOString(),
+                status: flag.status || 'open',
+                // Add missing properties required by LocalFlagType with default values
+                description: flag.description || '', // Use description for comment here too? Or set null?
+                resolved_at: null, // Not available in DBFlag
+                resolved_by: null, // Not available in DBFlag
+                updated_at: flag.updated_at || new Date().toISOString(), // Use updated_at if available, else default
+            })) as LocalFlagType[],
+        } as AnswerForReviewItem; // Use the defined type
+    }
     return acc;
-  }, {} as Record<string, SupplierResponse & { flags?: LocalFlagType[] }>);
+  }, {} as Record<string, AnswerForReviewItem>);
 
   // Filter questions
   const getFilteredQuestions = (sectionQuestions: DBQuestionForReview[]): DBQuestionForReview[] => {
     return sectionQuestions.filter(q => {
         const answer = answersMap[q.id];
-        if (!answer) return false;
+        if (!answer) return false; // Only show questions that have been answered
         const status = reviewStatus[answer.id];
         const hasFlags = answer.flags && answer.flags.length > 0;
 
@@ -344,6 +364,7 @@ const CustomerReview = () => {
 
   // Set default tab
   useEffect(() => {
+    // Default to 'all' or 'flagged' if previously reviewed with flags
     if (isPreviouslyReviewed && flaggedCount > 0) setActiveTab("flagged");
     else setActiveTab("all");
   }, [isPreviouslyReviewed, flaggedCount]);
@@ -352,7 +373,7 @@ const CustomerReview = () => {
   const toggleSection = (sectionId: string) => { setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] })); };
   const handleApprove = (responseId: string) => {
     setReviewStatus(prev => ({ ...prev, [responseId]: "approved" }));
-    setReviewNotes(prev => ({ ...prev, [responseId]: "" }));
+    setReviewNotes(prev => ({ ...prev, [responseId]: "" })); // Clear note on approve
     toast.success("Answer marked as approved");
    };
   const handleFlag = (responseId: string, note: string) => {
@@ -362,26 +383,45 @@ const CustomerReview = () => {
     toast.info("Answer marked as flagged");
    };
   const handleUpdateNote = (responseId: string, note: string) => { setReviewNotes(prev => ({ ...prev, [responseId]: note })); };
-  const handleSubmitReview = () => {
-    if (!user) { toast.error("You must be logged in"); return; }
-    if (!pirId) { toast.error("PIR ID missing"); return; }
 
-    const pendingAnswers = sheetResponses.filter(r => reviewStatus[r.id] === 'pending');
-    if (pendingAnswers.length > 0 && !isPreviouslyReviewed) {
-        toast.error(`Please review all ${pendingAnswers.length} pending answers.`); return;
-    }
-    const flaggedWithoutNotes = Object.entries(reviewStatus).filter(([id, status]) => status === 'flagged' && !reviewNotes[id]?.trim()).length;
-    if (flaggedWithoutNotes > 0) {
-        toast.error(`Please add notes to all ${flaggedWithoutNotes} flagged answers.`); return;
-    }
+  // Mutation to update PIR status for Accept/Request Revision
+  const updatePIRStatusMutation = useMutation({
+      mutationFn: async (newStatus: PIRStatus) => {
+          if (!pirId) throw new Error("Missing PIR ID");
+          const { error } = await supabase
+              .from('pir_requests')
+              .update({ status: newStatus, updated_at: new Date().toISOString() })
+              .eq('id', pirId);
+          if (error) throw error;
+          return newStatus;
+      },
+      onSuccess: (newStatus) => {
+          queryClient.invalidateQueries({ queryKey: ['pirDetailsForReview', pirId] });
+          queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
+          if (newStatus === 'accepted') {
+              toast.success("PIR Accepted!");
+              navigate('/product-sheets'); // Go back to list after accepting
+          } else if (newStatus === 'pending_supplier') {
+              toast.info("Revision requested. Supplier notified.");
+              // Optionally navigate or stay on page? Stay for now.
+          }
+      },
+      onError: (error: any) => {
+          toast.error(`Failed to update status: ${error.message}`);
+      }
+  });
 
-    submitReviewMutation.mutate({
-        pirId,
-        userId: user.id,
-        userName: user.email || 'Reviewer',
-        reviewStatuses: reviewStatus,
-        reviewNotes,
-    }, { onSuccess: () => { navigate("/product-sheets"); } });
+  const handleRequestRevision = () => {
+      console.log("Requesting Revision...");
+      // TODO: Check if there are actually flags/notes before allowing revision?
+      // For now, directly update status
+      updatePIRStatusMutation.mutate('pending_supplier');
+  };
+
+  const handleAccept = () => {
+      console.log("Accepting Response...");
+      // TODO: Add confirmation dialog? Check if all items are approved?
+      updatePIRStatusMutation.mutate('accepted');
   };
   // --- End Event Handlers ---
 
@@ -390,7 +430,7 @@ const CustomerReview = () => {
       if (sectionId === "unsectioned") return "General Questions";
       const questionInSection = sheetQuestions.find(q => q.subsection?.section?.id === sectionId);
       const section = questionInSection?.subsection?.section;
-      return section ? `${section.order || '?'}. ${section.name}` : "Unknown Section";
+      return section ? `${section.order_index || '?'}. ${section.name}` : "Unknown Section"; // Use order_index
   };
   const getSubsectionName = (sectionId: string, subsectionId: string): string => {
       if (subsectionId === "unsubsectioned") return "General";
@@ -398,10 +438,10 @@ const CustomerReview = () => {
       const subsection = questionInSubsection?.subsection;
       const section = subsection?.section;
       if (!section || !subsection) return "Unknown Subsection";
-      return `${section.order || '?'}.${subsection.order || '?'} ${subsection.name}`;
+      return `${section.order_index || '?'}.${subsection.order_index || '?'} ${subsection.name}`; // Use order_index
   };
-  const getDisplayStatus = () => { /* ... */ };
-  const getStatusColorClass = () => { /* ... */ };
+  const getDisplayStatus = () => { /* Placeholder - Add logic if needed */ return productSheet?.status || ''; };
+  const getStatusColorClass = () => { /* Placeholder - Add logic if needed */ return 'bg-gray-100 text-gray-800'; };
   // --- End Helper Functions ---
 
 
@@ -413,26 +453,62 @@ const CustomerReview = () => {
   const productName = pirDetails.product?.name ?? 'Unknown Product';
   const pageTitle = productSheet.title || `Review - ${productName}`;
 
+  // Determine if Accept/Revision buttons should be disabled (e.g., if already accepted/rejected)
+  const isFinalState = productSheet?.status === 'accepted' || productSheet?.status === 'rejected';
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={pageTitle}
         subtitle={isPreviouslyReviewed ? "Reviewing flagged issues" : "Initial review"}
-        actions={( // Fixed JSX expression
-          <Button className="bg-brand hover:bg-brand/90" onClick={handleSubmitReview} disabled={submitReviewMutation.isPending}>
-            <Send className="mr-2 h-4 w-4" />
-            {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
-          </Button>
+        actions={(
+            <div className="flex gap-2">
+              {/* Conditionally show Request Revision only if not already accepted/rejected? */}
+              {!isFinalState && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleRequestRevision}
+                    disabled={updatePIRStatusMutation.isPending}
+                  >
+                    Request Revision
+                  </Button>
+              )}
+               {/* Conditionally show Accept only if not already accepted/rejected? */}
+              {!isFinalState && (
+                  <Button
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={handleAccept}
+                    disabled={updatePIRStatusMutation.isPending}
+                  >
+                    Accept Response
+                  </Button>
+              )}
+               {/* Remove the generic submit button if Accept/Revision handles the final state change */}
+               {/* <Button className="bg-brand hover:bg-brand/90" onClick={handleSubmitReview} disabled={submitReviewMutation.isPending}>
+                 <Send className="mr-2 h-4 w-4" />
+                 {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+               </Button> */}
+            </div>
         )}
       />
 
       <Card>
-        {/* ... Card Header & Content ... */}
+        {/* TODO: Add Card Header & Content similar to SupplierResponseForm if needed */}
+         <CardHeader>
+           <CardTitle>Review Details</CardTitle>
+         </CardHeader>
+         <CardContent>
+            <p>Supplier: {supplier?.name || 'Unknown'}</p>
+            {/* Add more details as needed */}
+         </CardContent>
       </Card>
 
       <Tabs defaultValue={isPreviouslyReviewed ? "flagged" : "all"} value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-           {/* ... Tabs Triggers ... */}
+           <TabsTrigger value="all">All ({totalAnsweredQuestions})</TabsTrigger>
+           <TabsTrigger value="pending">Pending ({pendingCount})</TabsTrigger>
+           <TabsTrigger value="flagged">Flagged ({flaggedCount})</TabsTrigger>
+           <TabsTrigger value="approved">Approved ({approvedCount})</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4 mt-4">
@@ -455,25 +531,20 @@ const CustomerReview = () => {
                       if (!answer) return null;
                       const status = reviewStatus[answer.id] || "pending";
                       // Map DBQuestionForReview to LocalQuestionType for the component prop
+                      // Ensure LocalQuestionType is imported or defined correctly
                       const questionForComponent: LocalQuestionType = {
                           id: question.id,
                           text: question.text,
-                          // title: question.text, // Removed title
                           description: question.description,
-                          // Cast DB enum type directly to local type
+                          // Cast DB enum type directly to local type if compatible
                           type: question.type as LocalQuestionType['type'],
                           required: question.required ?? false,
-                          // is_required: question.required ?? false, // Removed is_required
                           options: question.options,
                           tags: question.tags || [],
                           created_at: question.created_at || '',
                           updated_at: question.updated_at || '',
                           subsection_id: question.subsection_id || '', // Use correct snake_case property name
-                          // subsectionId: question.subsection_id || '', // Removed incorrect camelCase
-                          // category_id: question.subsection_id || '', // Removed category_id if not in LocalQuestionType
-                          // validation_rules: null, // Removed validation_rules
-                          // created_by: '', // Removed created_by
-                          // sectionId: question.subsection?.section?.id || '', // Removed sectionId as it's not in LocalQuestionType
+                          // Add any other fields required by LocalQuestionType, ensure they exist or provide defaults
                       };
                       return (
                         <div key={question.id}>
@@ -496,7 +567,10 @@ const CustomerReview = () => {
               </Card>
             );
           })}
-          {/* ... No questions message ... */}
+          {/* Add message if no questions match the current filter */}
+          {Object.values(questionsBySections).every(qs => getFilteredQuestions(qs).length === 0) && (
+              <div className="text-center text-muted-foreground p-8">No questions match the current filter.</div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
