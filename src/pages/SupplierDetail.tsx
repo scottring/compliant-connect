@@ -89,13 +89,10 @@ const SupplierDetail = () => {
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
           .select(`
-              id, customer_id, supplier_company_id, product_id, updated_at, status,
-              products ( name ),
-              customer:companies!pir_requests_customer_id_fkey ( name ),
-              pir_tags!inner ( tags ( * ) ), /* Select all tag columns */
-              supplier_responses ( id )
+              id, status
           `)
-          .eq('supplier_company_id', id);
+          // Reverted filter to use direct column
+           .eq('supplier_company_id', id); 
 
       if (pirError) throw new Error(`Failed to load PIRs for supplier: ${pirError.message}`);
       if (!pirData) return [];
