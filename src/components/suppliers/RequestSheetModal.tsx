@@ -429,9 +429,10 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                                    {field.value && !supplierProducts.some(p => p.label.toLowerCase() === field.value.toLowerCase()) && (
                                         <CommandItem
                                             key="new-product-suggestion"
-                                            value={field.value}
+                                            value={field.value} // Use the typed value
                                             onSelect={() => {
-                                                form.setValue("productName", field.value);
+                                                form.setValue("productName", field.value); // Set form value to the typed value
+                                                toast.info(`Using new product name: "${field.value}"`); // Add feedback toast
                                                 setProductPopoverOpen(false);
                                             }}
                                             >

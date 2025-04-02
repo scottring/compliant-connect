@@ -3,7 +3,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuestionBankContext } from "@/context/QuestionBankContext";
-import { Question, Tag } from "@/types"; // Revert to alias
+import { Tag } from "@/types"; // Import Tag from index
+import { Question } from "@/types/pir"; // Import Question from pir types
 import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload, Loader2 } from "lucide-react";
 // Import DialogDescription
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; 
@@ -334,7 +335,15 @@ export function QuestionBuilderDialog({
                         <FormLabel>Section</FormLabel>
                         <div className="flex gap-2">
                           <Select
-                            onValueChange={field.onChange}
+                            onValueChange={(value) => {
+                              if (value === 'create-new-section') {
+                                setShowNewSectionForm(true);
+                                field.onChange(''); // Clear selection value if creating new
+                              } else {
+                                setShowNewSectionForm(false); // Hide form if selecting existing
+                                field.onChange(value);
+                              }
+                            }}
                             value={field.value}
                           >
                             <FormControl>
@@ -348,15 +357,13 @@ export function QuestionBuilderDialog({
                                   {section.name}
                                 </SelectItem>
                               ))}
+                              {/* Add option to create new section */}
+                              <SelectItem value="create-new-section" className="text-blue-600 italic">
+                                -- Create New Section --
+                              </SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowNewSectionForm(true)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
+                          {/* Removed separate + button */}
                         </div>
                         <FormMessage />
                       </FormItem>
@@ -398,7 +405,15 @@ export function QuestionBuilderDialog({
                         <FormLabel>Subsection</FormLabel> {/* Changed label to imply required */}
                         <div className="flex gap-2">
                           <Select
-                            onValueChange={field.onChange}
+                            onValueChange={(value) => {
+                              if (value === 'create-new-subsection') {
+                                setShowNewSubsectionForm(true);
+                                field.onChange(''); // Clear selection value if creating new
+                              } else {
+                                setShowNewSubsectionForm(false); // Hide form if selecting existing
+                                field.onChange(value);
+                              }
+                            }}
                             value={field.value || ""} // Default value to empty string
                             disabled={!selectedSectionId}
                           >
@@ -415,16 +430,13 @@ export function QuestionBuilderDialog({
                                   {subsection.name}
                                 </SelectItem>
                               ))}
+                              {/* Add option to create new subsection */}
+                              <SelectItem value="create-new-subsection" className="text-blue-600 italic">
+                                -- Create New Subsection --
+                              </SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowNewSubsectionForm(true)}
-                            disabled={!selectedSectionId}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
+                          {/* Removed separate + button */}
                         </div>
                         <FormMessage />
                       </FormItem>
