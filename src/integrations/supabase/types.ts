@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
       answers: {
@@ -88,88 +88,120 @@ export type Database = {
       }
       companies: {
         Row: {
-          address: string | null
-          city: string | null
-          contact_email: string
-          contact_name: string
-          contact_phone: string
-          country: string | null
-          created_at: string
           id: string
           name: string
-          progress: number
           role: string
-          state: string | null
+          contact_name: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          progress: number
+          created_at: string
           updated_at: string
-          zip_code: string | null
         }
         Insert: {
-          address?: string | null
-          city?: string | null
-          contact_email: string
-          contact_name: string
-          contact_phone: string
-          country?: string | null
-          created_at?: string
           id?: string
           name: string
-          progress?: number
           role: string
-          state?: string | null
+          contact_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          progress?: number
+          created_at?: string
           updated_at?: string
-          zip_code?: string | null
         }
         Update: {
-          address?: string | null
-          city?: string | null
-          contact_email?: string
-          contact_name?: string
-          contact_phone?: string
-          country?: string | null
-          created_at?: string
           id?: string
           name?: string
-          progress?: number
           role?: string
-          state?: string | null
+          contact_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          progress?: number
+          created_at?: string
           updated_at?: string
-          zip_code?: string | null
         }
-        Relationships: []
+      }
+      company_relationships: {
+        Row: {
+          id: string
+          customer_id: string
+          supplier_id: string
+          status: 'pending' | 'active' | 'inactive' | 'blocked'
+          type: 'direct' | 'indirect' | 'potential'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          supplier_id: string
+          status?: 'pending' | 'active' | 'inactive' | 'blocked'
+          type?: 'direct' | 'indirect' | 'potential'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          supplier_id?: string
+          status?: 'pending' | 'active' | 'inactive' | 'blocked'
+          type?: 'direct' | 'indirect' | 'potential'
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_relationships_customer_id_fkey"
+            columns: ["customer_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_relationships_supplier_id_fkey"
+            columns: ["supplier_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       company_users: {
         Row: {
-          company_id: string
-          created_at: string
           id: string
-          role: string
-          updated_at: string
+          company_id: string
           user_id: string
+          role: string
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          company_id: string
-          created_at?: string
           id?: string
-          role?: string
-          updated_at?: string
+          company_id: string
           user_id: string
+          role?: string
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          company_id?: string
-          created_at?: string
           id?: string
-          role?: string
-          updated_at?: string
+          company_id?: string
           user_id?: string
+          role?: string
+          created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "company_users_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "company_users_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
         ]
       }
       flags: {
@@ -280,30 +312,34 @@ export type Database = {
       }
       profiles: {
         Row: {
-          created_at: string | null
-          email: string
-          first_name: string | null
           id: string
+          first_name: string | null
           last_name: string | null
-          updated_at: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          email: string
-          first_name?: string | null
           id: string
+          first_name?: string | null
           last_name?: string | null
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          email?: string
-          first_name?: string | null
           id?: string
+          first_name?: string | null
           last_name?: string | null
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       question_tags: {
         Row: {

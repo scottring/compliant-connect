@@ -1,0 +1,424 @@
+# Cursor Project Intelligence
+
+## Critical Implementation Paths
+
+### 1. Authentication Flow
+- Always implement proper error handling and logging
+- Ensure company state is properly managed
+- Handle loading states consistently
+- Implement proper role-based redirects
+- Support invitation-based registration
+
+### 2. Company Management
+- Maintain clear company role definitions
+- Handle company relationships properly
+- Implement efficient context switching
+- Ensure proper data access controls
+- Support multiple roles per company
+
+### 3. State Management
+- **Server State:** Use `@tanstack/react-query` (`useQuery`, `useMutation`) for fetching/updating backend data. Utilize query keys effectively and query invalidation for synchronization.
+- **Auth State:** Centralize core Supabase auth state (`user`, `session`) in `AuthContext`.
+- **Company Context:** Manage user's associated companies and currently selected company via `useCompanyData` hook (uses `useQuery`).
+- **UI State:** Use local `useState` for component-specific UI state (e.g., modal open/close, form input).
+- **Loading/Error States:** Primarily rely on states provided by `useQuery`/`useMutation` results (`isLoading`, `isPending`, `error`). Minimize manual loading/error state variables.
+
+### 4. Data Model Dependencies
+- Company relationships are foundational
+- Product sheets depend on company and product data
+- PIRs link everything together
+- Questions organized by sections and subsections
+- Tags associate with questions for filtering
+
+### 5. User Workflows
+- Question bank → PIR creation → Supplier response → Review process
+- Each step must maintain proper state
+- Email notifications at key points
+- Section/subsection organization for questions
+- Status tracking throughout workflow
+
+## User Preferences
+
+### 1. UI/UX Patterns
+- Prefer table views over grid views for data
+- Need bulk import capabilities for efficiency
+- Toast notifications should be minimal
+- Status changes must be clear and accurate
+- Section/subsection organization for clarity
+
+### 2. Data Entry
+- Support for copying/pasting from Excel
+- Auto-save during form completion
+- Clear progress indicators
+- Efficient filtering and search
+- Hierarchical organization of data
+
+### 3. Error Handling
+- Clear error messages
+- Proper error recovery
+- Consistent error display
+- Helpful resolution steps
+- Proper loading indicators
+- Console logging for debugging
+
+### 4. Authentication UX
+- Smooth sign-in process
+- Clear role indication
+- Easy company switching
+- Proper progress feedback
+- Clear validation messages
+
+## Project-Specific Patterns
+
+### 1. Authentication & Company Patterns
+- Use `AuthContext` for central Supabase auth state (`user`, `session`).
+- Use `useCompanyData` hook for accessing `userCompanies` and `currentCompany`.
+- Implement role-based access checks using data from `useCompanyData`.
+- Handle loading/error states primarily via React Query results.
+
+### 2. Company Patterns
+- Clear role definitions
+- Proper relationship tracking
+- Efficient context switching
+- Secure data access
+- Proper validation
+
+### 3. Terminology
+- "Product Information Request (PIR)" not "Sheet Request"
+- "Product Sheet" is the master document
+- "In Progress" vs "Partially Submitted" for status
+- Clear distinction between suppliers and customers
+- "Sections" and "Subsections" for question organization
+
+### 4. Data Organization
+- Questions organized by sections/subsections
+- Tags for compliance categories
+- Support for nested tables
+- Smart answer reuse across tags
+- RPC functions for complex operations
+
+## Known Challenges
+
+### 1. Authentication Complexity
+- Company state management
+- Role-based access control
+- Invitation flow handling
+- Error recovery
+- State consistency
+
+### 2. Company Management
+- Relationship tracking
+- Context switching
+- Role validation
+- Access control
+- Data isolation
+
+### 3. Technical Complexity
+- Complex nested table implementations
+- Multi-tenant data isolation
+- Real-time updates and notifications
+- Answer history tracking
+- Question-tag associations
+
+### 4. UX Considerations
+- Balance between auto-save and notifications
+- Clear status progression
+- Efficient review process
+- Intuitive navigation between views
+- Hierarchical data presentation
+
+## Tool Usage Patterns
+
+### 1. Supabase Auth
+- Use auth helpers consistently
+- Implement proper error handling
+- Handle session management
+- Track loading states
+- Manage user data
+
+### 2. Database Access
+- Use Row Level Security
+- Implement proper policies
+- Handle relationships
+- Manage permissions
+- Track changes
+- Use RPC for complex operations
+
+### 3. Form Handling
+- React Hook Form for form state
+- Zod for validation
+- Progressive saving
+- Proper error handling
+- Hierarchical field organization
+
+### 4. Data Management (Server State)
+- Use `@tanstack/react-query` for fetching (`useQuery`) and mutations (`useMutation`).
+- Define reusable query/mutation hooks where appropriate (e.g., `useCreateTagMutation`).
+- Use query keys that reflect dependencies (e.g., `['suppliers', currentCompany?.id]`).
+- Use `queryClient.invalidateQueries` in mutation `onSuccess` callbacks to refetch stale data.
+- Handle loading and error states primarily through React Query's returned values.
+- Use Supabase RPC functions within mutations for atomic operations (e.g., `create_question_with_tags`).
+
+## Evolution Notes
+
+### 1. State Management Refactoring (Completed - Core)
+- Integrated `@tanstack/react-query` for server state.
+- Separated Auth state (`AuthContext`) from Company data (`useCompanyData`).
+- Refactored core hooks (`use-question-bank`, `use-tags`, `use-company-data`) and related components.
+- Established pattern for using `useQuery`/`useMutation`.
+
+### 2. Company Management (Updated)
+- Company data fetched via `useCompanyData` hook (`useQuery`).
+- Default company selection logic moved into `useCompanyData`.
+- Role validation logic updated in `Navigation`/`ProtectedRoute` to use `useCompanyData`.
+
+### 3. UI Improvements
+- Moved from grid to table views
+- Enhanced filtering capabilities
+- Improved status indicators
+- Added bulk import features
+- Implemented section/subsection structure
+
+### 4. Workflow Refinements
+- Streamlined review process
+- Enhanced communication features
+- Improved answer reuse
+- Better progress tracking
+- More intuitive organization
+
+## Implementation Guidelines
+
+### 1. Authentication
+```typescript
+// Always handle loading states
+const [loading, setLoading] = useState({
+  auth: false,
+  profile: false,
+  company: false
+});
+
+// Proper error handling
+const [error, setError] = useState<{
+  type: 'auth' | 'profile' | 'company' | null;
+  message: string | null;
+}>({
+  type: null,
+  message: null
+});
+
+// Company state management
+const [companies, setCompanies] = useState<UserCompany[]>([]);
+const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
+```
+
+### 2. Company Management
+```typescript
+// Role-based access control
+const checkAccess = (
+  company: Company,
+  action: string
+): boolean => {
+  const role = company.role;
+  return rolePermissions[role]?.[action] ?? false;
+};
+
+// Company context switching
+const switchCompany = async (
+  companyId: string
+): Promise<void> => {
+  try {
+    setLoading(true);
+    // Validate access
+    // Update state
+    // Refresh permissions
+    // Update UI
+  } catch (error) {
+    handleError(error);
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+### 3. Error Handling
+```typescript
+// Consistent error handling
+const handleError = (
+  error: unknown,
+  context: string
+): void => {
+  console.error(`Error in ${context}:`, error);
+  const message = getErrorMessage(error);
+  setError({
+    type: context as 'auth' | 'profile' | 'company',
+    message
+  });
+  showToast({
+    type: 'error',
+    message
+  });
+};
+
+// Error recovery
+const recoverFromError = async (
+  error: AuthError
+): Promise<void> => {
+  switch (error.type) {
+    case 'auth':
+      await refreshSession();
+      break;
+    case 'profile':
+      await refreshProfile();
+      break;
+    case 'company':
+      await refreshCompanyData();
+      break;
+  }
+};
+```
+
+### 4. Question Bank Implementation
+```typescript
+// RPC for atomic operations
+const createQuestion = async (question: QuestionInputData): Promise<DBQuestion | null> => {
+  try {
+    setLoading(true);
+    
+    // Extract tags from the question data
+    const { tags: selectedTags, ...questionData } = question;
+    const tagIds = selectedTags?.map(tag => tag.id) || [];
+
+    // Call the create_question_with_tags RPC function
+    const { data: newQuestionData, error: rpcError } = await supabase
+      .rpc('create_question_with_tags', {
+        p_subsection_id: questionData.subsection_id,
+        p_text: questionData.text,
+        p_description: questionData.description || null,
+        p_type: questionData.type,
+        p_required: questionData.required,
+        p_options: questionData.options || null,
+        p_tag_ids: tagIds
+      });
+
+    if (rpcError) throw rpcError;
+    
+    // Handle response and update state
+  } catch (err) {
+    // Error handling
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+## Testing Requirements
+
+### 1. Authentication Tests
+```typescript
+describe('Authentication', () => {
+  test('handles successful login', async () => {
+    // Setup
+    // Execute
+    // Verify state
+    // Check redirects
+  });
+
+  test('handles login errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+});
+```
+
+### 2. Company Tests
+```typescript
+describe('Company Management', () => {
+  test('handles company switching', async () => {
+    // Setup multiple companies
+    // Switch company
+    // Verify state update
+    // Check permissions
+  });
+
+  test('validates access control', async () => {
+    // Setup roles
+    // Attempt actions
+    // Verify permissions
+    // Check error handling
+  });
+});
+```
+
+### 3. Data Model Tests
+```typescript
+describe('Data Model', () => {
+  test('handles company relationships', async () => {
+    // Setup multiple companies
+    // Verify relationships
+    // Check data access
+  });
+
+  test('handles question bank', async () => {
+    // Setup sections, subsections, and questions
+    // Verify hierarchical structure
+    // Check tag associations
+    // Test CRUD operations
+  });
+});
+```
+
+### 4. User Workflow Tests
+```typescript
+describe('User Workflow', () => {
+  test('handles question bank', async () => {
+    // Setup question bank
+    // Verify data retrieval
+    // Check workflow consistency
+  });
+
+  test('handles PIR creation', async () => {
+    // Setup PIR creation
+    // Verify PIR creation
+    // Check data consistency
+  });
+
+  test('handles supplier response', async () => {
+    // Setup supplier response
+    // Verify response handling
+    // Check data consistency
+  });
+
+  test('handles review process', async () => {
+    // Setup review process
+    // Verify review handling
+    // Check data consistency
+  });
+});
+```
+
+### 5. Error Handling Tests
+```typescript
+describe('Error Handling', () => {
+  test('handles authentication errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery
+  });
+
+  test('handles database operation errors', async () => {
+    // Setup with error condition
+    // Execute
+    // Verify error handling
+    // Check recovery and retries
+  });
+
+  test('handles RPC errors', async () => {
+    // Setup with RPC error condition
+    // Execute complex operation
+    // Verify error handling
+    // Check state consistency
+  });
+}); 

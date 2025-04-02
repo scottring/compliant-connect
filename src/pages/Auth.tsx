@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Button, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, Alert, AlertDescription } from "@/components/ui";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<string>("login");
+  const location = useLocation();
   
   // Form state
+  const [activeTab, setActiveTab] = useState<string>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -23,12 +20,20 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
 
+  // Get the intended destination from location state, or default to dashboard
+  const from = location.state?.from?.pathname || "/dashboard";
+
+  // Handle successful authentication
   useEffect(() => {
-    // Redirect if user is already authenticated
     if (user) {
-      navigate("/dashboard");
+      navigate(from, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, from]);
+
+  // Clear error when switching tabs
+  useEffect(() => {
+    setError(null);
+  }, [activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,14 +46,16 @@ const Auth = () => {
     
     try {
       setIsSubmitting(true);
-      await signIn(email, password);
-      // No need to navigate here, the auth state change will trigger the useEffect
+      const { error: signInError } = await signIn(email, password);
+      
+      if (signInError) {
+        throw signInError;
+      }
+      
     } catch (error: any) {
       console.error("Login error:", error);
-      
-      // Special handling for unconfirmed email
-      if (error.message === "Email not confirmed") {
-        setError("Please confirm your email before signing in. Check your inbox for the confirmation link.");
+      if (error.message?.includes("Invalid login credentials")) {
+        setError("Invalid email or password");
       } else {
         setError(error.message || "Failed to sign in");
       }
@@ -68,9 +75,14 @@ const Auth = () => {
     
     try {
       setIsSubmitting(true);
-      await signUp(email, password, firstName, lastName);
+      const { error: signUpError } = await signUp(email, password, firstName, lastName);
+      
+      if (signUpError) {
+        throw signUpError;
+      }
+      
       setEmailConfirmationSent(true);
-      toast.success("Account created successfully! Please check your email for confirmation.");
+      toast.success("Account created! Please check your email for confirmation.");
     } catch (error: any) {
       console.error("Sign up error:", error);
       setError(error.message || "Failed to create account");
@@ -106,34 +118,24 @@ const Auth = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  // Simplified loading spinner logic
+  const showSpinner = isSubmitting;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-6 p-8 bg-white rounded-lg shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
         <div className="text-center">
-          <img 
-            src="/lovable-uploads/c2472b5a-b16b-4f53-9ea4-eb27391a2e5b.png" 
-            alt="StacksData Logo" 
-            className="h-12 mx-auto mb-4"
-          />
           <h1 className="text-2xl font-bold tracking-tight">Product Compliance Platform</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Sign in to your account or create a new one
           </p>
         </div>
-
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
 
         {emailConfirmationSent && (
           <Alert className="mb-4">
@@ -151,104 +153,111 @@ const Auth = () => {
           </Alert>
         )}
 
-        <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="login">Login</TabsTrigger>
-            <TabsTrigger value="register">Register</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="login" className="space-y-4">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="your@email.com" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                </div>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-              
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-          </TabsContent>
-          
-          <TabsContent value="register" className="space-y-4">
-            <form onSubmit={handleSignUp} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+        {showSpinner ? (
+          <div className="text-center py-8">
+            <div className="h-12 w-12 mx-auto border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+            <p className="mt-4 text-sm text-gray-600">Processing...</p>
+          </div>
+        ) : (
+          <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid grid-cols-2">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="login" className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input 
-                    id="firstName" 
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    id="email" 
+                    type="email" 
+                    placeholder="your@email.com" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={isSubmitting}
                     required
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                  </div>
                   <Input 
-                    id="lastName" 
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
+                    id="password" 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     disabled={isSubmitting}
                     required
                   />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="registerEmail">Email</Label>
-                <Input 
-                  id="registerEmail" 
-                  type="email" 
-                  placeholder="your@email.com" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="registerPassword">Password</Label>
-                <Input 
-                  id="registerPassword" 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-              
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Creating Account..." : "Create Account"}
-              </Button>
-            </form>
-          </TabsContent>
-        </Tabs>
+                
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  Sign In
+                </Button>
+              </form>
+            </TabsContent>
+            
+            <TabsContent value="register" className="space-y-4">
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input 
+                      id="firstName" 
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      disabled={isSubmitting}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input 
+                      id="lastName" 
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      disabled={isSubmitting}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="your@email.com" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isSubmitting}
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isSubmitting}
+                    required
+                  />
+                </div>
+                
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  Create Account
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </div>
   );

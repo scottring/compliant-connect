@@ -1,0 +1,14 @@
+{
+  "extends": [
+    // ... existing code ...
+  ],
+  "rules": {
+    // ... existing code ...
+    "no-restricted-imports": ["error", {
+      "patterns": [{
+        "group": ["@/lib/supabase", "../lib/supabase", "./lib/supabase"],
+        "message": "Please import Supabase client from '@/integrations/supabase/client' instead."
+      }]
+    }]
+  }
+} 

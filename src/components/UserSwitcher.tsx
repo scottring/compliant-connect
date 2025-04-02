@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { User } from "@/types";
 
 const UserSwitcher = () => {
-  const { user: appUser, setUser, companies, addCompany } = useApp();
+  const { user: appUser, setUser } = useApp(); // Removed companies, addCompany
   const { user: authUser, signOut } = useAuth();
 
   const handleCreateTestUser = () => {
@@ -31,49 +31,7 @@ const UserSwitcher = () => {
     toast.success("Created and switched to admin user");
   };
 
-  const handleCreateCompanyAndUser = (role: "customer" | "supplier" | "both") => {
-    // Create a test company first
-    const companyName = role === "customer" 
-      ? "Test Customer Inc." 
-      : role === "supplier" 
-        ? "Test Supplier Ltd." 
-        : "Test Hybrid Corp.";
-    
-    addCompany({
-      name: companyName,
-      contactName: "Test Contact",
-      contactEmail: "contact@example.com",
-      role: role,
-      contactPhone: "555-123-4567",
-      address: "123 Test St",
-      city: "Testville",
-      state: "TS",
-      zipCode: "12345",
-      country: "Testland",
-    });
-    
-    // Wait a moment for the company to be added before creating the user
-    setTimeout(() => {
-      // Find the newly created company
-      const newCompany = companies.find(c => c.name === companyName);
-      
-      if (newCompany) {
-        // Create and switch to a new user for this company
-        const newUser: User = {
-          id: `user-${Date.now()}`,
-          name: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
-          email: `${role}@example.com`,
-          role: "user",
-          companyId: newCompany.id,
-        };
-        
-        setUser(newUser);
-        toast.success(`Created ${role} company and user`);
-      } else {
-        toast.error("Failed to create company. Please try again.");
-      }
-    }, 100);
-  };
+  // Removed handleCreateCompanyAndUser function as it relied on removed AppContext state
 
   const handleSignOut = async () => {
     await signOut();
@@ -118,18 +76,7 @@ const UserSwitcher = () => {
           <UserPlus className="h-4 w-4" />
           Create Admin User
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("customer")} className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          Create Customer User
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("supplier")} className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          Create Supplier User
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleCreateCompanyAndUser("both")} className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          Create Hybrid User
-        </DropdownMenuItem>
+        {/* Removed menu items for creating company+user */}
       </DropdownMenuContent>
     </DropdownMenu>
   );

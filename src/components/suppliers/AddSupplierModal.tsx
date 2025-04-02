@@ -1,7 +1,17 @@
-
 import React from "react";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Dialog,
   DialogContent,
@@ -9,9 +19,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -19,130 +27,157 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Company } from "@/types";
+import { Company } from "@/types/auth";
+import { RelationshipType } from "@/types/auth";
+
+// Restore validation schema
+const formSchema = z.object({
+  name: z.string().min(1, "Company name is required"),
+  contactName: z.string().min(1, "Contact name is required"),
+  contactEmail: z.string().email("Invalid email address"),
+  contactPhone: z.string().min(1, "Phone number is required"),
+  relationshipType: z.enum(["direct", "indirect", "potential"] as const),
+});
+
+type FormData = z.infer<typeof formSchema>;
 
 interface AddSupplierModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (data: Omit<Company, "id" | "progress">) => void;
+  onClose: () => void;
+  onSubmit: (data: FormData) => Promise<void>;
+  loading: boolean;
 }
 
-const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
+export const AddSupplierModal = ({
   open,
-  onOpenChange,
+  onClose,
   onSubmit,
-}) => {
-  const { register, handleSubmit, setValue, watch, formState: { errors }, reset } = useForm<Omit<Company, "id" | "progress">>();
+  loading,
+}: AddSupplierModalProps) => {
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    // Restore default values
+    defaultValues: {
+      name: "",
+      contactName: "",
+      contactEmail: "",
+      contactPhone: "",
+      relationshipType: "direct",
+    },
+  });
 
-  React.useEffect(() => {
-    if (!open) {
-      reset();
+  const handleSubmit = async (data: FormData) => {
+    try {
+      await onSubmit(data);
+      form.reset();
+    } catch (error) {
+      console.error('Error submitting form:', error);
     }
-  }, [open, reset]);
-
-  const role = watch("role");
-
-  React.useEffect(() => {
-    register("role", { required: "Role is required" });
-  }, [register]);
-
-  const onSubmitForm = (data: Omit<Company, "id" | "progress">) => {
-    onSubmit(data);
-    onOpenChange(false);
-    reset();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Add New Supplier</DialogTitle>
           <DialogDescription>
-            Add a new supplier to your network. Fill in the details below.
+            Enter the supplier's details below. They will be added to your supplier list.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmitForm)}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Company Name</Label>
-              <Input
-                id="name"
-                placeholder="Enter company name"
-                {...register("name", { required: "Company name is required" })}
-              />
-              {errors.name && (
-                <p className="text-sm text-red-500">{errors.name.message}</p>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Company Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter company name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="role">Role</Label>
-              <Select
-                onValueChange={(value) => setValue("role", value as Company["role"])}
-                defaultValue={role}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="supplier">Supplier</SelectItem>
-                  <SelectItem value="customer">Customer</SelectItem>
-                  <SelectItem value="both">Both</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.role && (
-                <p className="text-sm text-red-500">{errors.role.message}</p>
+            />
+            {/* Restore contact fields */}
+            <FormField
+              control={form.control}
+              name="contactName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Contact Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter contact name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="contactName">Contact Person</Label>
-              <Input
-                id="contactName"
-                placeholder="Enter contact person"
-                {...register("contactName", { required: "Contact name is required" })}
-              />
-              {errors.contactName && (
-                <p className="text-sm text-red-500">{errors.contactName.message}</p>
+            />
+            <FormField
+              control={form.control}
+              name="contactEmail"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      placeholder="Enter contact email"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="contactEmail">Contact Email</Label>
-              <Input
-                id="contactEmail"
-                type="email"
-                placeholder="Enter contact email"
-                {...register("contactEmail", { 
-                  required: "Contact email is required",
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: "Invalid email address"
-                  }
-                })}
-              />
-              {errors.contactEmail && (
-                <p className="text-sm text-red-500">{errors.contactEmail.message}</p>
+            />
+            <FormField
+              control={form.control}
+              name="contactPhone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Phone</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter contact phone" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="contactPhone">Contact Phone (Optional)</Label>
-              <Input
-                id="contactPhone"
-                placeholder="Enter contact phone"
-                {...register("contactPhone")}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit">Add Supplier</Button>
-          </DialogFooter>
-        </form>
+            />
+            <FormField
+              control={form.control}
+              name="relationshipType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Relationship Type</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select relationship type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="direct">Direct</SelectItem>
+                      <SelectItem value="indirect">Indirect</SelectItem>
+                      <SelectItem value="potential">Potential</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? "Adding..." : "Add Supplier"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

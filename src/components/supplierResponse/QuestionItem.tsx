@@ -1,6 +1,6 @@
-
 import React, { useEffect, useState } from "react";
-import { Question, SupplierResponse, Comment } from "@/types";
+import { Question, SupplierResponse, Comment } from "@/types"; // Revert to alias
+import { DBQuestion } from "@/hooks/use-question-bank";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +32,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface QuestionItemProps {
-  question: Question;
+  question: Question | DBQuestion;
   answer?: SupplierResponse;
   productSheetId: string;
   onAnswerUpdate: (value: string | boolean | number | string[]) => void;
@@ -47,9 +47,9 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   onAddComment
 }) => {
   const [commentsOpen, setCommentsOpen] = React.useState(false);
-  const [debouncedValue, setDebouncedValue] = useState<any>(answer?.value);
+  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined); // Add type assertion
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
-  
+
   const getSchema = () => {
     switch (question.type) {
       case "text":
@@ -58,9 +58,9 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
         return z.number().optional();
       case "boolean":
         return z.boolean().optional();
-      case "select":
+      case "single_select": // Use correct enum value
         return z.string().optional();
-      case "multi-select":
+      case "multi_select": // Use correct enum value
         return z.array(z.string()).optional();
       case "file":
         return z.string().optional();
@@ -76,14 +76,14 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
-      answer: answer?.value,
+      answer: answer?.value as string | number | boolean | string[] | undefined,
     },
   });
-  
+
   useEffect(() => {
     if (answer?.value !== undefined) {
-      form.setValue("answer", answer.value);
-      setDebouncedValue(answer.value);
+      form.setValue("answer", answer.value as string | number | boolean | string[] | undefined);
+      setDebouncedValue(answer.value as string | number | boolean | string[] | undefined);
     }
   }, [answer, form]);
   
@@ -92,10 +92,10 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       onAnswerUpdate(data.answer);
     }
   };
-  
-  const handleValueChange = (value: any) => {
+
+  const handleValueChange = (value: string | number | boolean | string[]) => {
     form.setValue("answer", value);
-    
+
     // Clear any existing timeout
     if (saveTimeout) {
       clearTimeout(saveTimeout);
@@ -125,12 +125,12 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   const hasFlags = answer?.flags && answer.flags.length > 0;
   
   // Get the most recent flag
-  const latestFlag = hasFlags 
-    ? answer?.flags?.reduce((latest, current) => 
-        latest.createdAt > current.createdAt ? latest : current
-      ) 
+  const latestFlag = hasFlags
+    ? answer?.flags?.reduce((latest, current) =>
+        latest.created_at! > current.created_at! ? latest : current // Use created_at and add non-null assertion
+      )
     : null;
-  
+
   // Render the appropriate input based on question type
   const renderFormControl = () => {
     switch (question.type) {
@@ -169,11 +169,11 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             </label>
           </div>
         );
-      
-      case "select":
+
+      case "single_select": // Use correct enum value
         return (
-          <Select 
-            value={form.watch("answer") as string || ""} 
+          <Select
+            value={form.watch("answer") as string || ""}
             onValueChange={handleValueChange}
           >
             <SelectTrigger>
@@ -188,8 +188,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             </SelectContent>
           </Select>
         );
-      
-      case "multi-select":
+
+      case "multi_select": // This one was already correct
         return (
           <div className="space-y-2">
             {question.options?.map((option) => (

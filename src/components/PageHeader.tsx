@@ -33,9 +33,10 @@ export const PageHeaderAction: React.FC<{
     | "secondary"
     | "ghost"
     | "link";
-}> = ({ label, icon, onClick, variant = "default" }) => {
+  disabled?: boolean; // Add disabled prop
+}> = ({ label, icon, onClick, variant = "default", disabled }) => { // Destructure disabled
   return (
-    <Button variant={variant} onClick={onClick} className="flex items-center">
+    <Button variant={variant} onClick={onClick} className="flex items-center" disabled={disabled}> {/* Pass disabled to Button */}
       {icon && <span className="mr-2">{icon}</span>}
       {label}
     </Button>
