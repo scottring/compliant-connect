@@ -34,12 +34,15 @@ interface PirDisplayData {
 interface PirRequestRecord {
   id: string;
   customer_id: string;
+  supplier_company_id: string; // Need this for supplier info
   updated_at: string;
   status: PIRStatus;
+  suggested_product_name: string | null; // Fetch suggested name
   products: { // products might be an object or null
     name: string;
-    supplier_id: string;
-    companies: { name: string; } | null; // companies might be an object or null
+  } | null;
+  supplier: { // Fetch supplier directly
+      name: string;
   } | null;
 }
 
@@ -66,13 +69,14 @@ const SupplierProducts = () => {
       .select(`
         id,
         customer_id,
+        supplier_company_id, 
         updated_at,
         status,
+        suggested_product_name, 
         products (
-          name,
-          supplier_id,
-          companies ( name )
-        )
+          name 
+        ),
+        supplier:companies!supplier_company_id ( name ) 
       `)
       .eq('customer_id', customerId);
 
@@ -85,14 +89,14 @@ const SupplierProducts = () => {
     // Transform data, safely handling potential arrays/nulls
     const transformedPirs: PirDisplayData[] = pirData.map((pir: any) => { // Use any initially for flexibility
         // Safely access nested properties
-        const product = pir.products; // products might be null or object
-        const company = product?.companies; // companies might be null or object
+        const productName = pir.suggested_product_name ?? pir.products?.name ?? 'Unknown Product';
+        const supplierName = pir.supplier?.name ?? 'Unknown Supplier';
 
         return {
             id: pir.id,
-            productName: product?.name ?? 'Unknown Product',
-            supplierId: product?.supplier_id ?? 'unknown',
-            supplierName: company?.name ?? 'Unknown Supplier',
+            productName: productName,
+            supplierId: pir.supplier_company_id ?? 'unknown', // Use direct supplier ID
+            supplierName: supplierName,
             customerId: pir.customer_id,
             updatedAt: pir.updated_at,
             status: pir.status || 'draft'

@@ -89,7 +89,11 @@ const SupplierDetail = () => {
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
           .select(`
-              id, status
+              id, customer_id, supplier_company_id, product_id, suggested_product_name, updated_at, status,
+              products ( name ),
+              customer:companies!customer_id ( name ), 
+              pir_tags!inner ( tags ( * ) )
+              /* Removed supplier_responses count for now */
           `)
           // Reverted filter to use direct column
            .eq('supplier_company_id', id); 
@@ -103,7 +107,8 @@ const SupplierDetail = () => {
           const responseCount = (pir.supplier_responses || []).length;
           return {
               id: pir.id,
-              productName: pir.products?.name ?? 'N/A',
+              // Use suggested name if product is null, otherwise use product name
+              productName: pir.suggested_product_name ?? pir.products?.name ?? 'N/A', 
               supplierId: pir.supplier_company_id,
               supplierName: supplier?.name, // Use supplier name from the other query
               customerId: pir.customer_id,

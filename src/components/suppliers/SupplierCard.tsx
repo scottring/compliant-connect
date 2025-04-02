@@ -20,9 +20,10 @@ export const SupplierCard = ({ supplier, onClick }: SupplierCardProps) => {
       <h3 className="text-lg font-semibold">{supplier.name}</h3>
       <div className="mt-2 text-sm text-gray-600">
         {/* Use camelCase based on Company type from src/types/auth.ts */}
-        <p>Contact: {supplier.contactName || 'N/A'}</p>
-        <p>Email: {supplier.contactEmail || 'N/A'}</p>
-        <p>Phone: {supplier.contactPhone || 'N/A'}</p>
+        {/* Corrected to use snake_case from Company type */}
+        <p>Contact: {supplier.contact_name || 'N/A'}</p>
+        <p>Email: {supplier.contact_email || 'N/A'}</p>
+        <p>Phone: {supplier.contact_phone || 'N/A'}</p>
         {supplier.relationship && (
           <div className="mt-2">
             <p>Status: {supplier.relationship.status}</p>

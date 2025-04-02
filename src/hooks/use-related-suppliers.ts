@@ -8,6 +8,7 @@ type Company = Database['public']['Tables']['companies']['Row'];
 // Function to fetch suppliers related to a customer company
 const fetchRelatedSuppliers = async (customerId: string): Promise<Company[]> => {
   if (!customerId) return [];
+  console.log('[DEBUG] fetchRelatedSuppliers called with customerId:', customerId);
 
   // 1. Find approved supplier relationships for the customer
   const { data: relationships, error: relError } = await supabase
@@ -17,11 +18,13 @@ const fetchRelatedSuppliers = async (customerId: string): Promise<Company[]> => 
     // .eq('status', 'approved'); // REMOVED: Fetch regardless of status for selection purposes
 
   if (relError) {
-    console.error('Error fetching company relationships:', relError);
+    console.error('[DEBUG] Error fetching company relationships:', relError);
     throw new Error(`Failed to load supplier relationships: ${relError.message}`);
   }
+  console.log('[DEBUG] Fetched relationships:', relationships);
 
   if (!relationships || relationships.length === 0) {
+    console.log('[DEBUG] No relationships found for customerId:', customerId);
     return []; // No approved suppliers found
   }
 
@@ -34,9 +37,10 @@ const fetchRelatedSuppliers = async (customerId: string): Promise<Company[]> => 
     .in('id', supplierIds);
 
   if (compError) {
-    console.error('Error fetching supplier companies:', compError);
+    console.error('[DEBUG] Error fetching supplier companies:', compError);
     throw new Error(`Failed to load supplier details: ${compError.message}`);
   }
+  console.log('[DEBUG] Fetched suppliersData:', suppliersData);
 
   return (suppliersData || []) as Company[];
 };

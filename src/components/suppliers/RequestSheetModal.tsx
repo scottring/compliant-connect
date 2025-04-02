@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Company as AuthCompany, RelationshipType } from "@/types/auth";
 import { Tag as AppTag } from "@/types";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -17,8 +16,8 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Mail, Plus, Package, Building, SendHorizontal, Check, ChevronsUpDown } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Mail, Package, Building, SendHorizontal, Check, ChevronsUpDown } from "lucide-react";
+import { Input } from "@/components/ui/input"; // Re-added Input for Combobox
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -66,56 +65,86 @@ const useLoggingTags = () => {
     return tagsData;
 };
 
-type Company = ReturnType<typeof useRelatedSuppliers>['data'] extends (infer U)[] | undefined ? U : never;
-
+// Updated formSchema to require productName
 const formSchema = z.object({
   supplierId: z.string().min(1, "Please select a supplier"),
-  productName: z.string().optional(),
+  productName: z.string().min(1, "Please select or enter a product name"), // Updated message
   note: z.string().optional(),
 });
 type FormValues = z.infer<typeof formSchema>;
 
+// Input type for mutation - productName can be existing or new suggestion
 type CreatePIRInput = {
     productName: string;
     supplierId: string;
     customerId: string;
-    note?: string;
     tagIds: string[];
-    isNewProduct: boolean;
+    note?: string;
 };
-type CreatePIRResult = { pirId: string; productId: string };
+// Result type - productId can be null if it was a suggestion
+type CreatePIRResult = { pirId: string; productId: string | null };
 
 const useCreatePIRMutation = (
     queryClient: ReturnType<typeof useQueryClient>
 ): UseMutationResult<CreatePIRResult, Error, CreatePIRInput> => {
     return useMutation<CreatePIRResult, Error, CreatePIRInput>({
         mutationFn: async (input) => {
-            let productId: string | null = null;
-            if (input.isNewProduct) {
-                const { data: newProductData, error: productError } = await supabase
-                    .from('products')
-                    .insert({ name: input.productName, supplier_id: input.supplierId })
-                    .select('id').single();
-                if (productError) throw new Error(`Failed to create product: ${productError.message}`);
-                productId = newProductData.id;
-            } else {
-                const { data: existingProduct, error: fetchError } = await supabase
-                    .from('products').select('id').eq('name', input.productName).eq('supplier_id', input.supplierId).maybeSingle();
-                if (fetchError) throw new Error(`Failed to find existing product: ${fetchError.message}`);
-                if (!existingProduct) throw new Error(`Selected product "${input.productName}" not found.`);
-                productId = existingProduct.id;
+            // Check if product exists for this supplier
+            const { data: existingProduct, error: fetchError } = await supabase
+                .from('products').select('id').eq('name', input.productName).eq('supplier_id', input.supplierId).maybeSingle();
+
+            if (fetchError) {
+                // Log the specific error but try to proceed if possible, maybe it's just a lookup issue
+                console.error(`Error checking for existing product (continuing PIR creation): ${fetchError.message}`);
+                // Consider if you want to throw here or allow PIR creation with suggested name
+                 throw new Error(`Failed to verify existing product: ${fetchError.message}`);
             }
-            if (!productId) throw new Error("Could not determine product ID.");
+
+            const productId = existingProduct?.id || null;
+            const suggestedProductName = !existingProduct ? input.productName : null;
+
+            // Prepare PIR data
+            const pirInsertData: {
+                customer_id: string;
+                status: 'draft';
+                product_id: string | null;
+                suggested_product_name?: string | null;
+            } = {
+                customer_id: input.customerId,
+                status: 'draft',
+                product_id: productId, // Will be null if product doesn't exist
+                suggested_product_name: suggestedProductName, // Will be null if product exists
+            };
+
+             // Ensure product_id is explicitly null if suggesting a new product
+             if (suggestedProductName) {
+                 pirInsertData.product_id = null;
+             } else if (!productId) {
+                 // This case should ideally not happen if fetchError is handled, but as a fallback:
+                 console.warn("Attempting to create PIR without a valid existing product ID and no suggested name.");
+                 // Decide how to handle this - throw error or allow creation with null product_id?
+                 // For now, let's allow it but log a warning.
+                 pirInsertData.product_id = null;
+                 pirInsertData.suggested_product_name = input.productName; // Use input as suggestion
+             }
+
+
+            // Insert PIR Request
             const { data: pirRequestData, error: pirRequestError } = await supabase
-                .from('pir_requests').insert({ product_id: productId, customer_id: input.customerId, status: 'draft' }).select('id').single();
+                .from('pir_requests').insert(pirInsertData).select('id').single();
+
             if (pirRequestError) throw new Error(`Failed to create PIR request: ${pirRequestError.message}`);
             const pirId = pirRequestData.id;
+
+            // Link Tags
             if (input.tagIds.length > 0) {
                 const tagLinks = input.tagIds.map(tagId => ({ pir_id: pirId, tag_id: tagId }));
                 const { error: pirTagsError } = await supabase.from('pir_tags').insert(tagLinks);
                 if (pirTagsError) console.warn(`PIR created (ID: ${pirId}), but failed to link tags: ${pirTagsError.message}`);
             }
-            return { pirId, productId };
+
+            console.log('PIR Creation Result:', { pirId, productId });
+            return { pirId, productId }; // Return null productId if it was a suggestion
          },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
@@ -125,7 +154,7 @@ const useCreatePIRMutation = (
         onError: (error) => {
             console.error("Error submitting PIR:", error);
             toast.error(`Failed to submit PIR: ${error.message}`);
-         },
+        },
     });
 };
 
@@ -143,11 +172,9 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [addingNewProduct, setAddingNewProduct] = useState(true);
-  const [newProductName, setNewProductName] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(supplierId || "");
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(supplierName || "");
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [productPopoverOpen, setProductPopoverOpen] = useState(false); // Renamed state for clarity
 
   const { data: productSheets, isLoading: isLoadingProductSheets, error: errorProductSheets } = useFetchSupplierProducts(selectedSupplierId);
 
@@ -155,11 +182,12 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       console.log('[DEBUG] RequestSheetModal mounted/props updated:', { open, supplierId, supplierName });
   }, [open, supplierId, supplierName]);
 
+  // Memoize products for Combobox list
   const supplierProducts = React.useMemo(() =>
     (productSheets || [])
       .map(product => ({
-        value: product.name.toLowerCase(),
-        label: product.name,
+        value: product.name.toLowerCase(), // Value for searching/filtering
+        label: product.name, // Label for display
         id: product.id
       }))
   , [productSheets]);
@@ -178,9 +206,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     if (supplierName) {
       setSelectedSupplierName(supplierName);
     }
-    if (!supplierId) {
-      setAddingNewProduct(true);
-    }
     if (supplierId && relatedSuppliers && !relatedSuppliers.find(s => s.id === supplierId)) {
         console.warn(`[DEBUG] Provided supplierId ${supplierId} not found in related suppliers. Clearing selection.`);
         setSelectedSupplierId("");
@@ -189,21 +214,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     }
   }, [supplierId, supplierName, form, relatedSuppliers]);
 
-  useEffect(() => {
-      if (selectedSupplierId && !isLoadingProductSheets) {
-          console.log('[DEBUG] useEffect [selectedSupplierId, productSheets, isLoadingProductSheets]: Resetting product mode', { selectedSupplierId, productSheets, isLoadingProductSheets, errorProductSheets });
-          const defaultToAdd = !productSheets || productSheets.length === 0;
-          setAddingNewProduct(defaultToAdd);
-          setNewProductName("");
-          form.setValue("productName", "");
-      }
-  }, [selectedSupplierId, productSheets, isLoadingProductSheets, form]);
 
   useEffect(() => {
     if (selectedSupplierId !== form.getValues("supplierId")) {
        console.log('[DEBUG] useEffect [selectedSupplierId, form]: Syncing form supplierId', { selectedSupplierId });
        form.setValue("supplierId", selectedSupplierId);
     }
+     // Reset product name when supplier changes
+     form.resetField("productName"); // Use resetField for better state handling
   }, [selectedSupplierId, form]);
 
   const sendEmailNotification = async (supplierEmail: string | null | undefined, productName: string) => {
@@ -229,8 +247,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const createPIRMutation = useCreatePIRMutation(queryClient);
 
   const onSubmit = async (values: FormValues) => {
-    const finalProductName = addingNewProduct ? newProductName.trim() : values.productName;
-    if (!finalProductName) { toast.error("Please enter or select a product name."); return; }
+    if (!values.productName) { toast.error("Please select or enter a product name."); return; }
     if (selectedTags.length === 0) { toast.error("Please select at least one tag."); return; }
     if (!values.supplierId) { toast.error("Please select a supplier."); return; }
     if (!currentCompany?.id) { toast.error("Current company context missing."); return; }
@@ -239,23 +256,21 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
     if (!supplier) { toast.error("Invalid supplier selected"); return; }
 
     try {
-        await createPIRMutation.mutateAsync({
-            productName: finalProductName,
+        const result = await createPIRMutation.mutateAsync({
+            productName: values.productName, // Can be existing or new suggestion
             supplierId: values.supplierId,
             customerId: currentCompany.id,
             note: values.note,
             tagIds: selectedTags,
-            isNewProduct: addingNewProduct,
         });
 
+        // Send email notification regardless of whether product was existing or suggested
         if (supplier.contact_email) {
-            await sendEmailNotification(supplier.contact_email, finalProductName);
+            await sendEmailNotification(supplier.contact_email, values.productName);
         }
 
         form.reset({ supplierId: '', productName: '', note: '' });
         setSelectedTags([]);
-        setAddingNewProduct(true);
-        setNewProductName("");
         setSelectedSupplierId("");
         setSelectedSupplierName("");
         onOpenChange(false);
@@ -270,44 +285,26 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
         : [...prev, tagId]
     );
    };
-  const toggleAddNewProduct = () => {
-    setAddingNewProduct(prev => !prev);
-    if (addingNewProduct) { form.setValue("productName", ""); }
-    else { setNewProductName(""); }
-   };
+
   const handleSupplierChange = (newSupplierId: string) => {
     if (newSupplierId === "create-new") { handleCreateNewSupplier(); return; }
     const supplier = relatedSuppliers?.find(c => c.id === newSupplierId);
     setSelectedSupplierId(newSupplierId);
     setSelectedSupplierName(supplier?.name || "");
     form.setValue("supplierId", newSupplierId);
+    form.resetField("productName"); // Reset product when supplier changes
    };
 
   const isFormLoading = isLoadingCurrentCompany || isLoadingSuppliers || isLoadingTags || createPIRMutation.isPending || isSendingEmail || isLoadingProductSheets;
 
-  console.log('[DEBUG] RequestSheetModal State Check:', {
-    open,
-    propSupplierId: supplierId,
-    selectedSupplierId,
-    currentCompanyId: currentCompany?.id,
-    isLoadingCurrentCompany,
-    isLoadingSuppliers,
-    relatedSuppliersCount: relatedSuppliers?.length,
-    isLoadingProductSheets,
-    productSheetsCount: productSheets?.length,
-    isLoadingTags,
-    appTagsCount: appTags?.length,
-    addingNewProduct,
-    isFormLoading,
-  });
+  // Simplified debug logs
+  console.log('[DEBUG] Rendering RequestSheetModal State:', { isFormLoading, selectedSupplierId, isLoadingProductSheets, isLoadingTags });
 
-  console.log('[DEBUG] Rendering RequestSheetModal', { isFormLoading, selectedSupplierId, addingNewProduct, isLoadingProductSheets, errorProductSheets, isLoadingSuppliers, errorSuppliers, isLoadingTags });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Create Product Information Request (PIR)</DialogTitle>
-          {/* Replaced DialogDescription with div for valid nesting */}
           <div className="text-sm text-muted-foreground">
             Request product information from your suppliers.
             {selectedSupplierId && relatedSuppliers?.find(c => c.id === selectedSupplierId)?.contact_email && (
@@ -321,8 +318,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Form fields still commented out */}
-            {/* Uncommenting Supplier Select field (without FormControl) */}
+            {/* Supplier Select field (without FormControl) */}
             <FormField
               control={form.control}
               name="supplierId"
@@ -331,8 +327,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                   <FormLabel>Select Supplier <span className="text-destructive">*</span></FormLabel>
                   {/* <FormControl> */} {/* Keep FormControl commented out */}
                     <Select
-                      // Pass RHF field props directly, ensure custom handler also runs
-                      onValueChange={(value) => { 
+                      onValueChange={(value) => {
                         field.onChange(value); // RHF's change handler
                         handleSupplierChange(value);
                       }}
@@ -340,7 +335,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
                       value={field.value} // Keep value prop for Select state
                     >
                       <SelectTrigger className="pl-10">
-                        {/* Removed icon div, keeping only SelectValue */}
+                        <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <SelectValue placeholder={isLoadingSuppliers ? "Loading suppliers..." : ((relatedSuppliers?.length ?? 0) === 0 ? "No suppliers found" : "Select a supplier")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -358,14 +353,118 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
               )}
             />
 
-            {/* Uncommenting Note field */}
-            {selectedSupplierId && ( /* Need conditional rendering based on supplier selection */
+            {/* Product Name Combobox */}
+            {selectedSupplierId && (
+              <>
+                {isLoadingProductSheets ? (
+                    <div className="text-sm text-muted-foreground p-4">Loading products...</div>
+                ) : (
+                   <FormField
+                     control={form.control}
+                     name="productName"
+                     render={({ field }) => (
+                       <FormItem className="flex flex-col">
+                         <FormLabel>Select or Enter Product Name <span className="text-destructive">*</span></FormLabel>
+                         {/* <FormControl> */} {/* Keep FormControl commented out */}
+                          <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={productPopoverOpen}
+                                  className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
+                                >
+                                  <span className="flex items-center">
+                                    <Package className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                    {field.value || "Select or type product..."}
+                                  </span>
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                              <Command filter={(value, search) => {
+                                  // Allow filtering existing items OR showing the typed value if no match
+                                  const existingItem = supplierProducts.find(p => p.value === value);
+                                  if (existingItem && existingItem.label.toLowerCase().includes(search.toLowerCase())) return 1;
+                                  return 0;
+                                }}>
+                                <CommandInput
+                                    placeholder="Search product or type new..."
+                                    value={field.value} // Control input value
+                                    onValueChange={field.onChange} // Update form state on type
+                                />
+                                <CommandList>
+                                  <CommandEmpty>
+                                      {/* Show typed value if not empty, otherwise show 'No product found' */}
+                                      {field.value ? `Use "${field.value}"` : "No product found."}
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    {supplierProducts.map((product) => (
+                                      <CommandItem
+                                        key={product.id}
+                                        value={product.label} // Use label for matching CommandInput value
+                                        onSelect={(currentValue) => {
+                                          form.setValue("productName", currentValue === field.value ? "" : currentValue); // Set form value
+                                          setProductPopoverOpen(false);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            field.value === product.label ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {product.label}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                   {/* Option to explicitly use the typed value if it doesn't match existing */}
+                                   {field.value && !supplierProducts.some(p => p.label.toLowerCase() === field.value.toLowerCase()) && (
+                                        <CommandItem
+                                            key="new-product-suggestion"
+                                            value={field.value}
+                                            onSelect={() => {
+                                                form.setValue("productName", field.value);
+                                                setProductPopoverOpen(false);
+                                            }}
+                                            >
+                                            <span className="italic ml-6">Use "{field.value}" (New)</span>
+                                        </CommandItem>
+                                    )}
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                         {/* </FormControl> */}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                {/* Tags Field */}
+                <FormItem>
+                  <FormLabel>Information Categories (Tags) <span className="text-destructive">*</span></FormLabel>
+                  <div>
+                    <div className="flex flex-wrap gap-2 p-4 border rounded-md min-h-[60px]">
+                      {isLoadingTags ? ( <div className="text-sm text-muted-foreground">Loading tags...</div> )
+                       : errorTags ? ( <div className="text-sm text-red-500">Error loading tags</div> )
+                       : appTags.length > 0 ? (
+                        appTags.map((tag) => ( <TagBadge key={tag.id} tag={tag} selected={selectedTags.includes(tag.id)} onClick={() => toggleTag(tag.id)} /> ))
+                       ) : ( <div className="text-sm text-muted-foreground italic">No tags available</div> )}
+                    </div>
+                    {selectedTags.length === 0 && ( <p className="text-sm text-destructive mt-1">At least one category is required</p> )}
+                  </div>
+                </FormItem>
+
+                {/* Note Field */}
               <FormField control={form.control} name="note" render={({ field }) => ( <FormItem> <FormLabel>Note (optional)</FormLabel> {/* <FormControl> */} <Textarea placeholder="Add an optional note..." {...field} /> {/* </FormControl> */} <FormMessage /> </FormItem> )} />
+              </>
             )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isFormLoading}> Cancel </Button>
-              <Button type="submit" disabled={isFormLoading || !selectedSupplierId}>
+              <Button type="submit" disabled={isFormLoading || !selectedSupplierId || !form.watch('productName')}> {/* Disable submit if no product selected */}
                 {createPIRMutation.isPending ? "Sending..." : "Send Request"}
                 <SendHorizontal className="ml-2 h-4 w-4" />
               </Button>

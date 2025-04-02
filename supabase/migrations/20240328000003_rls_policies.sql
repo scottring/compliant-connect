@@ -196,14 +196,17 @@ CREATE POLICY "Customers can view approved answers from their suppliers"
 -- PIR Policies
 CREATE POLICY "Users can view PIRs involving their company"
     ON public.pir_requests
-    FOR SELECT
-    USING (
+    FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM public.company_users cu
             WHERE cu.user_id = auth.uid()
             AND (
                 cu.company_id = pir_requests.customer_id
-                OR cu.company_id = (
+                OR 
+                -- Check direct supplier ID on PIR request OR via product link
+                cu.company_id = pir_requests.supplier_company_id 
+                OR 
+                cu.company_id = (
                     SELECT supplier_id FROM public.products 
                     WHERE id = pir_requests.product_id
                 )
