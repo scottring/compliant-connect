@@ -153,6 +153,7 @@ export type Database = {
           id: string
           product_id: string | null
           status: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name: string | null
           supplier_company_id: string | null
           title: string | null
           updated_at: string | null
@@ -165,6 +166,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name?: string | null
           supplier_company_id?: string | null
           title?: string | null
           updated_at?: string | null
@@ -177,6 +179,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name?: string | null
           supplier_company_id?: string | null
           title?: string | null
           updated_at?: string | null
@@ -836,6 +839,9 @@ export type Database = {
         | "flagged"
         | "approved"
         | "rejected"
+        | "pending_supplier"
+        | "pending_review"
+        | "accepted"
       question_type:
         | "text"
         | "number"
@@ -972,6 +978,9 @@ export const Constants = {
         "flagged",
         "approved",
         "rejected",
+        "pending_supplier",
+        "pending_review",
+        "accepted",
       ],
       question_type: [
         "text",

@@ -93,12 +93,12 @@ const SupplierDetail = () => {
           .select(`
               id, customer_id, supplier_company_id, product_id, suggested_product_name, updated_at, status,
               products ( name ),
-              customer:companies!customer_id ( name ), 
+              customer:companies!customer_id ( name ),
               pir_tags!inner ( tags ( * ) )
               /* Removed supplier_responses count for now */
            `)
            // Reverted filter to use direct column
-           .eq('supplier_company_id', id); 
+           .eq('supplier_company_id', id);
 
       if (pirError) throw new Error(`Failed to load PIRs for supplier: ${pirError.message}`);
       console.log(`[DEBUG] fetchSupplierPirs: Raw data received for supplier ${id}:`, pirData); // Log raw data
@@ -111,7 +111,7 @@ const SupplierDetail = () => {
           return {
               id: pir.id,
               // Use suggested name if product is null, otherwise use product name
-              productName: pir.suggested_product_name ?? pir.products?.name ?? 'N/A', 
+              productName: pir.suggested_product_name ?? pir.products?.name ?? 'N/A',
               supplierId: pir.supplier_company_id,
               supplierName: supplier?.name, // Use supplier name from the other query
               customerId: pir.customer_id,
@@ -150,15 +150,17 @@ const SupplierDetail = () => {
   const getStatusStyle = (status: PIRStatus) => { /* ... */
     // Use only statuses defined in the PIRStatus enum
     const statusColors: Record<PIRStatus, { bg: string; text: string }> = {
-      // pending: { bg: "bg-amber-100", text: "text-amber-800" }, // 'pending' is not in the enum
       in_review: { bg: "bg-blue-100", text: "text-blue-800" },
       approved: { bg: "bg-green-100", text: "text-green-800" },
+      accepted: { bg: "bg-green-100", text: "text-green-800" }, // Added accepted (same as approved)
       rejected: { bg: "bg-red-100", text: "text-red-800" },
       flagged: { bg: "bg-yellow-100", text: "text-yellow-800" }, // Added flagged
       submitted: { bg: "bg-purple-100", text: "text-purple-800" }, // Added submitted
+      pending_supplier: { bg: "bg-orange-100", text: "text-orange-800" }, // Added pending_supplier
+      pending_review: { bg: "bg-cyan-100", text: "text-cyan-800" }, // Added pending_review
       draft: { bg: "bg-gray-100", text: "text-gray-800" },
     };
-    return statusColors[status] || statusColors.draft;
+    return statusColors[status] || statusColors.draft; // Fallback to draft style
   };
   const getStatusLabel = (status: PIRStatus) => { /* ... */
     return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
