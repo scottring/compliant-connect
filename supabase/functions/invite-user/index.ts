@@ -27,8 +27,9 @@ serve(async (req: Request) => {
     });
 
     // Parse request body
-    const { email, invitingCompanyId, invitingUserId, supplierName, contactName } = await req.json();
-    console.log("Received invite request:", { email, invitingCompanyId, invitingUserId, supplierName, contactName });
+    // Destructure the new ID from the body
+    const { email, invitingCompanyId, invitingUserId, supplierName, contactName, invited_supplier_company_id } = await req.json();
+    console.log("Received invite request:", { email, invitingCompanyId, invitingUserId, supplierName, contactName, invited_supplier_company_id });
 
     // Basic validation
     if (!email) {
@@ -40,6 +41,7 @@ serve(async (req: Request) => {
     const userMetadata = {
       invited_by_user_id: invitingUserId,
       invited_to_company_id: invitingCompanyId,
+      invited_supplier_company_id: invited_supplier_company_id, // Store the supplier company ID
       invited_supplier_name: supplierName, // Store supplier name if needed later
       invited_contact_name: contactName, // Store contact name if needed later
       // Add any other relevant metadata
@@ -48,9 +50,11 @@ serve(async (req: Request) => {
     // Invite the user using the Admin API
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
-      { data: userMetadata } // Pass metadata here
-      // You can add redirectTo options here if needed:
-      // { redirectTo: 'https://your-app.com/complete-registration' }
+      {
+        data: userMetadata, // Pass metadata here
+        // Explicitly set redirectTo for local development testing
+        redirectTo: 'http://localhost:8080/invitation/confirm'
+      }
     );
 
     if (error) {

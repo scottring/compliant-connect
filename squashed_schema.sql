@@ -973,6 +973,11 @@ CREATE POLICY "Enable read access for all users" ON public.companies FOR SELECT 
 -- Add policy to allow authenticated users to insert companies
 CREATE POLICY "Allow authenticated users to insert companies" ON public.companies FOR INSERT TO authenticated WITH CHECK (true);
 
+-- Add permissive update/delete policies for companies (Refine Later)
+CREATE POLICY "Allow authenticated users to update companies" ON public.companies FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated users to delete companies" ON public.companies FOR DELETE TO authenticated USING (true);
+
+
 --
 -- Name: company_relationships Enable read access for all users; Type: POLICY; Schema: public; Owner: -
 --
@@ -994,6 +999,11 @@ CREATE POLICY "Allow users to insert relationships for their company" ON public.
     )
   );
 
+-- Add permissive update/delete policies for company_relationships (Refine Later)
+CREATE POLICY "Allow authenticated users to update company_relationships" ON public.company_relationships FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated users to delete company_relationships" ON public.company_relationships FOR DELETE TO authenticated USING (true);
+
+
 --
 -- Name: company_users Enable read access for all users; Type: POLICY; Schema: public; Owner: -
 --
@@ -1009,7 +1019,10 @@ CREATE POLICY "Enable read access for all users" ON public.company_users FOR SEL
 
 ALTER TABLE public.pir_requests ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.pir_requests FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.pir_requests;
+CREATE POLICY "Allow authenticated full access on pir_requests" ON public.pir_requests
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1018,7 +1031,10 @@ CREATE POLICY "Enable read access for all users" ON public.pir_requests FOR SELE
 
 ALTER TABLE public.pir_responses ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.pir_responses FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.pir_responses;
+CREATE POLICY "Allow authenticated full access on pir_responses" ON public.pir_responses
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1027,7 +1043,10 @@ CREATE POLICY "Enable read access for all users" ON public.pir_responses FOR SEL
 
 ALTER TABLE public.pir_tags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.pir_tags FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.pir_tags;
+CREATE POLICY "Allow authenticated full access on pir_tags" ON public.pir_tags
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1036,7 +1055,10 @@ CREATE POLICY "Enable read access for all users" ON public.pir_tags FOR SELECT U
 
 ALTER TABLE public.product_answer_history ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.product_answer_history FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.product_answer_history;
+CREATE POLICY "Allow authenticated full access on product_answer_history" ON public.product_answer_history
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1045,7 +1067,10 @@ CREATE POLICY "Enable read access for all users" ON public.product_answer_histor
 
 ALTER TABLE public.product_answers ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.product_answers FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.product_answers;
+CREATE POLICY "Allow authenticated full access on product_answers" ON public.product_answers
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1054,7 +1079,10 @@ CREATE POLICY "Enable read access for all users" ON public.product_answers FOR S
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.products FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.products;
+CREATE POLICY "Allow authenticated full access on products" ON public.products
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1063,7 +1091,12 @@ CREATE POLICY "Enable read access for all users" ON public.products FOR SELECT U
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT USING (true);
+-- Keep existing specific policies for profiles, but add permissive DELETE
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
+CREATE POLICY "Profiles are viewable by users who created them." ON public.profiles FOR SELECT USING ((auth.uid() = id));
+CREATE POLICY "Users can insert their own profile." ON public.profiles FOR INSERT WITH CHECK ((auth.uid() = id));
+CREATE POLICY "Users can update own profile." ON public.profiles FOR UPDATE USING ((auth.uid() = id));
+CREATE POLICY "Allow authenticated users to delete profiles" ON public.profiles FOR DELETE TO authenticated USING (true); -- Added permissive delete
 
 
 --
@@ -1072,7 +1105,10 @@ CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT U
 
 ALTER TABLE public.question_tags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.question_tags FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.question_tags;
+CREATE POLICY "Allow authenticated full access on question_tags" ON public.question_tags
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1081,7 +1117,10 @@ CREATE POLICY "Enable read access for all users" ON public.question_tags FOR SEL
 
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.questions FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.questions;
+CREATE POLICY "Allow authenticated full access on questions" ON public.questions
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1090,7 +1129,10 @@ CREATE POLICY "Enable read access for all users" ON public.questions FOR SELECT 
 
 ALTER TABLE public.response_comments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.response_comments FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.response_comments;
+CREATE POLICY "Allow authenticated full access on response_comments" ON public.response_comments
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1099,7 +1141,10 @@ CREATE POLICY "Enable read access for all users" ON public.response_comments FOR
 
 ALTER TABLE public.response_flags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.response_flags FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.response_flags;
+CREATE POLICY "Allow authenticated full access on response_flags" ON public.response_flags
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1110,6 +1155,13 @@ ALTER TABLE public.sections ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Enable read access for all users" ON public.sections FOR SELECT USING (true);
 
+-- Allow authenticated users to insert sections (Can be refined later based on roles)
+CREATE POLICY "Allow authenticated users to insert sections" ON public.sections FOR INSERT TO authenticated WITH CHECK (true);
+
+-- Add permissive update/delete policies for sections (Refine Later)
+CREATE POLICY "Allow authenticated users to update sections" ON public.sections FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated users to delete sections" ON public.sections FOR DELETE TO authenticated USING (true);
+
 
 --
 -- Name: subsections Enable read access for all users; Type: POLICY; Schema: public; Owner: -
@@ -1117,7 +1169,10 @@ CREATE POLICY "Enable read access for all users" ON public.sections FOR SELECT U
 
 ALTER TABLE public.subsections ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON public.subsections FOR SELECT USING (true);
+-- Replace basic SELECT with permissive ALL policy
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.subsections;
+CREATE POLICY "Allow authenticated full access on subsections" ON public.subsections
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1128,26 +1183,12 @@ ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Enable read access for all users" ON public.tags FOR SELECT USING (true);
 
+-- Allow authenticated users to insert tags
+CREATE POLICY "Allow authenticated users to insert tags" ON public.tags FOR INSERT TO authenticated WITH CHECK (true);
 
---
--- Name: profiles Profiles are viewable by users who created them.; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Profiles are viewable by users who created them." ON public.profiles FOR SELECT USING ((auth.uid() = id));
-
-
---
--- Name: profiles Users can insert their own profile.; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Users can insert their own profile." ON public.profiles FOR INSERT WITH CHECK ((auth.uid() = id));
-
-
---
--- Name: profiles Users can update own profile.; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Users can update own profile." ON public.profiles FOR UPDATE USING ((auth.uid() = id));
+-- Add permissive update/delete policies for tags (Refine Later)
+CREATE POLICY "Allow authenticated users to update tags" ON public.tags FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated users to delete tags" ON public.tags FOR DELETE TO authenticated USING (true);
 
 
 --

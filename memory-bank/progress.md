@@ -177,13 +177,13 @@
 *   [x] Create `invite-user` Edge Function.
 *   [x] Update `InviteSupplierModal` to call Edge Function.
 *   [x] Update `InviteSupplierModal` to create pending Company & Relationship records before invite.
-*   [ ] Deploy `invite-user` Edge Function.
-*   [ ] Configure Supabase Auth Redirect URLs.
-*   [ ] Implement Invite Confirmation Handling (post-acceptance logic).
+*   [x] Deploy `invite-user` Edge Function.
+*   [x] Configure Supabase Auth Redirect URLs.
+*   [ ] Implement Invite Confirmation Handling (post-acceptance logic). (Page created, logic needs testing/refinement)
 *   [ ] Test end-to-end invite flow.
 
 **2. Product Information Request (PIR) Flow**
-*   [ ] Verify PIR Creation/Display works correctly on `feature/user-invites-v2` (based on `main` schema).
+*   [x] Verify PIR Creation/Display works correctly on `feature/user-invites-v2` (based on `main` schema).
 *   [ ] Implement Supplier Notification (on PIR creation).
 *   [ ] Implement Customer Notification (on PIR submission).
 *   [ ] Test basic PIR flow & notifications.

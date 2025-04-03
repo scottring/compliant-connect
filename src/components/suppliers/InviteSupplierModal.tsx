@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query"; // Import useQueryClient
 import { supabase } from "@/integrations/supabase/client"; // Import Supabase client
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
 import { useCompanyData } from "@/hooks/use-company-data"; // Import useCompanyData
@@ -34,6 +35,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
   open,
   onOpenChange,
 }) => {
+  const queryClient = useQueryClient(); // Get query client instance
   const { user } = useAuth(); // Get current user
   const { currentCompany } = useCompanyData(); // Get current company
   const {
@@ -82,6 +84,11 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
         });
 
       if (relationshipError) {
+      // --- Invalidate supplier query cache on success ---
+      console.log("Invalidating suppliers query cache for company:", currentCompany.id);
+      await queryClient.invalidateQueries({ queryKey: ['suppliers', currentCompany.id] });
+      // --- End Invalidation ---
+
         // Attempt to clean up the created company if relationship fails
         console.error("Failed to create relationship, attempting to delete created company...");
         await supabase.from('companies').delete().eq('id', newSupplierCompany.id);
@@ -95,8 +102,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
         invitingUserId: user.id,
         supplierName: data.supplierName,
         contactName: data.contactName,
-        // Optionally pass the newly created supplier company ID in metadata
-        // invited_supplier_company_id: newSupplierCompany.id
+        invited_supplier_company_id: newSupplierCompany.id // Pass the created supplier ID
         // Note: data.note is not explicitly sent, but could be added to metadata if needed
       });
 
@@ -110,7 +116,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
             invitingUserId: user.id,
             supplierName: data.supplierName,
             contactName: data.contactName,
-            // invited_supplier_company_id: newSupplierCompany.id // Pass if needed by function
+            invited_supplier_company_id: newSupplierCompany.id // Pass the created supplier ID
           },
         }
       );
