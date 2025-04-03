@@ -75,9 +75,12 @@ const SupplierProducts = () => {
         suggested_product_name, 
         products (
           name 
-        ),
-        supplier:companies!supplier_company_id ( name ) 
-      `)
+        ) // Removed trailing comma
+       `)
+      // Filter by supplier_company_id instead of customer_id
+      // Assuming 'customerId' passed in actually represents the ID of the company
+      // whose suppliers' PIRs we want to view.
+      // Revert filter back to customer_id as supplier_company_id doesn't exist at this commit
       .eq('customer_id', customerId);
 
     if (pirError) {

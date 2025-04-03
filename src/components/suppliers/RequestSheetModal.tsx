@@ -104,17 +104,13 @@ const useCreatePIRMutation = (
             // Prepare PIR data
             const pirInsertData: {
                 customer_id: string;
-                supplier_company_id: string; // Ensure this is included
                 status: 'draft';
                 product_id: string | null;
-                suggested_product_name?: string | null;
                 // note?: string | null; // Note: This field doesn't exist in schema yet
             } = {
                 customer_id: input.customerId,
-                supplier_company_id: input.supplierId, // Set the supplier ID
                 status: 'draft',
                 product_id: productId, // Will be null if product doesn't exist
-                suggested_product_name: suggestedProductName, // Will be null if product exists
                 // note: input.note || null, // Removed note as column doesn't exist
             };
 
@@ -122,9 +118,11 @@ const useCreatePIRMutation = (
              if (suggestedProductName) {
                  pirInsertData.product_id = null;
              } else if (!productId) {
-                 console.warn("Attempting to create PIR without a valid existing product ID and no suggested name.");
-                 pirInsertData.product_id = null;
-                 pirInsertData.suggested_product_name = input.productName; 
+                 // If product doesn't exist and it wasn't explicitly a suggestion,
+                // log a warning but proceed without suggested_product_name.
+                 // The product_id will be null.
+                 console.warn("Creating PIR for a potentially new product without suggested_product_name column.");
+                pirInsertData.product_id = null; 
              }
 
             console.log('[DEBUG] Data for pir_requests insert:', pirInsertData); // Log data before insert
