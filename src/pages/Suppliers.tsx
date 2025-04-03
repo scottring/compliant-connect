@@ -242,32 +242,7 @@ const Suppliers = () => {
           ? `Viewing as ${currentCompany.name}`
           : 'Select a company'} // Updated subtitle
         actions={
-          <>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <PageHeaderAction
-                  label="Reset All Data"
-                  variant="destructive"
-                  icon={<Trash2 className="h-4 w-4" />}
-                />
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset all application data?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will delete all suppliers, product sheets, questions, tags, and other data.
-                    This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={resetAllData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Reset Data
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
+          <> {/* Keep fragment */}
             <PageHeaderAction
               label="Export Data"
               variant="outline"
@@ -276,13 +251,22 @@ const Suppliers = () => {
 
             {canManageSuppliers && (
               <PageHeaderAction
+                label="Invite Supplier" // Add Invite button
+                onClick={handleInviteSupplier}
+                icon={<UserPlus className="h-4 w-4" />}
+                disabled={isLoadingCompanies || !currentCompany} // Disable if loading or no company
+              />
+            )}
+            {/* Remove Add New Supplier button below */}
+            {/* {canManageSuppliers && (
+              <PageHeaderAction
                 label="Add New Supplier"
                 onClick={handleAddSupplier}
                 icon={<Plus className="h-4 w-4" />}
                 // Disable based on company loading OR if no company is selected
                 disabled={isLoadingCompanies || !currentCompany || addSupplierMutation.isPending}
               />
-            )}
+            )} */}
           </>
         }
       />
