@@ -73,11 +73,20 @@
     *   Performance optimization
     *   Basic polish
 
+<<<<<<< Updated upstream
 ### Implementation Timeline
 *   Continue implementing PIR workflow features (Response/Review)
 *   Finish role-based access control review/testing
 *   Complete testing of key features (PIR creation/display)
 *   Focus on stability and performance
+=======
+### 1. Authentication
+- Setting up Supabase Auth
+- Debugging "failed to fetch" and related errors during login/signup
+- Implementing user sessions
+- Role-based access control
+- Company relationship management
+>>>>>>> Stashed changes
 
 ### Known Issues
 1.  **High Priority**
@@ -113,6 +122,7 @@
 - [ ] Response submission functional
 - [ ] Critical features tested (especially refactored areas & PIR workflow)
 
+<<<<<<< Updated upstream
 ### Notes
 - Significant progress with question bank implementation using section/subsection organization
 - Fixed question-tag association issue using RPC functions
@@ -124,3 +134,44 @@
 - **Implemented product suggestion workflow for PIR creation.**
 - **Fixed multiple RLS policy issues related to PIRs and Tags.**
 - **Resolved data display issues on Supplier Detail, Supplier Products, and Supplier Card.**
+=======
+### 2. Testing
+- Unit tests
+- Integration tests
+- End-to-end testing
+- Performance testing
+
+### 3. Documentation
+- API documentation
+- User guides
+- Deployment guides
+- Security documentation
+
+## Known Issues
+
+### 1. Data Management
+- Company relationship filtering incomplete
+- Product filtering needs improvement
+- Answer history tracking not implemented
+
+### 2. User Interface
+- Toast notifications too frequent
+- Status updates need refinement
+- Some form validations missing
+
+### 3. Authentication
+- Role-based access not implemented
+- Session management incomplete
+- Security rules not defined
+- Persistent "failed to fetch" errors during authentication flow
+
+## Next Steps
+1. Complete authentication implementation
+2. Set up proper data relationships
+3. Implement backend integration
+4. Add missing validations
+5. Optimize user experience
+6. Add comprehensive testing
+7. Use MCP to verify database schema and data consistency across environments
+8. Use advanced MCP server to set up initial database schema 
+>>>>>>> Stashed changes

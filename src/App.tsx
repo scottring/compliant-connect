@@ -30,12 +30,18 @@ import Onboarding from "./pages/Onboarding";
 import { useIsMobile } from "./hooks/use-mobile";
 import { useState, useEffect } from "react";
 import UserSwitcher from "./components/UserSwitcher";
+<<<<<<< Updated upstream
 import AdminSettings from "@/pages/AdminSettings";
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/components/ui/use-toast'
+=======
+import { Skeleton } from "./components/ui/skeleton"; // Import Skeleton
+import { useAuth } from "./context/AuthContext";
+>>>>>>> Stashed changes
 
 // Simplified CheckCompany component
 const CheckCompany = () => {
+<<<<<<< Updated upstream
   const { user, loading: authLoading } = useAuth();
   const { userCompanies, isLoadingCompanies, errorCompanies } = useCompanyData();
   const location = useLocation();
@@ -53,6 +59,24 @@ const CheckCompany = () => {
   if (authLoading.auth || isLoadingCompanies) {
     console.log('CheckCompany: Loading...', { authLoading, isLoadingCompanies });
     return <div>Loading user data...</div>;
+=======
+  const { userCompanies, loading } = useAuth();
+  
+  // Wait until loading is done
+  if (loading) {
+    // Show a loading indicator, similar to ProtectedRoute
+    return (
+      <div className="flex flex-col gap-4 p-8">
+        <Skeleton className="h-6 w-full max-w-md" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+    );
+  }
+  
+  // If user has no companies, redirect to onboarding
+  if (userCompanies.length === 0) {
+    return <Navigate to="/onboarding" replace />;
+>>>>>>> Stashed changes
   }
 
   // If no user after loading, redirect to auth
