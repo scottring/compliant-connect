@@ -9,7 +9,6 @@ const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
   <>
-  <div>Main</div>
     <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>

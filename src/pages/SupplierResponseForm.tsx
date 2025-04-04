@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TagBadge from "@/components/tags/TagBadge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 // Import types from central location
-import { Tag, Company, Subsection, Section, SupplierResponse } from "@/types";
+import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/index"; // Use relative path
 // Import PIRRequest from pir.ts, but use Database types for enums and responses
 import { PIRRequest } from "@/types/pir";
 import { Database } from "@/types/supabase"; // Import generated types
@@ -58,55 +58,97 @@ const SupplierResponseForm = () => {
 
   // --- Fetch PIR Details Query ---
   const fetchPirDetails = async (id: string): Promise<PirDetails> => {
+      // Step 1: Fetch PIR Request and basic related data
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
           .select(`
               *,
               product:products (*),
               supplier:companies!pir_requests_supplier_company_id_fkey(*),
-              customer:companies!pir_requests_customer_id_fkey(*),
-              pir_tags!inner ( tags (*) ),
-              pir_responses ( * ),
-              pir_questions!inner ( questions ( *, subsection:subsections(*, section:sections(*)) ) )
+              customer:companies!pir_requests_customer_id_fkey(*)
           `)
           .eq('id', id)
           .single();
 
       if (pirError || !pirData) throw new Error(`Failed to fetch PIR details: ${pirError?.message ?? 'Not found'}`);
 
-      const tags = (pirData.pir_tags?.map((pt: any) => pt.tags).filter(Boolean).flat() || []) as Tag[];
-      const questions = (pirData.pir_questions?.map((pq: any) => {
-          const questionData = pq.questions as any;
-          if (!questionData) return null;
-          const subsection = questionData.subsection as any;
-          const section = subsection?.section as any;
-          return {
-              ...questionData,
-              tags: [],
-              subsection: subsection ? { ...subsection, order: subsection.order_index, section: section ? { ...section, order: section.order_index } : undefined } : undefined
-          };
-      }).filter(Boolean) || []) as (DBQuestion & { subsection?: Subsection & { section?: Section } })[];
+      // Step 2: Fetch PIR Tags
+      const { data: pirTagsData, error: pirTagsError } = await supabase
+          .from('pir_tags')
+          .select('tags (*)')
+          .eq('pir_id', id);
 
-      questions.sort((a, b) => {
-          const sectionOrderA = a.subsection?.section?.order || 0;
-          const sectionOrderB = b.subsection?.section?.order || 0;
-          if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB;
-          const subsectionOrderA = a.subsection?.order || 0;
-          const subsectionOrderB = b.subsection?.order || 0;
-          return subsectionOrderA - subsectionOrderB;
-      });
+      if (pirTagsError) console.error("Warning: Failed to fetch PIR tags:", pirTagsError.message); // Non-critical?
+      const pirTags = (pirTagsData?.map((pt: any) => pt.tags).filter(Boolean).flat() || []) as Tag[];
+      const pirTagIds = pirTags.map(t => t.id);
 
-      // Cast the main PIR data using generated Row type
+      // Step 3: Fetch Questions based on PIR Tags
+      let questions: (DBQuestion & { subsection?: Subsection & { section?: Section } })[] = [];
+      if (pirTagIds.length > 0) {
+          const { data: questionsData, error: questionsError } = await supabase
+              .from('questions')
+              .select(`
+                  *,
+                  subsection:subsections(*, section:sections(*)),
+                  question_tags!inner ( tags (*) )
+              `)
+              // Fetch questions whose tags intersection with pirTagIds is not empty
+              // This requires joining question_tags and filtering
+              // A simpler approach (though less efficient if many tags/questions)
+              // is to fetch questions linked to *any* of the PIR tags.
+              .in('id', (await supabase
+                  .from('question_tags')
+                  .select('question_id')
+                  .in('tag_id', pirTagIds)).data?.map(qt => qt.question_id) || []
+              );
+
+
+          if (questionsError) throw new Error(`Failed to fetch questions for PIR tags: ${questionsError.message}`);
+
+          // Process fetched questions to include tags
+          questions = (questionsData || []).map((q: any) => {
+              const subsection = q.subsection as any;
+              const section = subsection?.section as any;
+              const questionTags = (q.question_tags?.map((qt: any) => qt.tags).filter(Boolean).flat() || []) as Tag[];
+              return {
+                  ...q,
+                  tags: questionTags,
+                  subsection: subsection ? { ...subsection, order_index: subsection.order_index, section: section ? { ...section, order_index: section.order_index } : undefined } : undefined // Use order_index consistently
+              };
+          });
+
+          // Sort Questions
+          questions.sort((a, b) => {
+              const sectionOrderA = a.subsection?.section?.order_index || 0; // Use order_index
+              const sectionOrderB = b.subsection?.section?.order_index || 0; // Use order_index
+              if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB;
+              const subsectionOrderA = a.subsection?.order_index || 0; // Use order_index
+              const subsectionOrderB = b.subsection?.order_index || 0; // Use order_index
+              return subsectionOrderA - subsectionOrderB;
+          });
+      } else {
+          console.log("No tags found for this PIR, no questions will be fetched based on tags.");
+      }
+
+      // Step 4: Fetch existing Responses for this PIR (to populate answers)
+      const { data: responsesData, error: responsesError } = await supabase
+          .from('pir_responses')
+          .select('*')
+          .eq('pir_id', id);
+
+      if (responsesError) throw new Error(`Failed to fetch existing PIR responses: ${responsesError.message}`);
+
+
+      // Step 5: Combine data
       const safePirData = pirData as Database['public']['Tables']['pir_requests']['Row'];
-
       return {
           pir: safePirData,
           product: pirData.product as any,
           supplier: pirData.supplier as Company | null,
           customer: pirData.customer as Company | null,
-          tags: tags,
-          questions: questions,
-          responses: (pirData.pir_responses || []) as DBPIRResponse[],
+          tags: pirTags, // PIR-specific tags
+          questions: questions, // Questions fetched via PIR tags
+          responses: (responsesData || []) as DBPIRResponse[], // Existing responses
       };
   };
 
@@ -173,10 +215,47 @@ const SupplierResponseForm = () => {
   // --- End Derived State ---
 
 
-  // --- Event Handlers (Placeholders) ---
+  // --- Mutations ---
+  const updateAnswerMutation = useMutation({
+    mutationFn: async ({ questionId, value }: { questionId: string; value: any }) => {
+      if (!pirId) throw new Error("PIR ID is missing");
+
+      // Prepare data for upsert
+      const responseData = {
+        pir_id: pirId,
+        question_id: questionId,
+        answer: value,
+        status: 'draft', // Keep status as draft when saving individual answers
+      };
+
+      // Upsert the response based on pir_id and question_id
+      // Assumes a unique constraint exists on (pir_id, question_id)
+      const { error } = await supabase
+        .from('pir_responses')
+        .upsert(responseData, { onConflict: 'pir_id, question_id' }); // Adjust onConflict if needed
+
+      if (error) throw error;
+      return responseData; // Return data on success
+    },
+    onSuccess: (data, variables) => {
+      toast.success(`Answer saved for question ID: ${variables.questionId}`);
+      // Invalidate the query cache to refetch the latest data, ensuring type consistency
+      queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
+    },
+    onError: (error: Error, variables) => {
+      console.error("Error saving answer:", error);
+      toast.error(`Failed to save answer for question ID ${variables.questionId}: ${error.message}`);
+    },
+  });
+
+  // --- Event Handlers ---
   const handleSubmit = () => { toast.info("Submit functionality not fully implemented."); };
   const handleSaveAsDraft = () => { toast.info("Save as Draft functionality not fully implemented."); };
-  const handleAnswerUpdate = (questionId: string, value: any) => { toast.info(`Updating answer for Q:${questionId} - Not implemented.`); };
+  // Updated handler to use the mutation
+  const handleAnswerUpdate = (questionId: string, value: any) => {
+    console.log(`Updating answer for Q:${questionId} with value:`, value);
+    updateAnswerMutation.mutate({ questionId, value });
+  };
   const handleAddComment = (answerId: string, text: string) => { toast.info(`Adding comment to A:${answerId} - Not implemented.`); };
   // --- End Event Handlers ---
 
@@ -188,7 +267,7 @@ const SupplierResponseForm = () => {
       if (sectionId === "unsectioned") return "General Questions";
       const questionInSection = sheetQuestions.find(q => q.subsection?.section?.id === sectionId);
       const section = questionInSection?.subsection?.section;
-      return section ? `${section.order || '?'}. ${section.name}` : "Unknown Section";
+      return section ? `${section.order_index || '?'}. ${section.name}` : "Unknown Section"; // Use order_index
   };
   const getSubsectionName = (sectionId: string, subsectionId: string): string => {
       if (subsectionId === "unsubsectioned") return "General";
@@ -196,7 +275,7 @@ const SupplierResponseForm = () => {
       const subsection = questionInSubsection?.subsection;
       const section = subsection?.section;
       if (!section || !subsection) return "Unknown Subsection";
-      return `${section.order || '?'}.${subsection.order || '?'} ${subsection.name}`;
+      return `${section.order_index || '?'}.${subsection.order_index || '?'} ${subsection.name}`; // Use order_index
   };
 
   const answeredQuestions = Object.keys(answersMap).length;

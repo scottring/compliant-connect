@@ -1,5 +1,5 @@
 import React from "react";
-import { Tag } from "@/types";
+import { Tag } from "../../types/index"; // Use relative path
 import { cn } from "@/lib/utils";
 
 interface TagBadgeProps {
