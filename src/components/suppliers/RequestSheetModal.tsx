@@ -57,14 +57,6 @@ const useFetchSupplierProducts = (supplierId: string | undefined) => {
     });
 };
 
-const useLoggingTags = () => {
-    const tagsData = useTags();
-    useEffect(() => {
-        console.log('[DEBUG] useTags result:', tagsData);
-    }, [tagsData]);
-    return tagsData;
-};
-
 // Updated formSchema to require productName
 const formSchema = z.object({
   supplierId: z.string().min(1, "Please select a supplier"),
@@ -76,10 +68,13 @@ type FormValues = z.infer<typeof formSchema>;
 // Input type for mutation - productName can be existing or new suggestion
 type CreatePIRInput = {
     productName: string;
-    supplierId: string; // Added supplierId here explicitly if needed by caller
+    supplierId: string;
     customerId: string;
     tagIds: string[];
     note?: string;
+    // Add context needed for onSuccess notification
+    relatedSuppliers?: ReturnType<typeof useRelatedSuppliers>['data'];
+    currentCompany?: ReturnType<typeof useCompanyData>['currentCompany'];
 };
 // Result type - productId can be null if it was a suggestion
 type CreatePIRResult = { pirId: string; productId: string | null };
@@ -126,9 +121,6 @@ const useCreatePIRMutation = (
                  pirInsertData.product_id = null;
                  pirInsertData.suggested_product_name = input.productName; 
              }
-
-            console.log('[DEBUG] Data for pir_requests insert:', pirInsertData); // Log data before insert
-
             // Insert PIR Request
             const { data: pirRequestData, error: pirRequestError } = await supabase
                 .from('pir_requests').insert(pirInsertData).select('id').single();
@@ -146,11 +138,50 @@ const useCreatePIRMutation = (
             console.log('PIR Creation Result:', { pirId, productId });
             return { pirId, productId }; // Return null productId if it was a suggestion
          },
-        onSuccess: (data, variables) => { // Add 'variables' to access input
-            // Invalidate both generic and specific query keys
+        onSuccess: async (data, variables) => { // Make async to await function invoke
+            // Invalidate queries first
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
-            queryClient.invalidateQueries({ queryKey: ['supplierPirs', variables.supplierId] }); // Use specific key
+            queryClient.invalidateQueries({ queryKey: ['supplierPirs', variables.supplierId] });
             toast.success(`Product Information Request (PIR) created (ID: ${data.pirId})`);
+
+            // --- Send Email Notification via Edge Function ---
+            try {
+                // Fetch the newly created PIR record to pass to the function
+                // Ensure all fields needed by the edge function's getCompanyDetails/getProductName are selected
+                const { data: newPirRecord, error: fetchError } = await supabase
+                    .from('pir_requests')
+                    .select('*, products(name)') // Select needed fields + product name
+                    .eq('id', data.pirId)
+                    .single();
+
+                if (fetchError || !newPirRecord) {
+                    throw new Error(`Failed to fetch created PIR record: ${fetchError?.message || 'Not found'}`);
+                }
+
+                // Construct the payload expected by the 'send-email' function
+                const payload = {
+                    type: 'PIR_STATUS_UPDATE', // Trigger the status update logic
+                    record: newPirRecord, // Pass the full record
+                    old_record: null // No old record for creation
+                };
+
+                // Invoke the Edge Function
+                const { error: functionError } = await supabase.functions.invoke(
+                    'send-email', // Use the correct function name
+                    { body: payload }
+                );
+
+                if (functionError) {
+                    throw functionError; // Throw to be caught by outer catch
+                }
+                // Success toast can be generic or removed if function handles it
+                toast.info(`Notification process initiated for PIR ${data.pirId}.`);
+            } catch (notificationError: any) {
+                console.error("Failed to send PIR creation notification:", notificationError);
+                // Show error, but PIR itself was created successfully earlier
+                toast.error(`PIR created, but failed to send notification: ${notificationError.message}`);
+            }
+            // --- End Send Email Notification ---
          },
         onError: (error) => {
             console.error("Error submitting PIR:", error);
@@ -167,7 +198,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 }) => {
   const { currentCompany, isLoadingCompanies: isLoadingCurrentCompany } = useCompanyData();
   const { data: relatedSuppliers, isLoading: isLoadingSuppliers, error: errorSuppliers } = useRelatedSuppliers(currentCompany?.id);
-  const { tags: appTags, isLoadingTags, errorTags } = useLoggingTags();
+  const { tags: appTags, isLoadingTags, errorTags } = useTags();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -178,10 +209,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [productPopoverOpen, setProductPopoverOpen] = useState(false); 
 
   const { data: productSheets, isLoading: isLoadingProductSheets, error: errorProductSheets } = useFetchSupplierProducts(selectedSupplierId);
-
-  useEffect(() => {
-      console.log('[DEBUG] RequestSheetModal mounted/props updated:', { open, supplierId, supplierName });
-  }, [open, supplierId, supplierName]);
 
   // Memoize products for Combobox list
   const supplierProducts = React.useMemo(() =>
@@ -200,7 +227,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
   useEffect(() => {
     if (supplierId) {
-      console.log('[DEBUG] useEffect [supplierId, supplierName]: Updating state from props', { supplierId, supplierName });
       setSelectedSupplierId(supplierId);
       form.setValue("supplierId", supplierId);
     }
@@ -208,7 +234,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       setSelectedSupplierName(supplierName);
     }
     if (supplierId && relatedSuppliers && !relatedSuppliers.find(s => s.id === supplierId)) {
-        console.warn(`[DEBUG] Provided supplierId ${supplierId} not found in related suppliers. Clearing selection.`);
         setSelectedSupplierId("");
         setSelectedSupplierName("");
         form.setValue("supplierId", "");
@@ -260,11 +285,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
     try {
         const result = await createPIRMutation.mutateAsync({
-            productName: values.productName, // Can be existing or new suggestion
-            supplierId: values.supplierId, // Pass supplierId to mutation
+            productName: values.productName,
+            supplierId: values.supplierId,
             customerId: currentCompany.id,
-            note: values.note, // Note is optional, mutation handles if column exists
+            note: values.note,
             tagIds: selectedTags,
+            // Pass necessary context for notification
+            relatedSuppliers: relatedSuppliers,
+            currentCompany: currentCompany,
         });
 
         // Send email notification regardless of whether product was existing or suggested
@@ -299,9 +327,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
    };
 
   const isFormLoading = isLoadingCurrentCompany || isLoadingSuppliers || isLoadingTags || createPIRMutation.isPending || isSendingEmail || isLoadingProductSheets;
-
-  // Simplified debug logs
-  console.log('[DEBUG] Rendering RequestSheetModal State:', { isFormLoading, selectedSupplierId, isLoadingProductSheets, isLoadingTags });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -467,7 +492,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isFormLoading}> Cancel </Button>
-              <Button type="submit" disabled={isFormLoading || !selectedSupplierId || !form.watch('productName')}> {/* Disable submit if no product selected */}
+              <Button type="submit" disabled={isFormLoading || !selectedSupplierId || !form.watch('productName')}>
                 {createPIRMutation.isPending ? "Sending..." : "Send Request"}
                 <SendHorizontal className="ml-2 h-4 w-4" />
               </Button>

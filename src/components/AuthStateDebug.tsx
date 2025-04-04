@@ -97,7 +97,6 @@ const AuthStateDebug = () => {
             const authProvider = document.getElementById('auth-provider');
             if (authProvider) {
               authProvider.dataset.forceLoaded = 'true';
-              console.log('Forcing auth state loading to stop');
               // Refresh after a short delay
               setTimeout(() => window.location.reload(), 500);
             }

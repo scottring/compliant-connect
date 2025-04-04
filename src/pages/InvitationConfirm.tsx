@@ -49,9 +49,6 @@ const InvitationConfirm = () => {
         invited_contact_name, // Name of the contact person (provided in invite modal)
         invited_supplier_company_id // ID of the supplier company (now passed from invite)
     } = user.user_metadata;
-
-    console.log('Handling invitation acceptance for user:', user.id, 'Metadata:', user.user_metadata);
-
     // Basic validation of metadata
     // Validate required metadata including the new supplier company ID
     if (!invited_to_company_id || !invited_supplier_company_id) {
@@ -66,7 +63,6 @@ const InvitationConfirm = () => {
       // 1. Find or Create the Supplier Company
       // We already create the company record when sending the invite now.
       // Let's find the relationship record instead, which should be 'pending'.
-      console.log(`Searching for pending relationship for supplier: ${invited_supplier_name} invited by customer: ${invited_to_company_id}`);
 
       const { data: relationshipData, error: relationshipError } = await supabase
         .from('company_relationships')
@@ -86,10 +82,7 @@ const InvitationConfirm = () => {
       const supplierCompanyId = relationshipData.supplier_id;
       const relationshipId = relationshipData.id;
 
-      console.log(`Found pending relationship: ${relationshipId} for supplier company: ${supplierCompanyId}`);
-
       // 2. Link the newly confirmed user to their Supplier Company
-      console.log(`Linking user ${user.id} to supplier company ${supplierCompanyId}`);
       const { error: userLinkError } = await supabase
         .from('company_users')
         .insert({
@@ -106,7 +99,6 @@ const InvitationConfirm = () => {
       }
 
       // 3. Update the Company Relationship status to 'active'
-      console.log(`Updating relationship ${relationshipId} to active`);
       const { error: updateRelError } = await supabase
         .from('company_relationships')
         .update({ status: 'active' })

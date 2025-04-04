@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { Question, SupplierResponse } from "@/types";
+import { Question, SupplierResponse } from "../../types/index"; // Use relative path
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import TagBadge from "@/components/tags/TagBadge";
@@ -27,13 +27,13 @@ import { toast } from "sonner";
 
 interface ReviewQuestionItemProps {
   question: Question;
-  answer: SupplierResponse;
+  answer?: SupplierResponse; // Make answer optional
   status: "approved" | "flagged" | "pending";
   note: string;
   onApprove: () => void;
   onFlag: (note: string) => void;
   onUpdateNote: (note: string) => void;
-  isPreviouslyFlagged?: boolean;
+  // isPreviouslyFlagged?: boolean; // This will be derived internally now
 }
 
 const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
@@ -44,13 +44,16 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onApprove,
   onFlag,
   onUpdateNote,
-  isPreviouslyFlagged = false,
+  // isPreviouslyFlagged = false, // Removed from props
 }) => {
+  console.log(`ReviewQuestionItem Props for Q:${question.id}`, { question, answer, status, note }); // Re-add log
+  // Log received props
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [flagHistoryOpen, setFlagHistoryOpen] = useState(false);
   
   const formatAnswerValue = () => {
-    if (answer.value === undefined || answer.value === null) {
+    // Handle undefined answer
+    if (!answer || answer.value === undefined || answer.value === null) {
       return <span className="text-muted-foreground italic">No answer provided</span>;
     }
     
@@ -61,9 +64,9 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
         return <div>{answer.value as number}</div>;
       case "boolean":
         return <div>{(answer.value as boolean) ? "Yes" : "No"}</div>;
-      case "select":
+      case "single_select": // Corrected enum value
         return <div>{answer.value as string}</div>;
-      case "multi-select":
+      case "multi_select": // This case seems correct
         return (
           <div className="flex flex-wrap gap-1">
             {(answer.value as string[]).map((value, index) => (
@@ -84,17 +87,16 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       return;
     }
     
-    console.log("Flagging question with note:", note);
     onFlag(note);
   };
   
-  // Sort flags by creation date (newest first)
-  const sortedFlags = answer.flags ? 
-    [...answer.flags].sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  // Sort flags by creation date (newest first) - Handle undefined answer
+  const sortedFlags = answer?.flags ?
+    [...answer.flags].sort((a, b) =>
+      new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime()
     ) : [];
   
-  const latestFlag = sortedFlags.length > 0 ? sortedFlags[0] : null;
+  const latestFlag = answer && sortedFlags.length > 0 ? sortedFlags[0] : null;
   
   return (
     <div className="p-4 space-y-4">
@@ -115,7 +117,8 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             {question.type}
           </span>
           
-          {isPreviouslyFlagged && (
+          {/* Determine isPreviouslyFlagged based on optional answer */}
+          {answer?.flags && answer.flags.length > 0 && (
             <Button 
               variant="ghost" 
               size="sm"
@@ -134,7 +137,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             onClick={() => setCommentsOpen(!commentsOpen)}
           >
             <MessageCircle className="h-4 w-4 mr-1" />
-            {answer.comments?.length || 0}
+            {answer?.comments?.length || 0}
           </Button>
         </div>
       </div>
@@ -144,7 +147,8 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       </div>
       
       {/* Flag history section */}
-      {isPreviouslyFlagged && (
+      {/* Only show flag history if answer exists and has flags */}
+      {answer?.flags && answer.flags.length > 0 && (
         <Collapsible open={flagHistoryOpen} onOpenChange={setFlagHistoryOpen}>
           <CollapsibleTrigger className="flex items-center space-x-2 text-sm font-medium text-amber-600 hover:text-amber-800 transition-colors">
             <Flag className="h-4 w-4" />
@@ -160,7 +164,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                   <p className="text-sm font-medium">
                     <span className="text-amber-800">{flag.createdByName}</span> 
                     <span className="text-gray-500 ml-2">
-                      {new Date(flag.createdAt).toLocaleDateString()}
+                      {new Date(flag.created_at!).toLocaleDateString()} {/* Use created_at and non-null assertion */}
                     </span>
                   </p>
                   <p className="text-amber-700 mt-1">{flag.comment}</p>
@@ -172,7 +176,8 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       )}
       
       <div className="flex flex-col space-y-2">
-        {status === "flagged" && !isPreviouslyFlagged && (
+        {/* Determine isPreviouslyFlagged locally */}
+        {status === "flagged" && !(answer?.flags && answer.flags.length > 0) && (
           <div className="bg-red-50 border border-red-200 rounded p-3">
             <div className="flex items-start">
               <Flag className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
@@ -196,7 +201,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             <div className="flex-1">
               <Textarea 
                 placeholder={
-                  isPreviouslyFlagged 
+                  (answer?.flags && answer.flags.length > 0)
                     ? "Add feedback on the revised answer..." 
                     : "Add a review note or flag explanation..."
                 }
@@ -212,7 +217,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 onClick={onApprove}
               >
                 <CheckCircle className="mr-2 h-4 w-4" />
-                {isPreviouslyFlagged ? "Resolve" : "Approve"}
+                {(answer?.flags && answer.flags.length > 0) ? "Resolve" : "Approve"}
               </Button>
               
               <TooltipProvider>
@@ -226,7 +231,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                         disabled={!note.trim()}
                       >
                         <Flag className="mr-2 h-4 w-4" />
-                        {isPreviouslyFlagged ? "Flag Again" : "Flag"}
+                        {(answer?.flags && answer.flags.length > 0) ? "Flag Again" : "Flag"}
                       </Button>
                     </span>
                   </TooltipTrigger>
@@ -242,11 +247,14 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       
       <Collapsible open={commentsOpen} onOpenChange={setCommentsOpen}>
         <CollapsibleContent className="border-t pt-4 mt-4">
-          <CommentsThread 
-            comments={answer.comments || []} 
-            answerId={answer.id}
-            onAddComment={() => {}} // Not needed for review
-          />
+          {/* Only show comments if answer exists */}
+          {answer && (
+            <CommentsThread
+              comments={answer.comments || []}
+              answerId={answer.id}
+              onAddComment={() => {}} // Not needed for review
+            />
+          )}
         </CollapsibleContent>
       </Collapsible>
     </div>

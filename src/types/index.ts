@@ -1,5 +1,7 @@
 import { Database, Json } from "./supabase"; // Import Database and Json types
 
+// Define Row types from generated Supabase types
+export type DBPIRResponse = Database['public']['Tables']['pir_responses']['Row'];
 export interface User {
   id: string;
   name: string;
@@ -52,7 +54,8 @@ export interface Section {
   dbId?: string; // Database ID for integration with Supabase
   name: string;
   description?: string;
-  order?: number; // Make optional or align with DB schema if it exists
+  order?: number; // Keep for potential legacy use?
+  order_index?: number | null; // Add the actual DB column name
 }
 
 export interface Subsection {
@@ -61,7 +64,8 @@ export interface Subsection {
   name: string;
   description?: string;
   sectionId: string;
-  order?: number; // Make optional or align with DB schema if it exists
+  order?: number; // Keep for potential legacy use?
+  order_index?: number | null; // Add the actual DB column name
 }
 
 export interface ProductSheet {
@@ -126,7 +130,6 @@ export interface PIR {
 }
 
 // Import Json type helper from supabase types
-import { Json } from "./supabase";
 
 export type ColumnType = "text" | "number" | "boolean" | "select" | "multi-select";
 
@@ -142,6 +145,31 @@ export interface TableColumn {
   options?: string[];
   nested?: boolean;
   nestedColumns?: NestedTableColumns[];
+}
+
+
+export interface PirRequest {
+  id: string;
+  customer_id: string | null;
+  supplier_company_id: string | null;
+  product_id?: string | null; // Added product_id
+  status: Database['public']['Enums']['pir_status'];
+  request_details: string | null;
+  created_at: string;
+  updated_at: string | null;
+  title?: string | null; // Added title
+  description?: string | null; // Added description
+  due_date?: string | null; // Added due_date
+  suggested_product_name?: string | null; // Added suggested_product_name
+
+  // Fields added during processing/joining
+  customer?: Company | null;
+  product?: { id?: string; name: string; } | null; // Allow partial product from join
+  tags?: Tag[]; // Added for consistency, might be populated later
+  responses?: DBPIRResponse[]; // Added for consistency
+  customerName?: string; // Processed field
+  productName?: string; // Processed field
+  responseCount?: number; // Processed field
 }
 
 export type CompanyUser = {

@@ -80,6 +80,64 @@ type PIRStatus =
 - Role-based UI access
 - Secure data isolation between tenants
 
+
+## Product Information Request (PIR) Workflow
+
+This outlines the sequence of actions and notifications involved when a customer requests product information from a supplier.
+
+1.  **Initiation (Customer):**
+    *   An authenticated user belonging to a customer company navigates to the PIR creation interface (e.g., via the supplier list or product sheet area).
+    *   The customer selects the relevant information categories required by choosing corresponding **Tags** (e.g., REACH, US EPA). These tags are linked to specific questions in the central Question Bank.
+    *   The customer selects the target **Supplier Company** and the specific **Product** (or suggests a new product name).
+    *   The customer submits the request.
+    *   **Database:** A new record is created in `pir_requests` linking the customer, supplier, product (or suggestion), and selected tags. Initial status is likely `'draft'` or `'new'`. Corresponding `pir_responses` records might be created with a default 'pending' status for each relevant question, or they might be created only when the supplier first saves/submits an answer.
+    *   **Notification:** An **email** is sent to the supplier company's contact notifying them of the new request from "[Requesting Company Name]" for "[Product Name]", including a link to the `SupplierResponseForm` page for that specific PIR ID.
+
+2.  **Response (Supplier):**
+    *   The supplier user receives the email notification or sees the pending request in their dashboard/list (`OurProducts` page).
+    *   They navigate to the `SupplierResponseForm` page using the link or manually.
+    *   The form displays only the questions associated with the **Tags** selected by the customer in the initial PIR request.
+    *   The supplier fills out the answers for the displayed questions.
+    *   **Save as Draft:** Answers can be saved progressively (e.g., via `upsert` to `pir_responses` with status 'draft'). The form remains editable.
+    *   **Submit Response:** When all required answers are filled, the supplier clicks "Submit Response".
+    *   **Database:** The status of the main `pir_requests` record is updated to `'submitted'`. The individual `pir_responses` might also have their status updated if applicable. Answers become locked for supplier editing at this stage.
+    *   **Notification:** An **email** is sent to the requesting customer company's contact notifying them that the response for "[Product Name]" from "[Supplier Company Name]" is ready for review, including a link to the `CustomerReview` page for that PIR ID.
+
+3.  **Review (Customer):**
+    *   The customer user receives the email notification or sees the submitted PIR in their dashboard/list.
+    *   They navigate to the `CustomerReview` page using the link or manually.
+    *   The page displays the questions and the supplier's submitted answers. Answers are **read-only** for the customer.
+    *   For each answer, the customer has options:
+        *   **Approve:** Mark the answer as satisfactory.
+        *   **Flag:** Mark the answer as needing revision. A comment/note explaining the issue is required.
+        *   **(Comment):** Add comments for discussion without necessarily flagging (handled via `CommentsThread`).
+    *   **Database:** When the customer submits their review:
+        *   Flags are created in the `response_flags` table for each flagged answer, linking back to the specific `pir_responses` record and including the note.
+        *   The overall status of the `pir_requests` record is updated based on the review outcome:
+            *   If *any* answer was flagged, the status becomes `'flagged'` (or similar, e.g., `'needs_revision'`).
+            *   If *all* answers were approved, the status becomes `'approved'`. 
+    *   **Notification:** An **email** is sent back to the supplier company's contact:
+        *   If flagged: Notifying them that the response requires revision, including a link back to the `SupplierResponseForm`.
+        *   If approved: Notifying them that the response has been approved.
+
+4.  **Revision (Supplier - Iterative):**
+    *   The supplier receives the email notification about required revisions or sees the updated status.
+    *   They navigate back to the `SupplierResponseForm`.
+    *   The form should now clearly indicate it's for "Round 2" (or N) of review.
+    *   **Crucially:** The form should ideally **only display the questions corresponding to the *flagged* answers**, along with the customer's notes/flags. Approved answers should likely be hidden or read-only to focus the supplier's attention.
+    *   The supplier reviews the flags/notes, potentially adds comments, and updates the necessary answers.
+    *   The supplier clicks "Submit Response" again.
+    *   **Database:** The relevant `pir_responses` are updated. The main `pir_requests` status is updated back to `'submitted'`. Flags might be marked as 'resolved' or handled appropriately.
+    *   **Notification:** An **email** is sent back to the customer, indicating a revised response is ready for review (similar to step 2 notification).
+
+5.  **Final Approval (Customer):**
+    *   The review process (Step 3 & 4) repeats until the customer approves all answers in a review cycle.
+    *   When all answers are approved, the `pir_requests` status is set to `'approved'`. 
+    *   **Database:** The approved answers might be consolidated or linked to a final `ProductSheet` record for historical tracking and easy access.
+    *   **Notification:** A final notification might be sent to the supplier confirming approval.
+
+This iterative loop continues until full approval is achieved.
+
 ## Design Patterns
 
 ### 1. Component Architecture

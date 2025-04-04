@@ -36,25 +36,3 @@ export const supabase = createClient<Database>(
     },
   }
 );
-
-// Verify session on load
-supabase.auth.getSession().then(({ data: { session } }) => { // Destructure session correctly
-  if (session) { // Check if session exists
-    console.log('Supabase session found on load:', {
-      user: session.user.email, // Use session.user
-      expires_at: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'N/A' // Use session.expires_at
-    });
-  } else {
-    console.log('No Supabase session found on load');
-  }
-}).catch(err => {
-  console.error('Error checking Supabase session:', err);
-});
-
-// Log Supabase initialization for debugging
-if (import.meta.env.MODE === 'development') { // Use import.meta.env.MODE
-  console.log(`Supabase client initialized for ${import.meta.env.MODE} environment`, {
-    url: import.meta.env.VITE_SUPABASE_URL,
-    anon_key_prefix: import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 5) + '...' // Add optional chaining
-  });
-}

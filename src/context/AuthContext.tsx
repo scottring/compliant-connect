@@ -44,21 +44,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Set up auth state listener
   useEffect(() => {
-    console.log('AuthProvider: Initializing');
     setLoading({ auth: true }); // Set loading true during initial check
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('AuthProvider: Initial session check', { hasSession: !!session });
       setSession(session);
       setUser(session?.user ?? null); // Set user or null
       setLoading({ auth: false }); // Finish initial loading
     }).catch((error) => {
-        console.error("Error getting initial session:", error);
         setLoading({ auth: false }); // Ensure loading stops on error too
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('AuthProvider: Auth state change', { event, hasSession: !!session });
         setSession(session);
         setUser(session?.user ?? null); // Update user on change
         // Removed company state reset logic
@@ -82,7 +78,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // User state will update via onAuthStateChange listener
       return { error: null };
     } catch (error: any) {
-      console.error("Sign in error:", error);
       toast.error(`Sign in failed: ${error.message}`);
       return { error: error as Error };
     } finally {
@@ -104,7 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       toast.info('Sign up successful! Please check your email to confirm.');
       return { error: null };
     } catch (error: any) {
-      console.error("Sign up error:", error);
       toast.error(`Sign up failed: ${error.message}`);
       return { error: error as Error };
     } finally {
@@ -119,7 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut();
       // User state will update via onAuthStateChange listener
     } catch (error: any) {
-      console.error("Sign out error:", error);
       toast.error("Error signing out");
     } finally {
       setLoading({ auth: false });
