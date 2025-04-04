@@ -78,7 +78,7 @@ const CheckCompany = () => {
   }
 
   console.log('CheckCompany: All checks passed, rendering outlet');
-  return <Outlet />;
+  return <><div>Check company</div><Outlet /></>;
 };
 
 const queryClient = new QueryClient();
@@ -89,76 +89,79 @@ const App = () => {
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppProvider>
-          <QuestionBankProvider>
-            <TooltipProvider>
-              <BrowserRouter>
-                <Routes>
-                  {/* Public Routes */}
-                  <Route path="/" element={<Index />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/email-confirmation" element={<EmailConfirmation />} />
-                  <Route path="/unauthorized" element={<Unauthorized />} />
-                  <Route path="/invitation/confirm" element={<InvitationConfirm />} /> {/* Add route for invite confirmation */}
-                  
-                  {/* Protected Routes */}
-                  <Route element={<ProtectedRoute />}>
-                    {/* Onboarding route */}
-                    <Route path="/onboarding" element={<Onboarding />} />
+    <>
+      <div>App</div>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AppProvider>
+            <QuestionBankProvider>
+              <TooltipProvider>
+                <BrowserRouter>
+                  <Routes>
+                    {/* Public Routes */}
+                    <Route path="/" element={<Index />} />
+                    <Route path="/auth" element={<Auth />} />
+                    <Route path="/email-confirmation" element={<EmailConfirmation />} />
+                    <Route path="/unauthorized" element={<Unauthorized />} />
+                    <Route path="/invitation/confirm" element={<InvitationConfirm />} /> {/* Add route for invite confirmation */}
                     
-                    {/* Main Routes */}
-                    <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
-                      {/* Dashboard */}
-                      <Route path="/dashboard" element={<Dashboard />} />
+                    {/* Protected Routes */}
+                    <Route element={<ProtectedRoute />}>
+                      {/* Onboarding route */}
+                      <Route path="/onboarding" element={<Onboarding />} />
                       
-                      {/* Routes that require company check */}
-                      <Route element={<CheckCompany />}>
-                        <Route path="/admin/settings" element={<AdminSettings />} /> {/* Add route for Admin Settings */}
-                        {/* Supplier Routes */}
-                        <Route path="/suppliers" element={<Suppliers />} />
-                        <Route path="/suppliers/:id" element={<SupplierDetail />} />
-                        <Route path="/supplier-products" element={<SupplierProducts />} />
-                        <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
+                      {/* Main Routes */}
+                      <Route element={<MainLayout sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />}>
+                        {/* Dashboard */}
+                        <Route path="/dashboard" element={<Dashboard />} />
                         
-                        {/* Customer Routes */}
-                        <Route path="/customers" element={<Customers />} />
-                        <Route path="/customer-review/:id" element={<CustomerReview />} />
-                        
-                        {/* Product Routes */}
-                        <Route path="/product-sheets" element={<ProductSheets />} />
-                        <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
-                        <Route path="/our-products" element={<OurProducts />} />
-                        
-                        {/* Admin Routes */}
-                        <Route path="/question-bank" element={<QuestionBank />} />
-                        <Route path="/tags" element={<Tags />} />
+                        {/* Routes that require company check */}
+                        <Route element={<CheckCompany />}>
+                          <Route path="/admin/settings" element={<AdminSettings />} /> {/* Add route for Admin Settings */}
+                          {/* Supplier Routes */}
+                          <Route path="/suppliers" element={<Suppliers />} />
+                          <Route path="/suppliers/:id" element={<SupplierDetail />} />
+                          <Route path="/supplier-products" element={<SupplierProducts />} />
+                          <Route path="/supplier-response-form/:id" element={<SupplierResponseForm />} />
+                          
+                          {/* Customer Routes */}
+                          <Route path="/customers" element={<Customers />} />
+                          <Route path="/customer-review/:id" element={<CustomerReview />} />
+                          
+                          {/* Product Routes */}
+                          <Route path="/product-sheets" element={<ProductSheets />} />
+                          <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
+                          <Route path="/our-products" element={<OurProducts />} />
+                          
+                          {/* Admin Routes */}
+                          <Route path="/question-bank" element={<QuestionBank />} />
+                          <Route path="/tags" element={<Tags />} />
+                        </Route>
                       </Route>
                     </Route>
-                  </Route>
-                  
-                  {/* Admin Settings Route */}
-                  <Route
-                    path="/admin/settings"
-                    element={
-                      <ProtectedRoute requiredPermission="admin:access">
-                        <AdminSettings />
-                      </ProtectedRoute>
-                    }
-                  />
-                  
-                  {/* Fallback Route */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
-              <Toaster />
-              <Sonner />
-            </TooltipProvider>
-          </QuestionBankProvider>
-        </AppProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+                    
+                    {/* Admin Settings Route */}
+                    <Route
+                      path="/admin/settings"
+                      element={
+                        <ProtectedRoute requiredPermission="admin:access">
+                          <AdminSettings />
+                        </ProtectedRoute>
+                      }
+                    />
+                    
+                    {/* Fallback Route */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
+                <Toaster />
+                <Sonner />
+              </TooltipProvider>
+            </QuestionBankProvider>
+          </AppProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </>
   );
 };
 

@@ -126,7 +126,6 @@ export interface PIR {
 }
 
 // Import Json type helper from supabase types
-import { Json } from "./supabase";
 
 export type ColumnType = "text" | "number" | "boolean" | "select" | "multi-select";
 
@@ -142,6 +141,19 @@ export interface TableColumn {
   options?: string[];
   nested?: boolean;
   nestedColumns?: NestedTableColumns[];
+}
+
+
+export interface PirRequest {
+  id: string;
+  customer_id: string | null;
+  supplier_company_id: string | null; // Corrected field name
+  status: Database['public']['Enums']['pir_status']; // Use generated enum
+  request_details: string | null;
+  created_at: string; // Assuming string from DB fetch
+  updated_at: string | null;
+  // Add other relevant fields from pir_requests table if needed
+  // e.g., product_id, requested_by_user_id, etc.
 }
 
 export type CompanyUser = {
