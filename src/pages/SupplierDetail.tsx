@@ -55,7 +55,7 @@ export type DBQuestion = {
 
 const SupplierDetail = () => {
   const { id: supplierId } = useParams<{ id: string }>();
-  console.log(`[DEBUG] SupplierDetail Page: ID from URL = ${supplierId}`); // Log ID from URL
+  // Log ID from URL
   const navigate = useNavigate();
   const { tags: globalTags, isLoadingTags } = useTags();
   const { currentCompany } = useCompanyData();
@@ -87,7 +87,7 @@ const SupplierDetail = () => {
 
   // --- Fetch PIRs for this Supplier Query ---
   const fetchSupplierPirs = async (id: string): Promise<SupplierPIRSummary[]> => {
-      console.log(`[DEBUG] fetchSupplierPirs: Fetching PIRs for supplier_company_id = ${id}`); // Log the ID being used
+      // Log the ID being used
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
           .select(`
@@ -101,7 +101,7 @@ const SupplierDetail = () => {
            .eq('supplier_company_id', id); 
 
       if (pirError) throw new Error(`Failed to load PIRs for supplier: ${pirError.message}`);
-      console.log(`[DEBUG] fetchSupplierPirs: Raw data received for supplier ${id}:`, pirData); // Log raw data
+      // Log raw data
       if (!pirData) return [];
 
       const transformedPirs: SupplierPIRSummary[] = pirData.map((pir: any) => {

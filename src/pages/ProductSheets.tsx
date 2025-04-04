@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { Search, Filter, Eye, Calendar, Tag, ArrowUpDown, Plus } from "lucide-react"; // Added Plus
+import { Search, Filter, Eye, Calendar, Tag, ArrowUpDown, Plus, Flag } from "lucide-react"; // Added Plus and Flag
 import TaskProgress from "@/components/ui/progress/TaskProgress";
 import { PIRSummary, PIRStatus } from "@/types/pir"; // Import shared types
 
@@ -114,10 +114,15 @@ const ProductSheets = () => {
   const rejected = filteredProductSheets.filter((sheet) => sheet.status === "rejected");
   const revisionRequested = filteredProductSheets.filter((sheet) => sheet.status === "revision_requested"); // Added revision
 
-  const handleProductSheetClick = (pirId: string) => {
-    // Navigate to the response form or review page based on role/status?
-    // For now, assume it goes to the response form for viewing/editing
-    navigate(`/supplier-response-form/${pirId}`);
+  const handleProductSheetClick = (pirId: string, status: PIRStatus) => {
+    // Navigate to review page if submitted/flagged, otherwise view (which will redirect if not supplier)
+    if (status === 'submitted' || status === 'flagged') { // Use 'flagged' based on CustomerReview logic
+      navigate(`/customer-review/${pirId}`);
+    } else {
+      // Navigate to supplier form - relies on auth check within that component
+      // TODO: Ideally, create a dedicated read-only view page for customers for other statuses
+      navigate(`/supplier-response-form/${pirId}`);
+    }
   };
 
   const isLoading = isLoadingCompanies || loadingPirs;
@@ -148,7 +153,7 @@ const ProductSheets = () => {
                 <TableRow
                   key={sheet.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleProductSheetClick(sheet.id)}
+                  onClick={() => handleProductSheetClick(sheet.id, sheet.status)}
                 >
                   <TableCell className="font-medium">{sheet.productName}</TableCell>
                   <TableCell>{sheet.supplierName}</TableCell>
@@ -157,15 +162,20 @@ const ProductSheets = () => {
                   </TableCell>
                   {/* <TableCell> <TaskProgress value={completionRate} size="sm" showLabel /> </TableCell> */}
                   <TableCell>
-                    <span className={`px-2 py-1 rounded-full text-xs capitalize ${
+                    {/* Customer-centric status display */}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       sheet.status === "approved" ? "bg-green-100 text-green-800" :
                       sheet.status === "rejected" ? "bg-red-100 text-red-800" :
-                      sheet.status === "in_review" ? "bg-blue-100 text-blue-800" :
-                      sheet.status === "pending" ? "bg-amber-100 text-amber-800" :
-                      sheet.status === "revision_requested" ? "bg-yellow-100 text-yellow-800" :
-                      "bg-gray-100 text-gray-800" // Draft
+                      sheet.status === "submitted" ? "bg-purple-100 text-purple-800" : // Ready for Review
+                      sheet.status === "flagged" ? "bg-yellow-100 text-yellow-800" : // Revision Requested
+                      sheet.status === "in_review" ? "bg-blue-100 text-blue-800" : // In Review
+                      "bg-gray-100 text-gray-800" // Draft / Other
                     }`}>
-                      {sheet.status.replace('_', ' ')} {/* Replace underscore for display */}
+                      { sheet.status === 'submitted' ? 'Pending Review' :
+                        sheet.status === 'flagged' ? 'Revision Requested' :
+                        sheet.status === 'in_review' ? 'In Review' :
+                        sheet.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) // Default formatting
+                      }
                     </span>
                   </TableCell>
                   <TableCell>
@@ -173,10 +183,19 @@ const ProductSheets = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
-                      onClick={(e) => { e.stopPropagation(); handleProductSheetClick(sheet.id); }}
-                      size="sm" variant="outline" className="ml-auto"
+                      onClick={(e) => { e.stopPropagation(); handleProductSheetClick(sheet.id, sheet.status); }}
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto"
+                      // Disable button for certain statuses if needed, e.g., draft?
+                      // disabled={sheet.status === 'draft'}
                     >
-                      <Eye className="h-4 w-4 mr-2" /> View
+                      {/* Change label based on status */}
+                      {sheet.status === 'submitted' || sheet.status === 'flagged' ? (
+                        <> <Flag className="h-4 w-4 mr-2" /> Review </>
+                      ) : (
+                        <> <Eye className="h-4 w-4 mr-2" /> View </>
+                      )}
                     </Button>
                   </TableCell>
                 </TableRow>

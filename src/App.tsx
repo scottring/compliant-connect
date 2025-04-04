@@ -41,24 +41,13 @@ const CheckCompany = () => {
   const { userCompanies, isLoadingCompanies, errorCompanies } = useCompanyData();
   const location = useLocation();
 
-  console.log('CheckCompany: State', {
-    hasUser: !!user,
-    authLoading,
-    userCompanies,
-    isLoadingCompanies,
-    errorCompanies,
-    currentPath: location.pathname
-  });
-
   // Show loading state while checking auth or company data
   if (authLoading.auth || isLoadingCompanies) {
-    console.log('CheckCompany: Loading...', { authLoading, isLoadingCompanies });
     return <div>Loading user data...</div>;
   }
 
   // If no user after loading, redirect to auth
   if (!user) {
-    console.log('CheckCompany: No user, redirecting to auth');
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
@@ -66,18 +55,15 @@ const CheckCompany = () => {
   if (!isLoadingCompanies && (!userCompanies || userCompanies.length === 0)) {
     // Prevent redirect loop if already on onboarding
     if (location.pathname !== '/onboarding') {
-      console.log("CheckCompany: No companies found, redirecting to onboarding");
       return <Navigate to="/onboarding" state={{ from: location }} replace />;
     }
   }
 
   // If there was an error loading companies, show an error message or redirect
   if (errorCompanies) {
-    console.error("CheckCompany: Error loading company data:", errorCompanies);
     return <div>Error loading company information. Please try again later.</div>;
   }
 
-  console.log('CheckCompany: All checks passed, rendering outlet');
   return <><Outlet /></>;
 };
 

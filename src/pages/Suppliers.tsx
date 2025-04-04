@@ -77,7 +77,7 @@ const useAddSupplierMutation = (
             return newSupplier as Company;
         },
         onSuccess: (data, variables) => { queryClient.invalidateQueries({ queryKey: ['suppliers', variables.customerId] }); toast.success("Supplier added successfully"); },
-        onError: (error) => { console.error("Error in handleAddSupplierSubmit:", error); toast.error(`Failed to add supplier: ${error.message}`); },
+        onError: (error) => { toast.error(`Failed to add supplier: ${error.message}`); },
     });
 };
 
@@ -91,16 +91,22 @@ const useUpdateSupplierMutation = (
             if (!updatedSupplier) throw new Error("Failed to update supplier: No data returned.");
 
             const { data: relationship, error: findRelError } = await supabase.from('company_relationships').select('id, type').eq('customer_id', data.customerId).eq('supplier_id', data.id).maybeSingle();
-            if (findRelError) console.error("Error finding relationship for update:", findRelError.message);
-
-            if (relationship && relationship.type !== data.relationshipType) {
+            if (findRelError) {
+                 // Handle error finding relationship (e.g., log it, but maybe don't block supplier update)
+                 console.error(`Warning: Error finding relationship during supplier update: ${findRelError.message}`);
+            } else if (relationship && relationship.type !== data.relationshipType) {
+                 // Only update relationship type if found and different
                 const { error: updateRelError } = await supabase.from('company_relationships').update({ type: data.relationshipType }).eq('id', relationship.id);
-                if (updateRelError) console.error(`Failed to update relationship type: ${updateRelError.message}`);
-            }
+                if (updateRelError) {
+                    // Log warning but don't necessarily throw, as company update succeeded
+                    console.error(`Warning: Failed to update relationship type: ${updateRelError.message}`);
+                }
+            } // Added missing closing brace for the outer if/else if
+
             return updatedSupplier as Company;
         },
         onSuccess: (data, variables) => { queryClient.invalidateQueries({ queryKey: ['suppliers', variables.customerId] }); toast.success("Supplier updated successfully"); },
-        onError: (error) => { console.error("Error in useUpdateSupplierMutation:", error); toast.error(`Failed to update supplier: ${error.message}`); },
+        onError: (error) => { toast.error(`Failed to update supplier: ${error.message}`); },
     });
 };
 
@@ -111,14 +117,13 @@ const useDeleteSupplierRelationshipMutation = (
         mutationFn: async (data) => {
             const { data: relationship, error: findError } = await supabase.from('company_relationships').select('id').eq('customer_id', data.customerId).eq('supplier_id', data.supplierId).maybeSingle();
             if (findError) throw new Error(`Error finding relationship to delete: ${findError.message}`);
-            if (!relationship) { console.warn(`Relationship not found between customer ${data.customerId} and supplier ${data.supplierId}. Assuming already deleted.`); return; }
+            if (!relationship) { return; }
 
             const { error: deleteError } = await supabase.from('company_relationships').delete().eq('id', relationship.id);
             if (deleteError) throw new Error(`Error deleting relationship: ${deleteError.message}`);
-            console.log(`Deleted relationship ${relationship.id}`);
-        },
+            },
         onSuccess: (data, variables) => { queryClient.invalidateQueries({ queryKey: ['suppliers', variables.customerId] }); toast.success("Supplier relationship deleted successfully"); },
-        onError: (error) => { console.error("Error in useDeleteSupplierRelationshipMutation:", error); toast.error(`Failed to delete supplier relationship: ${error.message}`); },
+        onError: (error) => { toast.error(`Failed to delete supplier relationship: ${error.message}`); },
     });
 };
 // --- End Delete Supplier Relationship Mutation Hook ---
@@ -189,7 +194,7 @@ const Suppliers = () => {
     try {
         await addSupplierMutation.mutateAsync({ ...data, customerId: currentCompany.id });
         setIsAddModalOpen(false);
-    } catch (error) { console.error("Add mutation failed:", error); }
+    } catch (error) { }
   };
 
   const handleEditSupplier = (supplier: Company) => {
@@ -203,7 +208,7 @@ const Suppliers = () => {
       await updateSupplierMutation.mutateAsync({ ...data, id: editingSupplier.id, customerId: currentCompany.id });
       setIsEditModalOpen(false);
       setEditingSupplier(null);
-    } catch (error) { console.error("Update mutation failed:", error); }
+    } catch (error) { }
   };
 
   const handleDeleteSupplier = (supplier: Company) => {
@@ -218,7 +223,7 @@ const Suppliers = () => {
       // Success toast is handled by the mutation hook
     } catch (error) {
       // Error toast is handled by the mutation hook
-      console.error("Delete mutation initiation failed:", error); // Log if mutateAsync itself throws
+      // Log if mutateAsync itself throws
     } finally {
        setDeletingSupplier(null);
        setIsDeleteDialogOpen(false);

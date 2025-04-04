@@ -28,7 +28,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // If no user after loading, redirect to login
   if (!user) {
-    console.log('ProtectedRoute: No user after loading, redirecting to login');
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
@@ -47,7 +46,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
 
     if (!hasRequiredPermission) {
-        console.log(`ProtectedRoute: User does not have permission '${requiredPermission}', redirecting.`);
         // Redirect to an unauthorized page or back to dashboard/home
         return <Navigate to="/unauthorized" replace />;
     }
