@@ -76,10 +76,13 @@ type FormValues = z.infer<typeof formSchema>;
 // Input type for mutation - productName can be existing or new suggestion
 type CreatePIRInput = {
     productName: string;
-    supplierId: string; // Added supplierId here explicitly if needed by caller
+    supplierId: string;
     customerId: string;
     tagIds: string[];
     note?: string;
+    // Add context needed for onSuccess notification
+    relatedSuppliers?: ReturnType<typeof useRelatedSuppliers>['data'];
+    currentCompany?: ReturnType<typeof useCompanyData>['currentCompany'];
 };
 // Result type - productId can be null if it was a suggestion
 type CreatePIRResult = { pirId: string; productId: string | null };
@@ -146,11 +149,51 @@ const useCreatePIRMutation = (
             console.log('PIR Creation Result:', { pirId, productId });
             return { pirId, productId }; // Return null productId if it was a suggestion
          },
-        onSuccess: (data, variables) => { // Add 'variables' to access input
-            // Invalidate both generic and specific query keys
+        onSuccess: async (data, variables) => { // Make async to await function invoke
+            // Invalidate queries first
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
-            queryClient.invalidateQueries({ queryKey: ['supplierPirs', variables.supplierId] }); // Use specific key
+            queryClient.invalidateQueries({ queryKey: ['supplierPirs', variables.supplierId] });
             toast.success(`Product Information Request (PIR) created (ID: ${data.pirId})`);
+
+            // --- Send Email Notification ---
+            try {
+                // Access data passed via variables
+                const supplier = variables.relatedSuppliers?.find(s => s.id === variables.supplierId);
+                const supplierEmail = supplier?.contact_email;
+                const customerName = variables.currentCompany?.name || 'Your Customer';
+                const productName = variables.productName; // From mutation input
+                const pirId = data.pirId; // From mutation result
+                const appUrl = window.location.origin; // Get base URL
+                const responseLink = `${appUrl}/supplier-response-form/${pirId}`;
+
+                if (supplierEmail) {
+                    const subject = `New Product Information Request from ${customerName}`;
+                    const html_body = `
+                        <p>Hello ${supplier?.contact_name || supplier?.name || ''},</p>
+                        <p>You have received a new Product Information Request from <strong>${customerName}</strong> regarding the product: <strong>${productName}</strong>.</p>
+                        <p>Please click the link below to view the request and submit your response:</p>
+                        <p><a href="${responseLink}">${responseLink}</a></p>
+                        <p>Thank you,<br/>CompliantConnect</p>
+                    `;
+
+                    // Invoke the Edge Function
+                    const { error: functionError } = await supabase.functions.invoke(
+                        'send-pir-notification',
+                        { body: { to: supplierEmail, subject, html_body } }
+                    );
+
+                    if (functionError) {
+                        throw functionError; // Throw to be caught by outer catch
+                    }
+                    toast.info(`Notification email sent to ${supplierEmail}`);
+                } else {
+                    toast.warning(`Could not find contact email for supplier ID ${variables.supplierId}. Notification not sent.`);
+                }
+            } catch (emailError: any) {
+                console.error("Failed to send PIR notification email:", emailError);
+                toast.error(`PIR created, but failed to send notification email: ${emailError.message}`);
+            }
+            // --- End Send Email Notification ---
          },
         onError: (error) => {
             console.error("Error submitting PIR:", error);
@@ -260,11 +303,14 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
     try {
         const result = await createPIRMutation.mutateAsync({
-            productName: values.productName, // Can be existing or new suggestion
-            supplierId: values.supplierId, // Pass supplierId to mutation
+            productName: values.productName,
+            supplierId: values.supplierId,
             customerId: currentCompany.id,
-            note: values.note, // Note is optional, mutation handles if column exists
+            note: values.note,
             tagIds: selectedTags,
+            // Pass necessary context for notification
+            relatedSuppliers: relatedSuppliers,
+            currentCompany: currentCompany,
         });
 
         // Send email notification regardless of whether product was existing or suggested

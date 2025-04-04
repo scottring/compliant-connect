@@ -11,8 +11,7 @@ const LoadingFallback = ({ children, timeout = 5000 }: LoadingFallbackProps) => 
 
   useEffect(() => {
     // If loading continues for too long, force it to stop
-    const timer = setTimeout(() => {
-      console.log('🔥 LoadingFallback: Force-stopping loading state after timeout');
+    const timer = setTimeout(() => {;
       // Access the AuthContext state directly through the DOM
       const authProviderElement = document.getElementById('auth-provider');
       if (authProviderElement) {
@@ -26,8 +25,6 @@ const LoadingFallback = ({ children, timeout = 5000 }: LoadingFallbackProps) => 
     // Clean up timer
     return () => clearTimeout(timer);
   }, [timeout]);
-
-  console.log('LoadingFallback: Current loading state:', loading, 'User:', user?.email);
 
   return <>{children}</>;
 };

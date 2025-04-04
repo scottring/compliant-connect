@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Filter, Plus, PackageOpen, Inbox } from "lucide-react"; // Changed icon
+import { Search, Filter, Plus, PackageOpen, Inbox, Eye, SendHorizontal } from "lucide-react"; // Added Eye, SendHorizontal
 import { toast } from "sonner";
 // Remove ProductSheet type if not used directly anymore
 // import { ProductSheet } from "@/types";
@@ -23,9 +23,8 @@ import { useNavigate } from "react-router-dom";
 import { PirRequest, Company } from "../types/index"; // Explicitly importing from index file
 
 const OurProducts = () => { // Was IncomingRequests, renamed back for file consistency
-  console.log('OurProducts')
   const { user } = useAuth(); // Get user from AuthContext
-  console.log('Rendering OurProducts - Initial:', { user: !!user }); // Log initial render
+  // Log initial render
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [incomingPirs, setIncomingPirs] = useState<PirRequest[]>([]);
   const [requestingCompanies, setRequestingCompanies] = useState<Company[]>([]);
@@ -40,7 +39,6 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
     const fetchCompanyId = async () => {
       if (user) {
         // setIsLoading(true); // Removed: Loading managed by PIR fetch effect
-        console.log("Fetching company ID for user:", user.id);
         try {
           const { data, error } = await supabase
             .from('company_users')
@@ -48,24 +46,19 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
             .eq('user_id', user.id)
             // .single(); // Removed .single() to check the array directly
 
-          console.log("Raw data from company_users fetch:", data); // Log raw data
+          // Log raw data
           if (error) {
-            console.error("Error fetching company ID:", error);
             toast.error("Could not determine your company association.");
             setCompanyId(null);
           } else if (data && data.length > 0 && data[0].company_id) {
             // Check if data is an array, has elements, and the first element has company_id
             const foundCompanyId = data[0].company_id;
-            console.log("User associated with company ID:", foundCompanyId);
             setCompanyId(foundCompanyId);
-            console.log('Set companyId state:', foundCompanyId);
-          } else {
+            } else {
             // Handle case where data is null, empty array, or row has no company_id
-            console.log("No company association found in returned data.");
             setCompanyId(null);
           }
         } catch (err) {
-          console.error("Unexpected error fetching company ID:", err);
           toast.error("An error occurred while identifying your company.");
           setCompanyId(null);
         }
@@ -88,57 +81,52 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
         setIsLoading(true);
         // Only proceed if companyId is actually determined
         if (companyId) {
-        console.log("Fetching PIRs for supplier company ID:", companyId);
         try {
           const { data: pirsData, error: pirsError } = await supabase
             .from('pir_requests')
-            .select('*') // Select all PIR fields
-            .eq('supplier_company_id', companyId); // Corrected column name
+            .select(`
+              *,
+              customer:companies!pir_requests_customer_id_fkey(*),
+              product:products(*)
+            `) // Fetch customer name explicitly, keep product join
+            .eq('supplier_company_id', companyId);
 
           if (pirsError) {
-            console.error("Error fetching PIR requests:", pirsError);
             toast.error("Failed to load incoming requests.");
             setIncomingPirs([]);
           } else {
-            console.log("Fetched PIRs:", pirsData);
-            setIncomingPirs(pirsData || []);
-            console.log('Set incomingPirs state:', pirsData?.length); // Log state update
+            // Process fetched data
+            const processedPirs = (pirsData || []).map((pir: any) => ({
+              ...pir,
+              // Use suggested name if product join is null
+              productName: pir.product?.name ?? pir.suggested_product_name ?? 'Unknown Product',
+              // Use explicitly fetched customer name
+              customerName: pir.customer?.name ?? 'Unknown Customer',
+            }));
+            setIncomingPirs(processedPirs);
+            // Log state update
 
-            // Fetch requesting company details
-            const customerIds = [...new Set(pirsData?.map(pir => pir.customer_id).filter(id => id))];
-            if (customerIds.length > 0) {
-              const { data: companiesData, error: companiesError } = await supabase
-                .from('companies')
-                .select('*') // Fetch all fields to match Company type
-                .in('id', customerIds);
-
-              if (companiesError) {
-                console.error("Error fetching requesting companies:", companiesError);
-                // Handle partial data loading?
-              } else {
-                setRequestingCompanies(companiesData || []);
-                console.log('Set requestingCompanies state:', companiesData?.length); // Log state update
-              }
-            }
+            // No longer need to fetch requestingCompanies separately as it's joined
+            // const customerIds = [...new Set(pirsData?.map(pir => pir.customer_id).filter(id => id))];
+            // ... removed separate company fetch ...
+            setRequestingCompanies([]); // Clear or remove this state if not used elsewhere
           }
         } catch (err) {
-          console.error("Unexpected error fetching PIRs:", err);
           toast.error("An error occurred while loading requests.");
           setIncomingPirs([]);
         } finally {
-          console.log('Setting isLoading state to false (fetch attempt done)'); // Log state update
+          // Removed leftover log comment
           setIsLoading(false); // Set loading false after fetch attempt
         }
         } else {
           // Handle case where companyId is null (either initially or after fetch error)
-          console.log("No company ID found, skipping PIR fetch.");
           setIncomingPirs([]);
           setRequestingCompanies([]);
           setIsLoading(false); // Set loading false as fetch attempt is complete (skipped)
         }
       } else {
         // No user logged in
-        console.log('Setting isLoading state to false (no user/companyId)'); // Log state update
+        // Removed leftover log comment
         setIsLoading(false);
         setIncomingPirs([]);
         setRequestingCompanies([]);
@@ -149,15 +137,22 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
   }, [companyId]);
 
   // --- Helper Functions --- Moved Up ---
-  const getCompanyName = (customerId: string | null): string => {
-    if (!customerId) return "Unknown Customer";
-    const company = requestingCompanies.find(c => c.id === customerId);
-    return company ? company.name : "Loading..."; // Or "Unknown ID"
+  // Removed getCompanyName as customer name is now directly on the pir object
+  // const getCompanyName = (customerId: string | null): string => {
+  //   if (!customerId) return "Unknown Customer";
+  //   const company = requestingCompanies.find(c => c.id === customerId);
+  //   return company ? company.name : "Loading..."; // Or "Unknown ID"
+  // };
+  // --- Helper Functions --- Moved Up --- // Keep this comment structure if needed
+  const getCompanyName = (customerId: string | null): string => { // Keep function signature for now if used elsewhere, but data comes from pir.customer
+      // This function might become redundant if customerName is always accessed directly
+      const pirWithCustomer = incomingPirs.find(p => p.customer_id === customerId);
+      return pirWithCustomer?.customer?.name ?? "Unknown Customer";
   };
 
   // --- Filtering Logic (Restored) ---
   const getFilteredPirs = () => {
-    console.log('Filtering PIRs:', { activeTab, incomingPirsCount: incomingPirs.length, searchTerm }); // Log filter start
+    // Log filter start
     let pirsToFilter = incomingPirs;
 
     // Adjust filtering based on tabs (e.g., 'pending', 'completed')
@@ -171,10 +166,10 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
     // Apply search term
     const result = pirsToFilter.filter(pir => // Assign to result
       pir.request_details?.toLowerCase().includes(searchTerm.toLowerCase()) || // Search details
-      getCompanyName(pir.customer_id)?.toLowerCase().includes(searchTerm.toLowerCase()) // Search customer name
+      pir.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) // Search customer name directly
       // Add more searchable fields if needed (e.g., product name if available)
     );
-    console.log('Filtered PIRs count:', result.length); // Log filter result using the correct variable
+    // Log filter result using the correct variable
     return result; // Return the correct variable
   };
 
@@ -190,7 +185,6 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
 
   // --- Rendering Logic (Restored) ---
   // Log final state before rendering main content
-  console.log('Rendering OurProducts - Final State:', { isLoading, companyId, user: !!user, incomingPirsCount: incomingPirs.length, filteredPirsCount: filteredPirs.length });
   return (
     <div className="space-y-6">
       <PageHeader
@@ -253,9 +247,8 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                       try {
                         // Original Row Rendering (Restored):
                         // Log each PIR being rendered
-                        console.log('Rendering PIR row:', pir.id, pir.status);
                         // Defensive checks
-                        const customerName = getCompanyName(pir.customer_id);
+                        const customerName = pir.customerName; // Use directly fetched name
                         const requestDetails = pir.request_details || "N/A";
                         // Ensure created_at is valid before creating Date
                         const dateReceived = pir.created_at && !isNaN(new Date(pir.created_at).getTime())
@@ -269,41 +262,50 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                           className="transition-colors hover:bg-muted/50 cursor-pointer"
                           onClick={() => handlePirAction(pir)}
                         >
-                          <TableCell className="font-medium">{customerName}</TableCell>
+                          <TableCell className="font-medium">{customerName || 'Unknown Customer'}</TableCell>
                           <TableCell>{requestDetails}</TableCell>
                           <TableCell>{dateReceived}</TableCell>
                           <TableCell>
+                             {/* Supplier-centric status display */}
                              <span
                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                 pir.status === "approved" // Use 'approved' instead of 'completed'
-                                   ? "bg-green-100 text-green-800"
-                                   : pir.status === "rejected"
-                                   ? "bg-red-100 text-red-800"
-                                   : pir.status === "in_review" // Use 'in_review' instead of 'in_progress'
-                                   ? "bg-yellow-100 text-yellow-800"
-                                   : "bg-blue-100 text-blue-800" // Default for 'pending' etc.
+                                 pir.status === "approved" ? "bg-green-100 text-green-800" :
+                                 pir.status === "rejected" ? "bg-red-100 text-red-800" :
+                                 pir.status === "submitted" ? "bg-purple-100 text-purple-800" : // Submitted by supplier
+                                 pir.status === "flagged" ? "bg-yellow-100 text-yellow-800" : // Changes Requested
+                                 pir.status === "in_review" ? "bg-blue-100 text-blue-800" : // Under Review
+                                 "bg-gray-100 text-gray-800" // Draft / Other
                                }`}
                              >
-                               {statusDisplay}
+                               { pir.status === 'draft' ? 'Response Required' :
+                                 pir.status === 'submitted' ? 'Submitted' :
+                                 pir.status === 'flagged' ? 'Changes Requested' :
+                                 pir.status === 'in_review' ? 'Under Review' :
+                                 pir.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) // Default formatting
+                               }
                              </span>
                           </TableCell>
                           <TableCell className="text-right">
+                            {/* Supplier Action Button Logic */}
                             <Button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handlePirAction(pir);
+                                handlePirAction(pir); // Always goes to the form
                               }}
-                              variant="secondary"
                               size="sm"
-                              className="bg-brand hover:bg-brand-700 text-white"
+                              variant={(pir.status === 'draft' || pir.status === 'flagged') ? "default" : "outline"} // Highlight actionable button
+                              className={`ml-auto ${(pir.status === 'draft' || pir.status === 'flagged') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
                             >
-                              View / Respond
+                              {pir.status === 'draft' || pir.status === 'flagged' ? (
+                                <> <SendHorizontal className="h-4 w-4 mr-2" /> Respond </>
+                              ) : (
+                                <> <Eye className="h-4 w-4 mr-2" /> View </>
+                              )}
                             </Button>
                           </TableCell>
                         </TableRow>
                         );
                       } catch (error) {
-                        console.error(`Error rendering PIR row for ID: ${pir?.id}`, error, pir);
                         // Render a fallback row indicating an error
                         return (
                           <TableRow key={`${pir?.id}-error`}>

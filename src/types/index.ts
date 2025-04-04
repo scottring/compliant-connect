@@ -1,5 +1,7 @@
 import { Database, Json } from "./supabase"; // Import Database and Json types
 
+// Define Row types from generated Supabase types
+export type DBPIRResponse = Database['public']['Tables']['pir_responses']['Row'];
 export interface User {
   id: string;
   name: string;
@@ -149,13 +151,25 @@ export interface TableColumn {
 export interface PirRequest {
   id: string;
   customer_id: string | null;
-  supplier_company_id: string | null; // Corrected field name
-  status: Database['public']['Enums']['pir_status']; // Use generated enum
+  supplier_company_id: string | null;
+  product_id?: string | null; // Added product_id
+  status: Database['public']['Enums']['pir_status'];
   request_details: string | null;
-  created_at: string; // Assuming string from DB fetch
+  created_at: string;
   updated_at: string | null;
-  // Add other relevant fields from pir_requests table if needed
-  // e.g., product_id, requested_by_user_id, etc.
+  title?: string | null; // Added title
+  description?: string | null; // Added description
+  due_date?: string | null; // Added due_date
+  suggested_product_name?: string | null; // Added suggested_product_name
+
+  // Fields added during processing/joining
+  customer?: Company | null;
+  product?: { id?: string; name: string; } | null; // Allow partial product from join
+  tags?: Tag[]; // Added for consistency, might be populated later
+  responses?: DBPIRResponse[]; // Added for consistency
+  customerName?: string; // Processed field
+  productName?: string; // Processed field
+  responseCount?: number; // Processed field
 }
 
 export type CompanyUser = {

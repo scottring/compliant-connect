@@ -19,6 +19,7 @@ import TaskProgress from "@/components/ui/progress/TaskProgress";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { toast } from "sonner";
+import { useCompanyData } from '@/hooks/use-company-data'; // Import useCompanyData
 
 // Type for the combined PIR data fetched by the query
 interface PirDetails {
@@ -53,6 +54,7 @@ const SupplierResponseForm = () => {
   const { id: pirId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompanyData(); // Get current company context
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
@@ -78,7 +80,7 @@ const SupplierResponseForm = () => {
           .select('tags (*)')
           .eq('pir_id', id);
 
-      if (pirTagsError) console.error("Warning: Failed to fetch PIR tags:", pirTagsError.message); // Non-critical?
+      // Removed incomplete if statement after log removal
       const pirTags = (pirTagsData?.map((pt: any) => pt.tags).filter(Boolean).flat() || []) as Tag[];
       const pirTagIds = pirTags.map(t => t.id);
 
@@ -127,8 +129,7 @@ const SupplierResponseForm = () => {
               return subsectionOrderA - subsectionOrderB;
           });
       } else {
-          console.log("No tags found for this PIR, no questions will be fetched based on tags.");
-      }
+          }
 
       // Step 4: Fetch existing Responses for this PIR (to populate answers)
       const { data: responsesData, error: responsesError } = await supabase
@@ -161,6 +162,18 @@ const SupplierResponseForm = () => {
       queryFn: () => fetchPirDetails(pirId!),
       enabled: !!pirId,
   });
+
+  // --- Authorization Check ---
+  useEffect(() => {
+    if (pirDetails && currentCompany && !isLoadingPir) {
+      const expectedSupplierId = pirDetails.pir.supplier_company_id;
+      if (currentCompany.id !== expectedSupplierId) {
+        toast.error("Unauthorized: You are not the designated supplier for this request.");
+        navigate('/unauthorized', { replace: true });
+      }
+    }
+    // Run check when PIR details or current company context changes after initial load
+  }, [pirDetails, currentCompany, isLoadingPir, navigate]);
   // --- End Fetch PIR Details Query ---
 
 
@@ -243,17 +256,101 @@ const SupplierResponseForm = () => {
       queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
     },
     onError: (error: Error, variables) => {
-      console.error("Error saving answer:", error);
       toast.error(`Failed to save answer for question ID ${variables.questionId}: ${error.message}`);
     },
   });
 
+  // Define input type for the submit mutation
+  type SubmitPirInput = {
+    pirId: string;
+    customerEmail?: string | null;
+    supplierName?: string | null;
+    productName?: string | null;
+    // Add any other data needed for notification
+  };
+
+  const submitPirMutation = useMutation({
+    mutationFn: async (input: SubmitPirInput) => { // Use the input type
+      if (!input.pirId) throw new Error("PIR ID is missing");
+
+      const updates = {
+        status: 'submitted' as PIRStatus, // Cast to the enum type
+        // removed submitted_at as the column doesn't exist
+      };
+
+      const { error } = await supabase
+        .from('pir_requests')
+        .update(updates)
+        .eq('id', input.pirId); // Use pirId from input
+
+      if (error) throw error;
+      return { ...input }; // Return input data for onSuccess
+    },
+    onSuccess: async (data) => { // Make async
+      toast.success(`PIR Response submitted successfully!`);
+      queryClient.invalidateQueries({ queryKey: ['pirDetails', data.pirId] });
+      // queryClient.invalidateQueries({ queryKey: ['pirList'] }); // Consider invalidating list if needed
+
+      // --- Send Email Notification to Customer ---
+      try {
+        const customerEmail = data.customerEmail;
+        const supplierName = data.supplierName || 'Your Supplier';
+        const productName = data.productName || 'the requested product';
+        const appUrl = window.location.origin;
+        const reviewLink = `${appUrl}/customer-review/${data.pirId}`; // Link to customer review page
+
+        if (customerEmail) {
+          const subject = `PIR Response Submitted by ${supplierName}`;
+          const html_body = `
+              <p>Hello,</p>
+              <p><strong>${supplierName}</strong> has submitted their response for the Product Information Request regarding <strong>${productName}</strong>.</p>
+              <p>Please click the link below to review their submission:</p>
+              <p><a href="${reviewLink}">${reviewLink}</a></p>
+              <p>Thank you,<br/>CompliantConnect</p>
+          `;
+
+          const { error: functionError } = await supabase.functions.invoke(
+              'send-pir-notification',
+              { body: { to: customerEmail, subject, html_body } }
+          );
+
+          if (functionError) throw functionError;
+          toast.info(`Notification email sent to ${customerEmail}`);
+        } else {
+          toast.warning("Could not find customer contact email. Notification not sent.");
+        }
+      } catch (emailError: any) {
+        console.error("Failed to send PIR submission notification email:", emailError);
+        toast.error(`Response submitted, but failed to send notification email: ${emailError.message}`);
+      }
+      // --- End Send Email Notification ---
+
+      navigate('/our-products'); // Navigate after success/notification attempt
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to submit PIR: ${error.message}`);
+    },
+  });
+
+
   // --- Event Handlers ---
-  const handleSubmit = () => { toast.info("Submit functionality not fully implemented."); };
+  // Updated handler to use the submit mutation
+  const handleSubmit = () => {
+    // Optional: Add validation here
+    if (!pirDetails) {
+      toast.error("PIR details not loaded yet.");
+      return;
+    }
+    submitPirMutation.mutate({
+      pirId: pirId!,
+      customerEmail: pirDetails.customer?.contact_email,
+      supplierName: pirDetails.supplier?.name,
+      productName: pirDetails.product?.name,
+    });
+  };
   const handleSaveAsDraft = () => { toast.info("Save as Draft functionality not fully implemented."); };
   // Updated handler to use the mutation
   const handleAnswerUpdate = (questionId: string, value: any) => {
-    console.log(`Updating answer for Q:${questionId} with value:`, value);
     updateAnswerMutation.mutate({ questionId, value });
   };
   const handleAddComment = (answerId: string, text: string) => { toast.info(`Adding comment to A:${answerId} - Not implemented.`); };
