@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { toast } from "sonner";
 // Import types from central location and generated types
-import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "@/types";
+import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "../types/index"; // Use relative path
 import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse } from "@/types/pir";
 import { Database } from "@/types/supabase";
 type DBFlag = Database['public']['Tables']['response_flags']['Row'];
@@ -53,10 +53,14 @@ interface PirDetailsForReview {
 // --- Reusable Submit Review Mutation Hook ---
 type SubmitReviewInput = {
     pirId: string;
-    userId: string;
-    userName: string;
+    userId: string; // Reviewer's ID
+    userName: string; // Reviewer's name/email
     reviewStatuses: Record<string, "approved" | "flagged" | "pending">;
     reviewNotes: Record<string, string>;
+    // Add context for notification
+    supplierEmail?: string | null;
+    customerName?: string | null;
+    productName?: string | null;
 };
 type SubmitReviewResult = { finalStatus: PIRStatus };
 
@@ -80,7 +84,7 @@ const useSubmitReviewMutation = (
                             created_by: userId,
                             status: 'open'
                         });
-                    } else { console.warn(`Response ${responseId} flagged without note.`); }
+                    } else { }
                 } else if (status === 'approved') {
                     // TODO: Clear/resolve flags for this response
                     // Example: await supabase.from('response_flags').update({ status: 'resolved', resolved_by: userId, resolved_at: new Date().toISOString() }).eq('response_id', responseId).eq('status', 'open');
@@ -102,13 +106,50 @@ const useSubmitReviewMutation = (
 
             return { finalStatus };
         },
-        onSuccess: (data, variables) => {
+        onSuccess: async (data, variables) => { // Make async
             queryClient.invalidateQueries({ queryKey: ['pirDetailsForReview', variables.pirId] });
-            queryClient.invalidateQueries({ queryKey: ['pirRequests'] }); // Invalidate general list too
+            queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
             toast.success(`Review submitted. Final status: ${data.finalStatus}`);
+
+            // --- Send Email Notification to Supplier via Edge Function ---
+            try {
+                // Fetch the updated PIR record to pass to the function
+                const { data: updatedPirRecord, error: fetchError } = await supabase
+                    .from('pir_requests')
+                    .select('*, products(name)') // Select needed fields
+                    .eq('id', variables.pirId)
+                    .single();
+
+                if (fetchError || !updatedPirRecord) {
+                    throw new Error(`Failed to fetch updated PIR record for notification: ${fetchError?.message || 'Not found'}`);
+                }
+
+                // Construct the payload expected by the 'send-email' function
+                // Pass the *updated* record which now has status 'approved' or 'flagged'
+                const payload = {
+                    type: 'PIR_STATUS_UPDATE',
+                    record: updatedPirRecord,
+                    // old_record might be useful here if the function handles transitions
+                };
+
+                // Invoke the Edge Function
+                const { error: functionError } = await supabase.functions.invoke(
+                    'send-email',
+                    { body: payload }
+                );
+
+                if (functionError) {
+                    throw functionError;
+                }
+                toast.info(`Notification process initiated for PIR ${variables.pirId}.`);
+
+            } catch (notificationError: any) {
+                console.error("Failed to send PIR review notification:", notificationError);
+                toast.error(`Review submitted, but failed to send notification: ${notificationError.message}`);
+            }
+            // --- End Send Email Notification ---
         },
         onError: (error) => {
-            console.error("Error submitting review:", error);
             toast.error(`Failed to submit review: ${error.message}`);
         },
     });
@@ -320,19 +361,26 @@ const CustomerReview = () => {
     return acc;
   }, {} as Record<string, SupplierResponse & { flags?: LocalFlagType[] }>);
 
-  // Filter questions
+  // Filter questions - Updated to handle missing answers
   const getFilteredQuestions = (sectionQuestions: DBQuestionForReview[]): DBQuestionForReview[] => {
     return sectionQuestions.filter(q => {
         const answer = answersMap[q.id];
-        if (!answer) return false;
-        const status = reviewStatus[answer.id];
-        const hasFlags = answer.flags && answer.flags.length > 0;
+        const status = reviewStatus[answer?.id] || "pending"; // Default to pending if no answer/status yet
+        const hasFlags = answer?.flags && answer.flags.length > 0;
 
-        if (activeTab === "all") return true;
+        if (activeTab === "all") return true; // Always show in 'all' tab
+
+        // If no answer exists yet, it's considered pending
+        if (!answer) {
+            return activeTab === "pending";
+        }
+
+        // If answer exists, apply tab-specific logic
         if (activeTab === "flagged") return status === "flagged" || (isPreviouslyReviewed && hasFlags);
         if (activeTab === "approved") return status === "approved";
         if (activeTab === "pending") return status === "pending" && !(isPreviouslyReviewed && hasFlags);
-        return false;
+
+        return false; // Should not be reached if tabs cover all cases
     });
   };
 
@@ -375,13 +423,21 @@ const CustomerReview = () => {
         toast.error(`Please add notes to all ${flaggedWithoutNotes} flagged answers.`); return;
     }
 
+    if (!pirDetails) {
+      toast.error("PIR details not loaded yet.");
+      return;
+    }
     submitReviewMutation.mutate({
-        pirId,
+        pirId: pirId!,
         userId: user.id,
         userName: user.email || 'Reviewer',
         reviewStatuses: reviewStatus,
         reviewNotes,
-    }, { onSuccess: () => { navigate("/product-sheets"); } });
+        // Pass context for notification
+        supplierEmail: pirDetails.supplier?.contact_email,
+        customerName: pirDetails.customer?.name,
+        productName: pirDetails.product?.name,
+    }, { onSuccess: () => { navigate("/product-sheets"); } }); // Keep existing navigation on success
   };
   // --- End Event Handlers ---
 
@@ -452,7 +508,7 @@ const CustomerReview = () => {
                     <Separator />
                     {filteredSectionQuestions.map((question, index) => {
                       const answer = answersMap[question.id];
-                      if (!answer) return null;
+                      // Removed check: if (!answer) return null; We need to render even without an answer.
                       const status = reviewStatus[answer.id] || "pending";
                       // Map DBQuestionForReview to LocalQuestionType for the component prop
                       const questionForComponent: LocalQuestionType = {
@@ -475,6 +531,8 @@ const CustomerReview = () => {
                           // created_by: '', // Removed created_by
                           // sectionId: question.subsection?.section?.id || '', // Removed sectionId as it's not in LocalQuestionType
                       };
+                      // DEBUG: Log props being passed to ReviewQuestionItem
+                      console.log(`CustomerReview: Rendering ReviewQuestionItem for Q:${question.id}`, { answerExists: !!answer, status, note: reviewNotes[answer?.id] || "" });
                       return (
                         <div key={question.id}>
                           <ReviewQuestionItem
@@ -482,10 +540,10 @@ const CustomerReview = () => {
                             answer={answer}
                             status={status}
                             note={reviewNotes[answer.id] || ""}
-                            onApprove={() => handleApprove(answer.id)}
-                            onFlag={(note) => handleFlag(answer.id, note)}
-                            onUpdateNote={(note) => handleUpdateNote(answer.id, note)}
-                            isPreviouslyFlagged={answer.flags && answer.flags.length > 0}
+                            onApprove={() => { if (answer) handleApprove(answer.id); }}
+                            onFlag={(note) => { if (answer) handleFlag(answer.id, note); }}
+                            onUpdateNote={(note) => { if (answer) handleUpdateNote(answer.id, note); }}
+                            // isPreviouslyFlagged is now handled internally by ReviewQuestionItem
                           />
                           {index < filteredSectionQuestions.length - 1 && <Separator />}
                         </div>

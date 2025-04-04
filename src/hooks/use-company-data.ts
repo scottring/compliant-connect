@@ -28,31 +28,21 @@ export const useCompanyData = (): UseCompanyDataReturn => {
   const queryClient = useQueryClient();
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
 
-  console.log('useCompanyData: Starting query', { hasUser: !!user });
-
   const fetchUserCompanies = async (userId: string): Promise<UserCompany[]> => {
-    console.log('useCompanyData: Fetching companies for user', { userId });
-
     const { data: linksData, error: linksError } = await supabase
       .from('company_users')
       .select('company_id, role')
       .eq('user_id', userId);
 
-    console.log('useCompanyData: company_users query result', { linksData, linksError });
-
     if (linksError) {
-      console.error('useCompanyData: Error fetching company_users:', linksError);
       throw new Error(`Failed to load company associations: ${linksError.message}`);
     }
     
     if (!linksData || linksData.length === 0) {
-      console.log('useCompanyData: No company associations found');
       return [];
     }
 
     const companyIds = linksData.map(link => link.company_id);
-    console.log('useCompanyData: Found company IDs', { companyIds });
-
     const userRoleMap = new Map(linksData.map(link => [link.company_id, link.role as UserRole]));
 
     const { data: companiesData, error: companiesError } = await supabase
@@ -60,10 +50,7 @@ export const useCompanyData = (): UseCompanyDataReturn => {
       .select('*')
       .in('id', companyIds);
 
-    console.log('useCompanyData: companies query result', { companiesData, companiesError });
-
     if (companiesError) {
-      console.error('useCompanyData: Error fetching companies:', companiesError);
       throw new Error(`Failed to load company details: ${companiesError.message}`);
     }
 
@@ -83,10 +70,7 @@ export const useCompanyData = (): UseCompanyDataReturn => {
   } = useQuery<UserCompany[], Error>({
     queryKey: ['userCompanies', user?.id],
     queryFn: () => {
-      console.log('useCompanyData: Fetching companies for user', { userId: user?.id });
-      
       if (!user) {
-        console.log('useCompanyData: No user, returning empty array');
         return Promise.resolve([]);
       }
 
@@ -102,7 +86,6 @@ export const useCompanyData = (): UseCompanyDataReturn => {
     if (!currentCompany && Array.isArray(userCompanies) && userCompanies.length > 0) {
       // Select the first company as default
       // No need to map fields, userCompanies[0] is already type Company
-      console.log("Setting default company:", userCompanies[0]);
       setCurrentCompany(userCompanies[0]);
     } else if (Array.isArray(userCompanies) && userCompanies.length === 0) {
         setCurrentCompany(null);

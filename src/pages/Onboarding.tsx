@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { env } from "@/config/env";
+// Removed unused import: import { env } from "@/config/env";
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient, useMutation, UseMutationResult } from '@tanstack/react-query';
 import { Company } from "@/types/auth"; // Import Company type
@@ -61,7 +61,6 @@ const useCreateCompanyAndAssociateUserMutation = (
                 .single();
 
             if (companyError) {
-                console.error("Error creating company:", companyError);
                 if (companyError.code === '23505') throw new Error("A company with this name already exists.");
                 if (companyError.code === '42501') throw new Error("Permission denied: Could not create company.");
                 throw new Error(`Failed to create company: ${companyError.message}`);
@@ -78,7 +77,6 @@ const useCreateCompanyAndAssociateUserMutation = (
                 });
 
             if (associationError) {
-                console.error("Error creating company association:", associationError);
                 // await supabase.from("companies").delete().eq("id", company.id); // Temporarily disabled cleanup
                 if (associationError.code === '42501') throw new Error("Permission denied: Could not associate user with company.");
                 throw new Error(`Failed to associate user: ${associationError.message}`);
@@ -140,7 +138,7 @@ const Onboarding = () => {
       if (!results.hasSession) setError("No active session found.");
       else if (!results.canSelectCompanies) setError("Cannot access companies table.");
       else if (!results.canSelectUsers) setError("Cannot access company_users table.");
-    } catch (error: any) { console.error("Diagnostics error:", error); setError(`Diagnostic error: ${error.message}`);
+    } catch (error: any) { setError(`Diagnostic error: ${error.message}`);
     } finally { setDiagnosing(false); }
   };
   useEffect(() => { runDiagnostics(); }, []);
@@ -172,7 +170,6 @@ const Onboarding = () => {
         await createCompanyMutation.mutateAsync({ ...data, userId: user.id });
         forceNavigateToEntryPoint();
     } catch (error) {
-        console.error("Company creation failed:", error);
         toast.error("Failed to create company. Please try again.");
     }
   };
@@ -186,7 +183,6 @@ const Onboarding = () => {
     }
     // setIsSubmitting(true); // Consider adding separate loading state for debug actions
     try {
-      console.log("Trying direct approach...");
       const directResult = await createCompanyDirectly({ userId: user.id, companyName: formData.name, contactName: formData.contact_name, contactEmail: formData.contact_email, contactPhone: formData.contact_phone }); // Removed role
       if (directResult.success) {
         toast.success(directResult.message);
@@ -195,7 +191,6 @@ const Onboarding = () => {
       }
       toast.error("Direct method failed: " + directResult.error);
 
-      console.log("Trying SQL bypass...");
       const sqlResult = await createCompanyWithSQL({ userId: user.id, companyName: formData.name, role: formData.role, contactName: formData.contact_name, contactEmail: formData.contact_email, contactPhone: formData.contact_phone }); // Added role back
       if (sqlResult.success) {
         toast.success("SQL method succeeded!");
@@ -207,7 +202,7 @@ const Onboarding = () => {
       // Add other fallback methods if necessary, ensuring query invalidation on success
       toast.error("All emergency creation methods failed.");
 
-    } catch (error: any) { console.error("Emergency create error:", error); toast.error("Emergency create failed: " + error.message);
+    } catch (error: any) { toast.error("Emergency create failed: " + error.message);
     } finally { /* setIsSubmitting(false); */ }
   };
 
@@ -235,7 +230,7 @@ const Onboarding = () => {
      try { /* ... */ await runDiagnostics(); } catch (e) { /* ... */ } finally { /* ... */ }
   };
   const forceNavigateToEntryPoint = async () => { /* ... implementation ... */
-     try { await supabase.auth.signOut(); window.location.href = '/auth'; } catch (e) { console.error("Sign out error on force nav:", e); window.location.href = '/auth'; }
+     try { await supabase.auth.signOut(); window.location.href = '/auth'; } catch (e) { window.location.href = '/auth'; }
   };
   // --- End Emergency/Debug Functions ---
 

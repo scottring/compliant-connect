@@ -154,11 +154,15 @@ const SupplierProducts = () => {
     setFilteredPirs(filtered);
   }, [pirRequests, searchTerm]);
 
-  const handleAction = (pirId: string, action: string) => {
-    if (action === "edit") {
-      navigate(`/supplier-response-form/${pirId}`);
-    } else if (action === "review") {
-      navigate(`/customer-review/${pirId}`);
+  // Updated handler to check status before navigating
+  const handleAction = (pir: PirDisplayData) => {
+    if (pir.status === 'submitted' || pir.status === 'flagged') {
+      // Customer's turn to review
+      navigate(`/customer-review/${pir.id}`);
+    } else {
+      // View details (likely supplier form, relies on auth check there)
+      // TODO: Consider a dedicated read-only view for customer
+      navigate(`/supplier-response-form/${pir.id}`);
     }
   };
 
@@ -247,23 +251,28 @@ const SupplierProducts = () => {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" size="sm">
-                          Actions
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => handleAction(pir.id, "review")}>
-                          <ClipboardCheck className="h-4 w-4 mr-2" />
-                          Review
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAction(pir.id, "edit")}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Conditionally render actions based on status */}
+                    {(pir.status === 'submitted' || pir.status === 'flagged') ? (
+                      // Show Review button when it's customer's turn
+                      <Button
+                        onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
+                        size="sm"
+                        variant="default" // Use default variant for primary action
+                        className="bg-brand hover:bg-brand/90 text-white"
+                      >
+                        <ClipboardCheck className="h-4 w-4 mr-2" /> Review
+                      </Button>
+                    ) : (
+                      // Show View button for other statuses
+                      <Button
+                        onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Eye className="h-4 w-4 mr-2" /> View
+                      </Button>
+                    )}
+                    {/* Removed DropdownMenu for simplicity, can be added back if more actions needed */}
                   </TableCell>
                 </TableRow>
               ))}

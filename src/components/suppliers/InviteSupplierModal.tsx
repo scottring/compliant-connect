@@ -56,8 +56,6 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
       if (!user) throw new Error("User not authenticated.");
       if (!currentCompany) throw new Error("Current company context is missing.");
 
-      // --- New Logic: Create Supplier Company and Relationship First ---
-      console.log("Creating supplier company record:", data.supplierName);
       const { data: newSupplierCompany, error: supplierError } = await supabase
         .from('companies')
         .insert({
@@ -73,7 +71,6 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
       if (supplierError) throw new Error(`Failed to create supplier company: ${supplierError.message}`);
       if (!newSupplierCompany) throw new Error("Supplier company created but no data returned.");
 
-      console.log("Creating company relationship (pending):", currentCompany.id, "->", newSupplierCompany.id);
       const { error: relationshipError } = await supabase
         .from('company_relationships')
         .insert({
@@ -85,26 +82,13 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
 
       if (relationshipError) {
       // --- Invalidate supplier query cache on success ---
-      console.log("Invalidating suppliers query cache for company:", currentCompany.id);
       await queryClient.invalidateQueries({ queryKey: ['suppliers', currentCompany.id] });
       // --- End Invalidation ---
 
-        // Attempt to clean up the created company if relationship fails
-        console.error("Failed to create relationship, attempting to delete created company...");
         await supabase.from('companies').delete().eq('id', newSupplierCompany.id);
         throw new Error(`Failed to create company relationship: ${relationshipError.message}`);
       }
       // --- End New Logic ---
-
-      console.log("Invoking invite-user function with:", {
-        email: data.contactEmail,
-        invitingCompanyId: currentCompany.id,
-        invitingUserId: user.id,
-        supplierName: data.supplierName,
-        contactName: data.contactName,
-        invited_supplier_company_id: newSupplierCompany.id // Pass the created supplier ID
-        // Note: data.note is not explicitly sent, but could be added to metadata if needed
-      });
 
       // Call the Edge Function
       const { data: functionResponse, error: functionError } = await supabase.functions.invoke(
@@ -128,8 +112,6 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
         }
         throw functionError; // Re-throw other function errors
       }
-
-      console.log("Invite function response:", functionResponse);
      
       toast.success(`Invitation sent successfully to ${data.contactEmail}`);
       onOpenChange(false);
