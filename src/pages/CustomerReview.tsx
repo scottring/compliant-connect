@@ -111,52 +111,41 @@ const useSubmitReviewMutation = (
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
             toast.success(`Review submitted. Final status: ${data.finalStatus}`);
 
-            // --- Send Email Notification to Supplier ---
+            // --- Send Email Notification to Supplier via Edge Function ---
             try {
-                const supplierEmail = variables.supplierEmail;
-                const customerName = variables.customerName || 'Your Customer';
-                const productName = variables.productName || 'the requested product';
-                const appUrl = window.location.origin;
-                // Link back to the supplier response form
-                const responseLink = `${appUrl}/supplier-response-form/${variables.pirId}`;
-                const reviewStatus = data.finalStatus; // 'approved' or 'flagged'
+                // Fetch the updated PIR record to pass to the function
+                const { data: updatedPirRecord, error: fetchError } = await supabase
+                    .from('pir_requests')
+                    .select('*, products(name)') // Select needed fields
+                    .eq('id', variables.pirId)
+                    .single();
 
-                if (supplierEmail) {
-                    let subject = '';
-                    let html_body = '';
-
-                    if (reviewStatus === 'approved') {
-                        subject = `PIR Response Approved by ${customerName}`;
-                        html_body = `
-                            <p>Hello,</p>
-                            <p>Your response for the Product Information Request regarding <strong>${productName}</strong> has been reviewed and approved by <strong>${customerName}</strong>.</p>
-                            <p>No further action is required at this time.</p>
-                            <p>Thank you,<br/>CompliantConnect</p>
-                        `;
-                    } else { // Assumes 'flagged'
-                        subject = `PIR Response Requires Revision - Request from ${customerName}`;
-                        html_body = `
-                            <p>Hello,</p>
-                            <p>Your response for the Product Information Request regarding <strong>${productName}</strong> has been reviewed by <strong>${customerName}</strong>, and some items require revision.</p>
-                            <p>Please click the link below to view the feedback and update your response:</p>
-                            <p><a href="${responseLink}">${responseLink}</a></p>
-                            <p>Thank you,<br/>CompliantConnect</p>
-                        `;
-                    }
-
-                    const { error: functionError } = await supabase.functions.invoke(
-                        'send-pir-notification',
-                        { body: { to: supplierEmail, subject, html_body } }
-                    );
-
-                    if (functionError) throw functionError;
-                    toast.info(`Notification email sent to ${supplierEmail}`);
-                } else {
-                    toast.warning("Could not find supplier contact email. Notification not sent.");
+                if (fetchError || !updatedPirRecord) {
+                    throw new Error(`Failed to fetch updated PIR record for notification: ${fetchError?.message || 'Not found'}`);
                 }
-            } catch (emailError: any) {
-                console.error("Failed to send PIR review notification email:", emailError);
-                toast.error(`Review submitted, but failed to send notification email: ${emailError.message}`);
+
+                // Construct the payload expected by the 'send-email' function
+                // Pass the *updated* record which now has status 'approved' or 'flagged'
+                const payload = {
+                    type: 'PIR_STATUS_UPDATE',
+                    record: updatedPirRecord,
+                    // old_record might be useful here if the function handles transitions
+                };
+
+                // Invoke the Edge Function
+                const { error: functionError } = await supabase.functions.invoke(
+                    'send-email',
+                    { body: payload }
+                );
+
+                if (functionError) {
+                    throw functionError;
+                }
+                toast.info(`Notification process initiated for PIR ${variables.pirId}.`);
+
+            } catch (notificationError: any) {
+                console.error("Failed to send PIR review notification:", notificationError);
+                toast.error(`Review submitted, but failed to send notification: ${notificationError.message}`);
             }
             // --- End Send Email Notification ---
         },

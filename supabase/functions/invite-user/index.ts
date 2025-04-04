@@ -2,8 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-console.log("invite-user function initializing");
-
 serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -36,7 +34,6 @@ serve(async (req: Request) => {
     // Parse request body
     // Destructure the new ID from the body
     const { email, invitingCompanyId, invitingUserId, supplierName, contactName, invited_supplier_company_id } = await req.json();
-    console.log("Received invite request:", { email, invitingCompanyId, invitingUserId, supplierName, contactName, invited_supplier_company_id });
 
     // Basic validation
     if (!email) {
@@ -76,8 +73,6 @@ serve(async (req: Request) => {
       }
       throw error; // Re-throw other errors
     }
-
-    console.log("User invited successfully:", data);
 
     // Return success response
     return new Response(JSON.stringify({ success: true, data }), {
