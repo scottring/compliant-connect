@@ -57,14 +57,6 @@ const useFetchSupplierProducts = (supplierId: string | undefined) => {
     });
 };
 
-const useLoggingTags = () => {
-    const tagsData = useTags();
-    useEffect(() => {
-        console.log('[DEBUG] useTags result:', tagsData);
-    }, [tagsData]);
-    return tagsData;
-};
-
 // Updated formSchema to require productName
 const formSchema = z.object({
   supplierId: z.string().min(1, "Please select a supplier"),
@@ -129,9 +121,6 @@ const useCreatePIRMutation = (
                  pirInsertData.product_id = null;
                  pirInsertData.suggested_product_name = input.productName; 
              }
-
-            console.log('[DEBUG] Data for pir_requests insert:', pirInsertData); // Log data before insert
-
             // Insert PIR Request
             const { data: pirRequestData, error: pirRequestError } = await supabase
                 .from('pir_requests').insert(pirInsertData).select('id').single();
@@ -155,43 +144,42 @@ const useCreatePIRMutation = (
             queryClient.invalidateQueries({ queryKey: ['supplierPirs', variables.supplierId] });
             toast.success(`Product Information Request (PIR) created (ID: ${data.pirId})`);
 
-            // --- Send Email Notification ---
+            // --- Send Email Notification via Edge Function ---
             try {
-                // Access data passed via variables
-                const supplier = variables.relatedSuppliers?.find(s => s.id === variables.supplierId);
-                const supplierEmail = supplier?.contact_email;
-                const customerName = variables.currentCompany?.name || 'Your Customer';
-                const productName = variables.productName; // From mutation input
-                const pirId = data.pirId; // From mutation result
-                const appUrl = window.location.origin; // Get base URL
-                const responseLink = `${appUrl}/supplier-response-form/${pirId}`;
+                // Fetch the newly created PIR record to pass to the function
+                // Ensure all fields needed by the edge function's getCompanyDetails/getProductName are selected
+                const { data: newPirRecord, error: fetchError } = await supabase
+                    .from('pir_requests')
+                    .select('*, products(name)') // Select needed fields + product name
+                    .eq('id', data.pirId)
+                    .single();
 
-                if (supplierEmail) {
-                    const subject = `New Product Information Request from ${customerName}`;
-                    const html_body = `
-                        <p>Hello ${supplier?.contact_name || supplier?.name || ''},</p>
-                        <p>You have received a new Product Information Request from <strong>${customerName}</strong> regarding the product: <strong>${productName}</strong>.</p>
-                        <p>Please click the link below to view the request and submit your response:</p>
-                        <p><a href="${responseLink}">${responseLink}</a></p>
-                        <p>Thank you,<br/>CompliantConnect</p>
-                    `;
-
-                    // Invoke the Edge Function
-                    const { error: functionError } = await supabase.functions.invoke(
-                        'send-pir-notification',
-                        { body: { to: supplierEmail, subject, html_body } }
-                    );
-
-                    if (functionError) {
-                        throw functionError; // Throw to be caught by outer catch
-                    }
-                    toast.info(`Notification email sent to ${supplierEmail}`);
-                } else {
-                    toast.warning(`Could not find contact email for supplier ID ${variables.supplierId}. Notification not sent.`);
+                if (fetchError || !newPirRecord) {
+                    throw new Error(`Failed to fetch created PIR record: ${fetchError?.message || 'Not found'}`);
                 }
-            } catch (emailError: any) {
-                console.error("Failed to send PIR notification email:", emailError);
-                toast.error(`PIR created, but failed to send notification email: ${emailError.message}`);
+
+                // Construct the payload expected by the 'send-email' function
+                const payload = {
+                    type: 'PIR_STATUS_UPDATE', // Trigger the status update logic
+                    record: newPirRecord, // Pass the full record
+                    old_record: null // No old record for creation
+                };
+
+                // Invoke the Edge Function
+                const { error: functionError } = await supabase.functions.invoke(
+                    'send-email', // Use the correct function name
+                    { body: payload }
+                );
+
+                if (functionError) {
+                    throw functionError; // Throw to be caught by outer catch
+                }
+                // Success toast can be generic or removed if function handles it
+                toast.info(`Notification process initiated for PIR ${data.pirId}.`);
+            } catch (notificationError: any) {
+                console.error("Failed to send PIR creation notification:", notificationError);
+                // Show error, but PIR itself was created successfully earlier
+                toast.error(`PIR created, but failed to send notification: ${notificationError.message}`);
             }
             // --- End Send Email Notification ---
          },
@@ -210,7 +198,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 }) => {
   const { currentCompany, isLoadingCompanies: isLoadingCurrentCompany } = useCompanyData();
   const { data: relatedSuppliers, isLoading: isLoadingSuppliers, error: errorSuppliers } = useRelatedSuppliers(currentCompany?.id);
-  const { tags: appTags, isLoadingTags, errorTags } = useLoggingTags();
+  const { tags: appTags, isLoadingTags, errorTags } = useTags();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -221,10 +209,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
   const [productPopoverOpen, setProductPopoverOpen] = useState(false); 
 
   const { data: productSheets, isLoading: isLoadingProductSheets, error: errorProductSheets } = useFetchSupplierProducts(selectedSupplierId);
-
-  useEffect(() => {
-      console.log('[DEBUG] RequestSheetModal mounted/props updated:', { open, supplierId, supplierName });
-  }, [open, supplierId, supplierName]);
 
   // Memoize products for Combobox list
   const supplierProducts = React.useMemo(() =>
@@ -243,7 +227,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
   useEffect(() => {
     if (supplierId) {
-      console.log('[DEBUG] useEffect [supplierId, supplierName]: Updating state from props', { supplierId, supplierName });
       setSelectedSupplierId(supplierId);
       form.setValue("supplierId", supplierId);
     }
@@ -251,7 +234,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
       setSelectedSupplierName(supplierName);
     }
     if (supplierId && relatedSuppliers && !relatedSuppliers.find(s => s.id === supplierId)) {
-        console.warn(`[DEBUG] Provided supplierId ${supplierId} not found in related suppliers. Clearing selection.`);
         setSelectedSupplierId("");
         setSelectedSupplierName("");
         form.setValue("supplierId", "");
@@ -345,9 +327,6 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
    };
 
   const isFormLoading = isLoadingCurrentCompany || isLoadingSuppliers || isLoadingTags || createPIRMutation.isPending || isSendingEmail || isLoadingProductSheets;
-
-  // Simplified debug logs
-  console.log('[DEBUG] Rendering RequestSheetModal State:', { isFormLoading, selectedSupplierId, isLoadingProductSheets, isLoadingTags });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -513,7 +492,7 @@ const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isFormLoading}> Cancel </Button>
-              <Button type="submit" disabled={isFormLoading || !selectedSupplierId || !form.watch('productName')}> {/* Disable submit if no product selected */}
+              <Button type="submit" disabled={isFormLoading || !selectedSupplierId || !form.watch('productName')}>
                 {createPIRMutation.isPending ? "Sending..." : "Send Request"}
                 <SendHorizontal className="ml-2 h-4 w-4" />
               </Button>
