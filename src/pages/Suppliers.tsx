@@ -23,7 +23,7 @@ import { useCompanyData } from "@/hooks/use-company-data";
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { SupplierCard } from "@/components/suppliers/SupplierCard";
 import { AddSupplierModal } from "@/components/suppliers/AddSupplierModal";
-import { EditSupplierModal } from "@/components/suppliers/EditSupplierModal";
+import { EditSupplierModal } from "@/components/suppliers/EditSupplierModal.tsx"; // Explicitly add extension
 
 type CompanyRow = Database['public']['Tables']['companies']['Row'];
 type RelationshipRow = Database['public']['Tables']['company_relationships']['Row'];
