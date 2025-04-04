@@ -132,10 +132,8 @@ const useCreatePIRMutation = (
             if (input.tagIds.length > 0) {
                 const tagLinks = input.tagIds.map(tagId => ({ pir_id: pirId, tag_id: tagId }));
                 const { error: pirTagsError } = await supabase.from('pir_tags').insert(tagLinks);
-                if (pirTagsError) console.warn(`PIR created (ID: ${pirId}), but failed to link tags: ${pirTagsError.message}`);
+                if (pirTagsError) throw new Error(`PIR created (ID: ${pirId}), but failed to link tags: ${pirTagsError.message}`);
             }
-
-            console.log('PIR Creation Result:', { pirId, productId });
             return { pirId, productId }; // Return null productId if it was a suggestion
          },
         onSuccess: async (data, variables) => { // Make async to await function invoke
