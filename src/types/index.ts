@@ -52,7 +52,8 @@ export interface Section {
   dbId?: string; // Database ID for integration with Supabase
   name: string;
   description?: string;
-  order?: number; // Make optional or align with DB schema if it exists
+  order?: number; // Keep for potential legacy use?
+  order_index?: number | null; // Add the actual DB column name
 }
 
 export interface Subsection {
@@ -61,7 +62,8 @@ export interface Subsection {
   name: string;
   description?: string;
   sectionId: string;
-  order?: number; // Make optional or align with DB schema if it exists
+  order?: number; // Keep for potential legacy use?
+  order_index?: number | null; // Add the actual DB column name
 }
 
 export interface ProductSheet {

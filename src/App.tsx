@@ -78,7 +78,7 @@ const CheckCompany = () => {
   }
 
   console.log('CheckCompany: All checks passed, rendering outlet');
-  return <><div>Check company</div><Outlet /></>;
+  return <><Outlet /></>;
 };
 
 const queryClient = new QueryClient();
@@ -90,7 +90,6 @@ const App = () => {
 
   return (
     <>
-      <div>App</div>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <AppProvider>
