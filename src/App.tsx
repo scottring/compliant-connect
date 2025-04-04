@@ -25,7 +25,7 @@ import Auth from "./pages/Auth";
 import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
 import InvitationConfirm from "./pages/InvitationConfirm"; // Import the new page
-import Unauthorized from "./pages/Unauthorized";
+import Unauthorized from "./pages/Unauthorized.tsx"; // Explicitly add extension
 import CompanySelector from "./components/CompanySelector";
 import Onboarding from "./pages/Onboarding";
 import { useIsMobile } from "./hooks/use-mobile";
