@@ -24,6 +24,7 @@ import OurProducts from "./pages/OurProducts";
 import Auth from "./pages/Auth";
 import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
+import InvitationConfirm from "./pages/InvitationConfirm"; // Import the new page
 import Unauthorized from "./pages/Unauthorized";
 import CompanySelector from "./components/CompanySelector";
 import Onboarding from "./pages/Onboarding";
@@ -100,6 +101,7 @@ const App = () => {
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/email-confirmation" element={<EmailConfirmation />} />
                   <Route path="/unauthorized" element={<Unauthorized />} />
+                  <Route path="/invitation/confirm" element={<InvitationConfirm />} /> {/* Add route for invite confirmation */}
                   
                   {/* Protected Routes */}
                   <Route element={<ProtectedRoute />}>
@@ -113,6 +115,7 @@ const App = () => {
                       
                       {/* Routes that require company check */}
                       <Route element={<CheckCompany />}>
+                        <Route path="/admin/settings" element={<AdminSettings />} /> {/* Add route for Admin Settings */}
                         {/* Supplier Routes */}
                         <Route path="/suppliers" element={<Suppliers />} />
                         <Route path="/suppliers/:id" element={<SupplierDetail />} />

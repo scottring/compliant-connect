@@ -40,7 +40,8 @@ export default defineConfig(({ mode }) => {
     ].filter(Boolean),
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "./src"),
+        // Ensure path resolution is robust
+        "@": path.resolve(__dirname, "src"),
       },
     },
     // Ensure environment variables are properly typed

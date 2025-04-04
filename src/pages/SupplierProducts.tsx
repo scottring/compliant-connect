@@ -41,9 +41,10 @@ interface PirRequestRecord {
   products: { // products might be an object or null
     name: string;
   } | null;
-  supplier: { // Fetch supplier directly
-      name: string;
-  } | null;
+  // Removed supplier join, so remove supplier property from record type
+  // supplier: {
+  //     name: string;
+  // } | null;
 }
 
 // Type guard to check if the nested structure exists
@@ -64,44 +65,64 @@ const SupplierProducts = () => {
   // Load PIR Requests using React Query
   const fetchPirRequests = useCallback(async (customerId: string): Promise<PirDisplayData[]> => {
     // Fetch data with potentially nested arrays/objects
+    // Explicitly type the expected data structure
     const { data: pirData, error: pirError } = await supabase
       .from('pir_requests')
       .select(`
         id,
         customer_id,
-        supplier_company_id, 
+        supplier_company_id,
         updated_at,
         status,
-        suggested_product_name, 
+        suggested_product_name,
         products (
-          name 
-        ),
-        supplier:companies!supplier_company_id ( name ) 
-      `)
-      .eq('customer_id', customerId);
+          name
+        )
+      `) // Removed supplier join to fetch separately
+      .eq('customer_id', customerId)
+      .returns<PirRequestRecord[]>(); // Add .returns<Type>()
 
     if (pirError) {
       console.error('Error loading PIR requests:', pirError);
       throw new Error(`Failed to load Product Information Requests: ${pirError.message}`);
     }
-    if (!pirData) return [];
+    if (!pirData || pirData.length === 0) return [];
 
-    // Transform data, safely handling potential arrays/nulls
-    const transformedPirs: PirDisplayData[] = pirData.map((pir: any) => { // Use any initially for flexibility
-        // Safely access nested properties
-        const productName = pir.suggested_product_name ?? pir.products?.name ?? 'Unknown Product';
-        const supplierName = pir.supplier?.name ?? 'Unknown Supplier';
+    // Get unique supplier IDs from the PIR data
+    const supplierIds = [...new Set(pirData.map(pir => pir.supplier_company_id).filter(Boolean))];
 
-        return {
-            id: pir.id,
-            productName: productName,
-            supplierId: pir.supplier_company_id ?? 'unknown', // Use direct supplier ID
-            supplierName: supplierName,
-            customerId: pir.customer_id,
-            updatedAt: pir.updated_at,
-            status: pir.status || 'draft'
-        };
+    // Fetch supplier names for these IDs
+    let supplierMap = new Map<string, string>();
+    if (supplierIds.length > 0) {
+      const { data: suppliersData, error: suppliersError } = await supabase
+        .from('companies')
+        .select('id, name')
+        .in('id', supplierIds);
+
+      if (suppliersError) {
+        console.error('Error fetching supplier names:', suppliersError);
+        // Continue without supplier names if fetch fails
+      } else if (suppliersData) {
+        supplierMap = new Map(suppliersData.map(s => [s.id, s.name]));
+      }
+    }
+
+    // Transform data, mapping supplier names
+    const transformedPirs: PirDisplayData[] = pirData.map((pir: any) => {
+      const productName = pir.suggested_product_name ?? pir.products?.name ?? 'Unknown Product';
+      const supplierName = supplierMap.get(pir.supplier_company_id) ?? 'Unknown Supplier'; // Get name from map
+
+      return {
+        id: pir.id,
+        productName: productName,
+        supplierId: pir.supplier_company_id ?? 'unknown',
+        supplierName: supplierName, // Use fetched name
+        customerId: pir.customer_id,
+        updatedAt: pir.updated_at,
+        status: pir.status || 'draft'
+      };
     });
+
     return transformedPirs;
   }, []); // No dependencies needed for the fetch function itself
 
