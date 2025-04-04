@@ -58,7 +58,7 @@ serve(async (req: Request) => {
         data: userMetadata,
         // Construct redirectTo URL dynamically
         // Use SITE_URL from env, fallback to localhost for local dev if not set
-        redirectTo: `${siteUrl || 'http://localhost:8080'}/invitation/confirm`
+        redirectTo: `${siteUrl || 'http://localhost:8080'}/invite/register` // Point to the new dedicated registration page
       }
     );
 

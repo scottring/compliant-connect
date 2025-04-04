@@ -6,6 +6,8 @@ import type { Database } from './types';
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+console.log('import.meta.env.VITE_SUPABASE_URL',import.meta.env.VITE_SUPABASE_URL)
+
 // Initialize Supabase client with custom settings
 export const supabase = createClient<Database>(
   // Access environment variables directly via import.meta.env

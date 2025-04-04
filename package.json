@@ -9,7 +9,7 @@
     "pnpm": ">=8.15.4"
   },
   "scripts": {
-    "dev": "vite --mode staging",
+    "dev": "vite",
     "build": "vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint .",
