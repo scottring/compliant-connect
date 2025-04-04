@@ -54,7 +54,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // User is authenticated, render children or outlet
-  return children ? <>{children}</> : <Outlet />;
+  return children ? <><div>A</div>{children}</> : <><div>B</div><Outlet /></>;
 };
 
 export default ProtectedRoute;
