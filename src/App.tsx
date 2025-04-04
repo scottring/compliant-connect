@@ -24,7 +24,8 @@ import OurProducts from "./pages/OurProducts";
 import Auth from "./pages/Auth";
 import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
-import InvitationConfirm from "./pages/InvitationConfirm"; // Import the new page
+import InvitationConfirm from "./pages/InvitationConfirm";
+import InviteRegistration from "./pages/InviteRegistration"; // Import the new registration page
 import Unauthorized from "@/pages/Unauthorized.tsx"; // Use path alias instead of relative path
 import CompanySelector from "./components/CompanySelector";
 import Onboarding from "./pages/Onboarding";
@@ -88,7 +89,8 @@ const App = () => {
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/email-confirmation" element={<EmailConfirmation />} />
                     <Route path="/unauthorized" element={<Unauthorized />} />
-                    <Route path="/invitation/confirm" element={<InvitationConfirm />} /> {/* Add route for invite confirmation */}
+                    <Route path="/invitation/confirm" element={<InvitationConfirm />} /> {/* Old confirmation route */}
+                    <Route path="/invite/register" element={<InviteRegistration />} /> {/* New registration route */}
                     
                     {/* Protected Routes */}
                     <Route element={<ProtectedRoute />}>
