@@ -163,10 +163,10 @@ const MainLayout = ({
   return (
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
-      <main className="flex-1 overflow-auto p-8">
-        <div className="flex justify-between items-center mb-4">
+      <main className="flex-1 overflow-auto p-10"> {/* Increased padding */}
+        <div className="flex justify-between items-center mb-8"> {/* Increased bottom margin */}
           <CompanySelector />
-          <UserSwitcher />
+          {/* <UserSwitcher /> Removed */}
         </div>
         <Outlet />
       </main>
