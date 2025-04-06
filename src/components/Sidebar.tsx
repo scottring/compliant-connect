@@ -37,18 +37,20 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon, label, collapsed })
       {({ isActive }) => ( // Use function as child to get isActive
         <div // Apply classes to this div instead of NavLink directly
           className={cn(
-            "flex items-center px-4 py-2.5 my-1 rounded-lg transition-all duration-200 group", // Slightly increased padding, added group
+            "relative flex items-center px-4 py-2.5 my-0.5 rounded-lg transition-all duration-200 group", // Reduced vertical margin to my-0.5
             "hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground", // Adjusted hover
             isActive
-              ? "bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-inner shadow-black/10" // Use new primary, font-semibold
+              ? "bg-sidebar-primary/10 font-semibold text-sidebar-primary" // Subtle background highlight, keep font-semibold
               : "text-sidebar-foreground",
             collapsed ? "justify-center" : "justify-start"
+            // Removed underline pseudo-element
           )}
         >
           {/* Rounded icon container - isActive is now in scope */}
           <span className={cn(
             "flex items-center justify-center h-7 w-7 rounded-full transition-colors duration-200",
-            isActive ? "bg-sidebar-primary-foreground/20 text-sidebar-primary-foreground" : "bg-sidebar-accent/50 text-sidebar-foreground group-hover:bg-sidebar-accent/80"
+            // Slightly stronger icon background on active
+            isActive ? "bg-sidebar-primary/20 text-sidebar-primary" : "bg-sidebar-accent/50 text-sidebar-foreground group-hover:bg-sidebar-accent/80"
           )}>
             {React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4" })} 
           </span>
@@ -158,7 +160,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
         "shadow-sm"
       )}
     >
-      <div className="px-4 flex items-center mb-6 justify-center">
+      {/* Added pt-4 for top padding */}
+      <div className="px-4 pt-4 flex items-center mb-6 justify-center"> 
         <motion.div 
           animate={{ 
             justifyContent: collapsed ? "center" : "flex-start",
@@ -170,7 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             src="/stacksdata-logo.png" // Updated logo path
             alt="StacksData"
             className={cn(
-              "h-64 w-auto transition-all duration-300", // Increased height from h-32 to h-64
+              "h-24 w-auto transition-all duration-300", // Set height to h-24 (3x original)
               collapsed ? "scale-90" : "scale-100"
             )}
           />
@@ -178,14 +181,16 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
         </motion.div>
       </div>
 
-      {/* Adjusted padding and spacing */}
-      <div className="flex-1 px-3 space-y-1.5 overflow-y-auto scrollbar-thin"> 
+      {/* Reduced spacing */}
+      <div className="flex-1 px-3 space-y-0.5 overflow-y-auto scrollbar-thin"> 
         <SidebarLink
           to="/dashboard"
           icon={<LayoutDashboard />} // Size handled in span now
           label="Dashboard"
           collapsed={collapsed}
         />
+
+        <div className="border-b border-sidebar-border/50 my-2"></div> {/* Divider */}
         
         <SidebarNavGroup 
           title="Companies" 
@@ -205,6 +210,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             collapsed={collapsed}
           />
         </SidebarNavGroup>
+
+        <div className="border-b border-sidebar-border/50 my-2"></div> {/* Divider */}
         
         <SidebarNavGroup
           title="Product Sheets"
@@ -224,6 +231,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             collapsed={collapsed}
           />
         </SidebarNavGroup>
+
+        <div className="border-b border-sidebar-border/50 my-2"></div> {/* Divider */}
         
         <SidebarLink
           to="/question-bank"
@@ -231,6 +240,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
           label="Question Bank"
           collapsed={collapsed}
         />
+
+        <div className="border-b border-sidebar-border/50 my-2"></div> {/* Divider */}
         
         <SidebarLink
           to="/tags"
