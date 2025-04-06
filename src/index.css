@@ -5,85 +5,85 @@
 
 @layer base {
   :root {
-    --background: 40 30% 97%; /* Light Beige */
-    --foreground: 230 20% 25%; /* Dark Desaturated Blue */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 230 20% 25%; /* Dark Desaturated Blue */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 230 20% 25%; /* Dark Desaturated Blue */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 190 65% 45%; /* Logo Teal */
-    --primary-foreground: 190 100% 98%; /* Very Light Cyan */
+    --primary: 138 39% 35%; /* Logo Green */
+    --primary-foreground: 138 100% 98%; /* Light Green/White */
 
-    --secondary: 230 40% 95%; /* Light Muted Blue/Purple */
-    --secondary-foreground: 230 40% 35%; /* Logo Dark Blue */
+    --secondary: 210 40% 96.1%; /* Original Neutral */
+    --secondary-foreground: 222.2 47.4% 11.2%; /* Original Neutral */
 
-    --muted: 230 40% 97%; /* Very Light Muted Blue/Purple */
-    --muted-foreground: 230 20% 55%; /* Medium Blue/Gray */
+    --muted: 210 40% 96.1%; /* Original Neutral */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Original Neutral */
 
-    --accent: 230 40% 95%; /* Use Secondary */
-    --accent-foreground: 230 40% 35%; /* Use Secondary Foreground */
+    --accent: 210 40% 96.1%; /* Original Neutral */
+    --accent-foreground: 222.2 47.4% 11.2%; /* Original Neutral */
 
-    --destructive: 0 84% 60%; /* Red */
-    --destructive-foreground: 0 0% 98%; /* Light Gray */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 230 20% 90%; /* Light Blue/Gray Border */
-    --input: 230 20% 90%; /* Light Blue/Gray Input */
-    --ring: 190 65% 45%; /* Logo Teal */
+    --border: 214.3 31.8% 91.4%; /* Original Neutral */
+    --input: 214.3 31.8% 91.4%; /* Original Neutral */
+    --ring: 138 39% 35%; /* Logo Green */
 
     --radius: 0.75rem;
 
     /* Sidebar specific */
-    --sidebar-background: 230 30% 98%; /* Very Light Blue/Purple Tint */
-    --sidebar-foreground: 230 25% 30%; /* Darker Blue/Gray */
-    --sidebar-primary: 190 65% 45%; /* Logo Teal */
-    --sidebar-primary-foreground: 190 100% 98%; /* Very Light Cyan */
-    --sidebar-accent: 230 40% 94%; /* Slightly darker than secondary */
-    --sidebar-accent-foreground: 230 40% 30%; /* Darker Blue */
-    --sidebar-border: 230 20% 90%; /* Match main border */
-    --sidebar-ring: 190 65% 45%; /* Logo Teal */
+    --sidebar-background: 0 0% 100%; /* Original Neutral */
+    --sidebar-foreground: 215 25% 27%; /* Original Neutral */
+    --sidebar-primary: 138 39% 35%; /* Logo Green */
+    --sidebar-primary-foreground: 138 100% 98%; /* Light Green/White */
+    --sidebar-accent: 220 14% 96%; /* Original Neutral */
+    --sidebar-accent-foreground: 215 25% 27%; /* Original Neutral */
+    --sidebar-border: 220 13% 91%; /* Original Neutral */
+    --sidebar-ring: 138 39% 35%; /* Logo Green */
   }
 
   .dark {
-    --background: 230 20% 10%; /* Very Dark Blue */
-    --foreground: 230 20% 95%; /* Light Blue/Gray */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 230 20% 12%; /* Slightly Lighter Dark Blue */
-    --card-foreground: 230 20% 95%; /* Light Blue/Gray */
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 230 20% 10%; /* Very Dark Blue */
-    --popover-foreground: 230 20% 95%; /* Light Blue/Gray */
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 190 70% 55%; /* Brighter Logo Teal */
-    --primary-foreground: 190 100% 15%; /* Dark Cyan */
+    --primary: 138 39% 45%; /* Lighter Logo Green */
+    --primary-foreground: 138 100% 98%; /* Light Green/White */
 
-    --secondary: 230 30% 25%; /* Muted Dark Blue/Purple */
-    --secondary-foreground: 230 30% 85%; /* Light Muted Blue/Purple */
+    --secondary: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --secondary-foreground: 210 40% 98%; /* Original Dark Neutral */
 
-    --muted: 230 30% 20%; /* Darker Muted Blue/Purple */
-    --muted-foreground: 230 20% 65%; /* Medium Light Blue/Gray */
+    --muted: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --muted-foreground: 215 20.2% 65.1%; /* Original Dark Neutral */
 
-    --accent: 230 30% 25%; /* Use Secondary */
-    --accent-foreground: 230 30% 85%; /* Use Secondary Foreground */
+    --accent: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --accent-foreground: 210 40% 98%; /* Original Dark Neutral */
 
-    --destructive: 0 70% 50%; /* Dark Red */
-    --destructive-foreground: 0 0% 98%; /* Light Gray */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 230 20% 25%; /* Dark Blue Border */
-    --input: 230 20% 25%; /* Dark Blue Input */
-    --ring: 190 70% 55%; /* Brighter Logo Teal */
+    --border: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --input: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --ring: 138 39% 45%; /* Lighter Logo Green */
     
     /* Sidebar specific */
-    --sidebar-background: 230 25% 14%; /* Darker Blue */
-    --sidebar-foreground: 230 20% 85%; /* Lighter Blue/Gray */
-    --sidebar-primary: 190 70% 55%; /* Brighter Logo Teal */
-    --sidebar-primary-foreground: 190 100% 15%; /* Dark Cyan */
-    --sidebar-accent: 230 30% 22%; /* Slightly darker than dark secondary */
-    --sidebar-accent-foreground: 230 20% 95%; /* Light Blue/Gray */
-    --sidebar-border: 230 20% 25%; /* Match main dark border */
-    --sidebar-ring: 190 70% 55%; /* Brighter Logo Teal */
+    --sidebar-background: 215 28% 17%; /* Original Dark Neutral */
+    --sidebar-foreground: 210 40% 98%; /* Original Dark Neutral */
+    --sidebar-primary: 138 39% 45%; /* Lighter Logo Green */
+    --sidebar-primary-foreground: 138 100% 98%; /* Light Green/White */
+    --sidebar-accent: 215 25% 27%; /* Original Dark Neutral */
+    --sidebar-accent-foreground: 210 40% 98%; /* Original Dark Neutral */
+    --sidebar-border: 215 25% 27%; /* Original Dark Neutral */
+    --sidebar-ring: 138 39% 45%; /* Lighter Logo Green */
   }
 }
 
