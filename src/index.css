@@ -14,35 +14,36 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 142 41% 36%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 138 39% 35%; /* Logo Green */
+    --primary-foreground: 138 100% 98%; /* Light Green/White */
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 210 40% 96.1%; /* Original Neutral */
+    --secondary-foreground: 222.2 47.4% 11.2%; /* Original Neutral */
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 40% 96.1%; /* Original Neutral */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Original Neutral */
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 210 40% 96.1%; /* Original Neutral */
+    --accent-foreground: 222.2 47.4% 11.2%; /* Original Neutral */
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 142 41% 36%;
+    --border: 214.3 31.8% 91.4%; /* Original Neutral */
+    --input: 214.3 31.8% 91.4%; /* Original Neutral */
+    --ring: 138 39% 35%; /* Logo Green */
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 215 25% 27%;
-    --sidebar-primary: 142 41% 36%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 14% 96%;
-    --sidebar-accent-foreground: 215 25% 27%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 142 41% 36%;
+    /* Sidebar specific */
+    --sidebar-background: 0 0% 100%; /* Original Neutral */
+    --sidebar-foreground: 215 25% 27%; /* Original Neutral */
+    --sidebar-primary: 138 39% 35%; /* Logo Green */
+    --sidebar-primary-foreground: 138 100% 98%; /* Light Green/White */
+    --sidebar-accent: 220 14% 96%; /* Original Neutral */
+    --sidebar-accent-foreground: 215 25% 27%; /* Original Neutral */
+    --sidebar-border: 220 13% 91%; /* Original Neutral */
+    --sidebar-ring: 138 39% 35%; /* Logo Green */
   }
 
   .dark {
@@ -55,33 +56,34 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 143 40% 43%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 138 39% 45%; /* Lighter Logo Green */
+    --primary-foreground: 138 100% 98%; /* Light Green/White */
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --secondary-foreground: 210 40% 98%; /* Original Dark Neutral */
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --muted-foreground: 215 20.2% 65.1%; /* Original Dark Neutral */
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --accent-foreground: 210 40% 98%; /* Original Dark Neutral */
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 143 40% 43%;
+    --border: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --input: 217.2 32.6% 17.5%; /* Original Dark Neutral */
+    --ring: 138 39% 45%; /* Lighter Logo Green */
     
-    --sidebar-background: 215 28% 17%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 143 40% 43%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 25% 27%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 215 25% 27%;
-    --sidebar-ring: 143 40% 43%;
+    /* Sidebar specific */
+    --sidebar-background: 215 28% 17%; /* Original Dark Neutral */
+    --sidebar-foreground: 210 40% 98%; /* Original Dark Neutral */
+    --sidebar-primary: 138 39% 45%; /* Lighter Logo Green */
+    --sidebar-primary-foreground: 138 100% 98%; /* Light Green/White */
+    --sidebar-accent: 215 25% 27%; /* Original Dark Neutral */
+    --sidebar-accent-foreground: 210 40% 98%; /* Original Dark Neutral */
+    --sidebar-border: 230 20% 25%; /* Match main dark border */
+    --sidebar-ring: 190 70% 55%; /* Brighter Logo Teal */
   }
 }
 
