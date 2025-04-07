@@ -29,7 +29,9 @@ const InviteRegistration = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-  const [isVerified, setIsVerified] = useState(false); // Track if token verification was successful
+  const [isVerified, setIsVerified] = useState(false);
+  // State to store relevant IDs from metadata
+  const [invitationMetadata, setInvitationMetadata] = useState<{ customerCompanyId: string | null, supplierCompanyId: string | null }>({ customerCompanyId: null, supplierCompanyId: null });
 
   const form = useForm<PasswordFormData>({
     resolver: zodResolver(passwordSchema),
@@ -53,11 +55,26 @@ const InviteRegistration = () => {
       } else if (session?.user) {
         // User is logged in, likely after clicking the invite link.
         // Supabase handles the 'invite' type confirmation implicitly via the ConfirmationURL.
-        console.log("Session found, user likely verified invite.", session.user.email);
+        // console.log("Session found, user likely verified invite.", session.user.email); // Removed log
         setEmail(session.user.email || null);
-        setIsVerified(true); // Assume verified as session exists post-invite-click
+        // Extract metadata needed for relationship
+        const meta = session.user.user_metadata;
+        // console.log("Extracted user metadata:", meta); // Removed log
+        setInvitationMetadata({
+            customerCompanyId: meta?.invited_to_company_id || null,
+            supplierCompanyId: meta?.invited_supplier_company_id || null
+        });
+        if (!meta?.invited_to_company_id || !meta?.invited_supplier_company_id) {
+            console.warn("Invitation metadata (customer or supplier company ID) missing from session user metadata.");
+            // Optionally set an error or prevent form submission if IDs are crucial
+            // setError("Could not retrieve necessary invitation details. Please contact support.");
+            // setIsVerified(false); // Prevent submission if IDs are missing
+        }
+        setIsVerified(true);
       } else {
         // Priority 2: No session, check for tokens in hash (Password Recovery flow)
+        // Note: Recovery flow might not have the same metadata. This needs careful handling
+        // if suppliers can also reset passwords via this route. Assuming invite flow for now.
         const hash = location.hash.substring(1);
         const params = new URLSearchParams(hash);
         const accessToken = params.get('access_token');
@@ -65,7 +82,7 @@ const InviteRegistration = () => {
         const type = params.get('type'); // Should be 'recovery'
 
         if (accessToken && refreshToken && type === 'recovery') {
-          console.log("Tokens found in hash, attempting recovery flow session set.");
+          // console.log("Tokens found in hash, attempting recovery flow session set."); // Removed log
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -75,8 +92,19 @@ const InviteRegistration = () => {
             console.error("Error setting session from URL hash:", sessionError);
             setError("Failed to verify link parameters. Link might be expired or invalid.");
           } else {
-            console.log("Session set successfully from hash tokens.", sessionData.user.email);
+            // console.log("Session set successfully from hash tokens.", sessionData.user.email); // Removed log
             setEmail(sessionData.user.email || null);
+            // Extract metadata needed for relationship from recovery user data if applicable
+            const meta = sessionData.user.user_metadata;
+            // console.log("Extracted user metadata from recovery:", meta); // Removed log
+             setInvitationMetadata({
+                 customerCompanyId: meta?.invited_to_company_id || null,
+                 supplierCompanyId: meta?.invited_supplier_company_id || null
+             });
+            if (!meta?.invited_to_company_id || !meta?.invited_supplier_company_id) {
+                 console.warn("Invitation metadata (customer or supplier company ID) missing from recovery user metadata.");
+                 // Optionally set an error or prevent form submission if IDs are crucial
+            }
             setIsVerified(true);
             navigate(location.pathname, { replace: true }); // Clear hash
           }
@@ -104,23 +132,32 @@ const InviteRegistration = () => {
     setLoading(true);
     setError(null);
 
+    // console.log("Registration onSubmit started. Metadata:", invitationMetadata); // Removed log
+
     try {
       // 1. Update the user's password (this confirms the invite)
+      // console.log("Step 1: Updating user password..."); // Removed log
       const { error: passwordError } = await supabase.auth.updateUser({
         password: data.password,
       });
 
       if (passwordError) {
+        console.error("Step 1 FAILED: Password update error:", passwordError);
         throw new Error(`Failed to set password: ${passwordError.message}`);
       }
+      // console.log("Step 1 SUCCESS: Password updated."); // Removed log
 
       // 2. Update the user's profile with first/last name
       // Get the user ID from the current session (should exist after updateUser)
+      // console.log("Step 2: Fetching user after password update..."); // Removed log
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+          console.error("Step 2 FAILED: Could not get user after password update.");
           throw new Error("Could not retrieve user information after password update.");
       }
+      // console.log(`Step 2 SUCCESS: Got user ID: ${user.id}`); // Removed log
 
+      // console.log("Step 2b: Updating profile..."); // Removed log
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -132,17 +169,95 @@ const InviteRegistration = () => {
 
       if (profileError) {
         // Log profile error but proceed, password was set. User might need manual profile update.
-        console.error("Password set, but failed to update profile:", profileError);
-        toast.warning("Password set, but failed to update profile details.");
+        console.error("Step 2b WARNING: Password set, but failed to update profile:", profileError);
+        // Don't toast success here, wait until the end
       } else {
-        toast.success("Registration complete! Redirecting...");
+        // console.log("Step 2b SUCCESS: Profile updated."); // Removed log
       }
+
+      // --- START MODIFIED SECTION ---
+
+      // 3. Link the user to their company in company_users
+      // console.log("Step 3: Attempting to link user to company..."); // Removed log
+      let companyUserLinkSuccess = false; // Flag to track success
+      const supplierCompanyId = invitationMetadata.supplierCompanyId; // Cache for logging
+      if (supplierCompanyId && user) { // Ensure we have the supplier company ID and user object
+        // console.log(`Step 3: Inserting into company_users: user_id=${user.id}, company_id=${supplierCompanyId}`); // Removed log
+        const { error: companyUserError } = await supabase
+          .from('company_users')
+          .insert({
+            user_id: user.id,
+            company_id: supplierCompanyId,
+            role: 'admin' // Assign a default role (e.g., 'admin' or 'member')
+          });
+
+        if (companyUserError) {
+          // Log error, but registration is mostly complete. Might need manual fix.
+          console.error("Step 3 FAILED: Failed to link user to their company:", companyUserError);
+          toast.error("Registration complete, but failed to associate user with their company. Please contact support.");
+          // Don't throw here, allow relationship attempt if possible, but mark as failed
+        } else {
+          // console.log(`Step 3 SUCCESS: User ${user.id} successfully linked to company ${supplierCompanyId}`); // Removed log
+          companyUserLinkSuccess = true; // Mark as successful
+        }
+      } else if (!supplierCompanyId) {
+          console.warn("Step 3 SKIPPED: Skipping user-company link creation due to missing supplier company ID in metadata.");
+          toast.warning("Registration complete, but could not link user to their company due to missing details.");
+          // Don't throw, but linking failed
+      } else if (!user) {
+          // This case should be caught earlier, but log just in case
+          console.error("Step 3 SKIPPED: User object is missing.");
+      }
+
+      // 4. Activate the existing company relationship (Update status from 'pending' to 'active')
+      // console.log("Step 4: Attempting to activate company relationship..."); // Removed log
+      let relationshipSuccess = false; // Flag to track success
+      const customerCompanyId = invitationMetadata.customerCompanyId; // Cache for logging
+      if (customerCompanyId && supplierCompanyId) {
+        // console.log(`Step 4: Updating company_relationships: set status='active' WHERE customer_id=${customerCompanyId} AND supplier_id=${supplierCompanyId}`); // Removed log
+        const { error: relationshipError } = await supabase
+          .from('company_relationships')
+          .update({ status: 'active' }) // Update status to active
+          .eq('customer_id', customerCompanyId) // Match the existing relationship
+          .eq('supplier_id', supplierCompanyId); // Match the existing relationship
+
+        if (relationshipError) {
+          // Log relationship error but registration is mostly complete
+          console.error("Step 4 FAILED: Failed to activate company relationship:", relationshipError);
+          toast.error("Registration complete, but failed to activate link to inviting company. Please contact support.");
+          // Don't throw here
+        } else {
+          // Check if the update actually affected any rows.
+          // Note: Supabase update doesn't directly return affected rows count easily in v2 JS client.
+          // We assume success if no error is thrown, but ideally, we'd verify the update.
+          // console.log(`Step 4 SUCCESS: Attempted to activate relationship between ${customerCompanyId} and ${supplierCompanyId}. Check DB to confirm.`); // Removed log
+          relationshipSuccess = true; // Mark as successful if no error
+        }
+      } else {
+          console.warn("Step 4 SKIPPED: Skipping company relationship activation due to missing metadata IDs.");
+          toast.warning("Registration complete, but could not activate link to inviting company due to missing details.");
+          // Don't throw, but relationship activation failed
+      }
+
+      // --- END MODIFIED SECTION ---
+
+      // Final success message only if core steps succeeded
+      // console.log(`Final Check: companyUserLinkSuccess=${companyUserLinkSuccess}, relationshipSuccess=${relationshipSuccess}`); // Removed log
+      if (companyUserLinkSuccess && relationshipSuccess) {
+          toast.success("Registration complete and linked successfully! Redirecting...");
+      } else {
+          // Use a more generic message if some steps failed but didn't throw
+          toast.warning("Registration complete, but some linking steps encountered issues. Please check logs or contact support.");
+      }
+
 
       // Redirect to dashboard or appropriate page after successful registration
       // A small delay allows the user to see the success toast
+      // console.log("Redirecting to dashboard..."); // Removed log
       setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
 
     } catch (err: any) {
+      console.error("Registration onSubmit CATCH block error:", err); // Log caught errors
       setError(err.message || "An unexpected error occurred.");
       toast.error(err.message || "Registration failed.");
       setLoading(false);

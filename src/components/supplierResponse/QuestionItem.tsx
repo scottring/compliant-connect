@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Question, SupplierResponse, Comment } from "@/types"; // Revert to alias
+import { Question, SupplierResponse, Comment } from "@/types/index"; // Correct import path
 import { DBQuestion } from "@/hooks/use-question-bank";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,18 +30,22 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Database } from "@/types/supabase"; // Import Database types for PIRStatus
+type PIRStatus = Database['public']['Enums']['pir_status']; // Use generated enum
 
 interface QuestionItemProps {
   question: Question | DBQuestion;
   answer?: SupplierResponse;
   productSheetId: string;
+  pirStatus: PIRStatus; // Add PIR status prop
   onAnswerUpdate: (value: string | boolean | number | string[]) => void;
   onAddComment: (text: string) => void;
 }
 
-const QuestionItem: React.FC<QuestionItemProps> = ({ 
-  question, 
-  answer, 
+const QuestionItem: React.FC<QuestionItemProps> = ({
+  question,
+  answer,
+  pirStatus, // Destructure pirStatus
   productSheetId,
   onAnswerUpdate,
   onAddComment
@@ -49,6 +53,9 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   const [commentsOpen, setCommentsOpen] = React.useState(false);
   const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined); // Add type assertion
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Determine if the form should be disabled based on PIR status
+  const isLocked = ['submitted', 'in_review', 'approved', 'rejected'].includes(pirStatus);
 
   const getSchema = () => {
     switch (question.type) {
@@ -140,6 +147,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             value={form.watch("answer") as string || ""} 
             onChange={(e) => handleValueChange(e.target.value)}
             placeholder="Type here..."
+            disabled={isLocked} // Disable based on status
           />
         );
       
@@ -150,18 +158,20 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             value={form.watch("answer") as number || ""} 
             onChange={(e) => handleValueChange(Number(e.target.value))}
             placeholder="Enter a number..."
+            disabled={isLocked} // Disable based on status
           />
         );
       
       case "boolean":
         return (
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id={`question-${question.id}`} 
-              checked={form.watch("answer") as boolean || false} 
+            <Checkbox
+              id={`question-${question.id}`}
+              checked={form.watch("answer") as boolean || false}
               onCheckedChange={handleValueChange}
+              disabled={isLocked} // Disable based on status
             />
-            <label 
+            <label
               htmlFor={`question-${question.id}`}
               className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
@@ -175,9 +185,10 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           <Select
             value={form.watch("answer") as string || ""}
             onValueChange={handleValueChange}
+            disabled={isLocked} // Disable based on status
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select an option" />
+            <SelectTrigger disabled={isLocked}> {/* Also disable trigger */}
+              <SelectValue placeholder={isLocked ? "Locked" : "Select an option"} />
             </SelectTrigger>
             <SelectContent>
               {question.options?.map((option) => (
@@ -194,9 +205,10 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           <div className="space-y-2">
             {question.options?.map((option) => (
               <div key={option} className="flex items-center space-x-2">
-                <Checkbox 
-                  id={`question-${question.id}-${option}`} 
-                  checked={(form.watch("answer") as string[] || []).includes(option)} 
+                <Checkbox
+                  id={`question-${question.id}-${option}`}
+                  checked={(form.watch("answer") as string[] || []).includes(option)}
+                  disabled={isLocked} // Disable based on status
                   onCheckedChange={(checked) => {
                     const currentValues = form.watch("answer") as string[] || [];
                     if (checked) {
@@ -221,11 +233,12 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
         return (
           <Button 
             type="button" 
-            variant="outline" 
-            className="w-full" 
+            variant="outline"
+            className="w-full"
             onClick={() => alert("File upload not implemented yet")}
+            disabled={isLocked} // Disable based on status
           >
-            Start upload
+            {isLocked ? "File Upload Locked" : "Start upload"}
           </Button>
         );
       
@@ -235,6 +248,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             value={form.watch("answer") as string || ""} 
             onChange={(e) => handleValueChange(e.target.value)}
             placeholder="Type here..."
+            disabled={isLocked} // Disable based on status
           />
         );
     }
@@ -310,10 +324,11 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           <div className="flex justify-end">
             <Button 
               type="submit" 
-              variant="secondary" 
+              variant="secondary"
               size="sm"
+              disabled={isLocked} // Disable save button too
             >
-              Save
+              {isLocked ? "Locked" : "Save"}
             </Button>
           </div>
         </form>

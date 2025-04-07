@@ -494,6 +494,7 @@ const SupplierResponseForm = () => {
                               question={question}
                               answer={answer} // Pass the correctly typed answer
                               productSheetId={productSheet.id} // Pass PIR ID
+                              pirStatus={productSheet.status} // Pass the PIR status
                               onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
                               onAddComment={(text) => { if (answer) handleAddComment(answer.id, text); }}
                             />
