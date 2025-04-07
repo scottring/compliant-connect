@@ -3,10 +3,10 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuestionBankContext } from "@/context/QuestionBankContext";
-import { Question, Tag } from "@/types"; // Revert to alias
+import { Question, Tag, TableColumn } from "@/types"; // Import TableColumn
 import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload, Loader2 } from "lucide-react";
 // Import DialogDescription
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; 
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,8 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TagBadge from "@/components/tags/TagBadge";
 import { toast } from "sonner";
+import { TableBuilder } from "./TableBuilder"; // Import TableBuilder
 // Import correct types from hook
-import { Section, Subsection, QuestionType } from "@/hooks/use-question-bank"; 
+import { Section, Subsection, QuestionType } from "@/hooks/use-question-bank";
 
 const formSchema = z.object({
   sectionId: z.string().min(1, "Section is required"),
@@ -27,8 +28,10 @@ const formSchema = z.object({
   text: z.string().min(1, "Question text is required"),
   description: z.string().optional(),
   required: z.boolean().default(true),
-  type: z.enum(["text", "number", "boolean", "single_select", "multi_select", "date", "file"] as const),
+  // Add LIST_TABLE to the enum
+  type: z.enum(["text", "number", "boolean", "single_select", "multi_select", "date", "file", "LIST_TABLE"] as const),
   options: z.array(z.string()).optional(),
+  // table_config is handled separately in component state, not directly in the form schema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -72,6 +75,8 @@ export function QuestionBuilderDialog({
   const [showNewSubsectionForm, setShowNewSubsectionForm] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [newSubsectionName, setNewSubsectionName] = useState("");
+  // State for table configuration
+  const [tableConfig, setTableConfig] = useState<TableColumn[]>([]);
 
   const editingQuestion = questionId ? questions.find(q => q.id === questionId) : null;
 
@@ -99,6 +104,9 @@ export function QuestionBuilderDialog({
 
   // Update type checks for options visibility
   const showOptions = questionType === "single_select" || questionType === "multi_select";
+
+  // Check if the type is LIST_TABLE
+  const showTableBuilder = questionType === "LIST_TABLE";
 
   // Update type checks for file upload
   const showFileUpload = questionType === "file";
@@ -134,6 +142,12 @@ export function QuestionBuilderDialog({
           options: editingQuestion.options || [],
         });
         setSelectedTags(editingQuestion.tags);
+        // Initialize tableConfig if editing a LIST_TABLE question
+        if (editingQuestion.type === 'LIST_TABLE') {
+          setTableConfig(editingQuestion.table_config || []);
+        } else {
+          setTableConfig([]);
+        }
       } else {
         // If subsectionId is provided, find its parent section
         let sectionId = "";
@@ -154,7 +168,10 @@ export function QuestionBuilderDialog({
           options: [],
         });
         setSelectedTags([]);
+        setTableConfig([]); // Reset table config for new questions
       }
+    } else {
+       setTableConfig([]); // Reset table config when dialog closes
     }
   }, [open, editingQuestion, sections, form, subsectionId, allSubsections]); // Added allSubsections
 
@@ -279,10 +296,12 @@ export function QuestionBuilderDialog({
         text: values.text,
         description: values.description || "",
         required: values.required,
-        type: values.type as QuestionType,
-        options: values.options || [],
+        type: values.type as QuestionType, // Cast to ensure LIST_TABLE is included if hook type is updated
+        options: (values.type === 'single_select' || values.type === 'multi_select') ? values.options || [] : null, // Only include options for relevant types
         subsection_id: values.subsectionId,
         tags: selectedTags,
+        // Include table_config only if the type is LIST_TABLE
+        table_config: values.type === 'LIST_TABLE' ? tableConfig : null,
       };
 
       if (editingQuestion) {
@@ -561,6 +580,7 @@ export function QuestionBuilderDialog({
                           <SelectItem value="multi_select">Multiple Choice</SelectItem>
                           <SelectItem value="date">Date</SelectItem>
                           <SelectItem value="file">File</SelectItem>
+                          <SelectItem value="LIST_TABLE">List Table</SelectItem>
                         </SelectContent>
                       </Select>
                     </FormItem>
@@ -638,6 +658,17 @@ export function QuestionBuilderDialog({
                       ))}
                     </div>
                   </div>
+                )}
+
+                {/* Conditionally render TableBuilder */}
+                {showTableBuilder && (
+                   <div className="space-y-4">
+                     <Label>Table Configuration</Label>
+                     <TableBuilder
+                       columns={tableConfig}
+                       onChange={setTableConfig}
+                     />
+                   </div>
                 )}
 
                 <FormField

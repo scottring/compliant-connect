@@ -47,6 +47,7 @@ export interface Question {
   created_at: string;
   updated_at: string | null; // Match generated type
   subsection_id: string | null; // Match generated type
+  table_config?: TableColumn[] | null; // Configuration for LIST_TABLE type
 }
 
 export interface Section {

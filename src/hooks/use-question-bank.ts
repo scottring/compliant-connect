@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { Question, Tag } from '@/types';
+import { Question, Tag, TableColumn } from '@/types'; // Import TableColumn
 import { toast } from 'sonner';
 
 // Define separate types based on the actual schema
@@ -25,11 +25,14 @@ export type Subsection = {
   updated_at: string;
 };
 
-// Use Supabase enum type directly for consistency
+// Use Supabase enum type directly for consistency, but extend it manually for LIST_TABLE
 import { Database } from '@/types/supabase';
-export type QuestionType = Database['public']['Enums']['question_type'];
+type SupabaseQuestionType = Database['public']['Enums']['question_type'];
+export type QuestionType = SupabaseQuestionType | 'LIST_TABLE'; // Manually add LIST_TABLE
+
 // Original local type: 'text' | 'number' | 'boolean' | 'select' | 'multi-select' | 'file' | 'table';
 // Supabase enum type: 'text' | 'number' | 'boolean' | 'single_select' | 'multi_select' | 'date' | 'file'
+// Combined type: 'text' | 'number' | 'boolean' | 'single_select' | 'multi_select' | 'date' | 'file' | 'LIST_TABLE'
 // Note: 'table' is not in Supabase enum, 'date' is not in local. 'select' maps to 'single_select'.
 
 // DB Question type matching schema
@@ -45,6 +48,7 @@ export type DBQuestion = {
   created_at: string;
   updated_at: string;
   tags: Tag[]; // Make tags required for UI state
+  table_config?: TableColumn[] | null; // Add table_config
 };
 
 // Input type for creating/updating questions (maps UI state to DB structure)
@@ -56,6 +60,7 @@ export type QuestionInputData = {
   tags: Tag[]; // Array of selected Tag objects
   options?: string[] | null;
   subsection_id: string; // Need subsection ID to create/update
+  table_config?: TableColumn[] | null; // Add table_config
 };
 
 
@@ -158,24 +163,33 @@ const useCreateQuestionMutation = (
         mutationFn: async (question) => { /* ... implementation ... */
             if (!user) throw new Error('You must be logged in');
             if (!question.subsection_id) throw new Error("Subsection ID missing");
-            const { tags: selectedTags, ...questionData } = question;
+            // Destructure table_config as well
+            const { tags: selectedTags, table_config: tableConfig, ...questionData } = question;
             const tagIds = selectedTags?.map(tag => tag.id) || [];
+
+            // TODO: Update the RPC function 'create_question_with_tags' to accept 'p_table_config JSONB'
+            // Assuming the RPC function is updated, pass table_config
             const { data: newQuestionData, error: rpcError } = await supabase.rpc('create_question_with_tags', {
                 p_subsection_id: questionData.subsection_id, p_text: questionData.text,
-                p_description: questionData.description || null, p_type: questionData.type as QuestionType, // Ensure type matches Supabase enum
-                p_required: questionData.required, p_options: questionData.options || null, p_tag_ids: tagIds
+                p_description: questionData.description || null, p_type: questionData.type as QuestionType,
+                p_required: questionData.required, p_options: questionData.options || null, p_tag_ids: tagIds,
+                p_table_config: tableConfig || null // Pass table_config to RPC
             });
             if (rpcError) throw new Error(`RPC Error: ${rpcError.message}`);
             const rpcResult = newQuestionData as any;
             if (!rpcResult || !rpcResult.id) throw new Error("RPC function did not return expected question ID.");
+            // Fetch the newly created question including table_config
             const { data: fetchedQuestionData, error: fetchError } = await supabase.from('questions')
-                .select('id, subsection_id, text, description, type, required, options, created_at, updated_at')
+                .select('id, subsection_id, text, description, type, required, options, table_config, created_at, updated_at') // Select table_config
                 .eq('id', rpcResult.id).single();
             if (fetchError) throw new Error(`Fetch after create failed: ${fetchError.message}`);
             if (!fetchedQuestionData) throw new Error("Newly created question data not found after fetch.");
+
+            // Construct the final object including tags and table_config
             const completeNewQuestionWithTags: DBQuestion = {
-                ...(fetchedQuestionData as Omit<DBQuestion, 'tags' | 'created_by'>),
-                tags: selectedTags || []
+                ...(fetchedQuestionData as Omit<DBQuestion, 'tags' | 'created_by'>), // Base type assertion
+                tags: selectedTags || [],
+                table_config: fetchedQuestionData.table_config || null // Ensure table_config is included
             };
             return completeNewQuestionWithTags;
         },
@@ -202,11 +216,24 @@ const useUpdateQuestionMutation = (
     return useMutation<DBQuestion, Error, { id: string; updates: Partial<QuestionInputData> }>({
         mutationFn: async ({ id, updates }) => { /* ... implementation ... */
             if (!user) throw new Error('You must be logged in');
-            const { tags: updatedTagsData, ...questionUpdateData } = updates;
+            // Destructure tags and table_config separately
+            const { tags: updatedTagsData, table_config: updatedTableConfig, ...questionUpdateData } = updates;
+
+            // Prepare the update payload, including table_config if present
+            const updatePayload: Partial<Omit<DBQuestion, 'id' | 'created_at' | 'updated_at' | 'tags' | 'created_by'>> = { ...questionUpdateData };
+            if (updatedTableConfig !== undefined) {
+                updatePayload.table_config = updatedTableConfig;
+            }
+
+            // Update the question, selecting the updated fields including table_config
             const { data: updatedQuestion, error: questionUpdateError } = await supabase.from('questions')
-                .update(questionUpdateData as any).eq('id', id).select().single(); // Use 'as any' temporarily to bypass complex type mismatch during update, review if specific update type is better
+                .update(updatePayload).eq('id', id)
+                .select('id, subsection_id, text, description, type, required, options, table_config, created_at, updated_at') // Select table_config
+                .single();
             if (questionUpdateError) throw new Error(`Question update failed: ${questionUpdateError.message}`);
             if (!updatedQuestion) throw new Error("Update failed: No data returned after update.");
+
+            // Handle tags update (unchanged logic)
             if (updatedTagsData !== undefined) {
                 const { error: deleteError } = await supabase.from('question_tags').delete().eq('question_id', id);
                 if (deleteError) console.error('Non-fatal: Error deleting old tags during update:', deleteError);
@@ -217,10 +244,13 @@ const useUpdateQuestionMutation = (
                 }
             }
             const currentQuestions = queryClient.getQueryData<DBQuestion[]>(['questions']) || [];
-            // Ensure the returned object matches DBQuestion, especially the 'type'
+            const currentQuestion = currentQuestions.find(q => q.id === id);
+
+            // Construct the final object, ensuring tags and table_config are correctly merged
             const finalUpdatedQuestion: DBQuestion = {
-                ...updatedQuestion,
-                tags: updatedTagsData || currentQuestions.find(q => q.id === id)?.tags || []
+                ...(updatedQuestion as Omit<DBQuestion, 'tags'>), // Assert base type after select
+                tags: updatedTagsData || currentQuestion?.tags || [],
+                // table_config is already included in updatedQuestion due to the .select()
             };
             return finalUpdatedQuestion;
         },
@@ -355,14 +385,16 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
 
   // --- Fetch Questions using React Query ---
   const fetchQuestionsWithTags = async (): Promise<DBQuestion[]> => { /* ... implementation ... */
+    // Select table_config along with other question fields
     const { data: questionsData, error: questionsError } = await supabase
-      .from('questions').select('id, subsection_id, text, description, type, required, options, created_at, updated_at');
+      .from('questions').select('id, subsection_id, text, description, type, required, options, table_config, created_at, updated_at'); // Added table_config
     if (questionsError) { console.error('Error loading questions:', questionsError); throw new Error(questionsError.message); }
     if (!questionsData) return [];
     const questionIds = questionsData.map(q => q.id);
     if (questionIds.length === 0) return questionsData.map(q => ({ ...q, tags: [] })) as DBQuestion[];
+    // Select created_at and updated_at from tags as well
     const { data: tagsData, error: tagsError } = await supabase.from('question_tags')
-      .select(`question_id, tags ( id, name, description )`).in('question_id', questionIds);
+      .select(`question_id, tags ( id, name, description, created_at, updated_at )`).in('question_id', questionIds);
     if (tagsError) {
       console.error('Error loading question tags:', tagsError);
       return questionsData.map(q => ({ ...q, tags: [] })) as DBQuestion[];
@@ -370,18 +402,46 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
     const questionTagsMap = new Map<string, Tag[]>();
     if (tagsData) {
       for (const item of tagsData) {
-        if (!item.tags || !item.question_id) continue;
+        // Check if item.tags exists and is a valid object (not null, not array)
+        if (!item.tags || typeof item.tags !== 'object' || Array.isArray(item.tags) || !item.question_id) {
+            // Log if the structure is unexpected, but continue processing other tags
+            if (item.tags) { // Only log if tags exist but are not the expected object
+                 console.warn(`Unexpected tag structure for question_id ${item.question_id}:`, item.tags);
+            }
+            continue;
+        }
         const questionId = item.question_id;
-        const tagData = item.tags as any;
-        const tag: Tag = { id: tagData.id, name: tagData.name, description: tagData.description || undefined };
-        if (!questionTagsMap.has(questionId)) questionTagsMap.set(questionId, []);
+        // Assert the structure of the joined tag data - TS should infer this now, but explicit assertion is safer
+        const tagData = item.tags as Tag;
+
+        // Construct the Tag object, ensuring all required fields are present
+        // The 'as Tag' assertion implies these fields exist if the assertion is correct.
+        const tag: Tag = {
+          id: tagData.id,
+          name: tagData.name,
+          description: tagData.description, // Already optional in Tag type
+          created_at: tagData.created_at, // Already optional in Tag type
+          updated_at: tagData.updated_at, // Already optional in Tag type
+        };
+
+        // Add the tag to the map
+        if (!questionTagsMap.has(questionId)) {
+          questionTagsMap.set(questionId, []);
+        }
         questionTagsMap.get(questionId)?.push(tag);
       }
     }
-    return questionsData.map(q => ({ ...q, tags: questionTagsMap.get(q.id) || [] })) as DBQuestion[];
+    // Map questions and ensure table_config is included
+    return questionsData.map(q => ({
+       ...q,
+       tags: questionTagsMap.get(q.id) || [],
+       table_config: q.table_config || null // Ensure table_config exists, default to null if undefined/null in DB
+      })) as DBQuestion[];
   };
   const { data: questions, isLoading: isLoadingQuestions, error: errorQuestions } = useQuery<DBQuestion[], Error>({
-    queryKey: ['questions'], queryFn: fetchQuestionsWithTags,
+    queryKey: ['questions'],
+    queryFn: fetchQuestionsWithTags,
+    // The select function within fetchQuestionsWithTags now handles the mapping including table_config
   });
   // --- End Fetch Questions ---
 
