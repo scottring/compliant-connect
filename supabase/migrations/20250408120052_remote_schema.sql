@@ -73,54 +73,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 -- Removed redundant CREATE TYPE for flag_status (already created in an earlier migration)
 
 
-CREATE TYPE "public"."pir_status" AS ENUM (
-    'draft',
-    'submitted',
-    'in_review',
-    'flagged',
-    'approved',
-    'rejected'
-);
-
-
-ALTER TYPE "public"."pir_status" OWNER TO "postgres";
-
-
-CREATE TYPE "public"."question_type" AS ENUM (
-    'text',
-    'number',
-    'boolean',
-    'single_select',
-    'multi_select',
-    'date',
-    'file',
-    'LIST_TABLE'
-);
-
-
-ALTER TYPE "public"."question_type" OWNER TO "postgres";
-
-
-CREATE TYPE "public"."relationship_status" AS ENUM (
-    'pending',
-    'active',
-    'inactive',
-    'rejected'
-);
-
-
-ALTER TYPE "public"."relationship_status" OWNER TO "postgres";
-
-
-CREATE TYPE "public"."response_status" AS ENUM (
-    'draft',
-    'submitted',
-    'flagged',
-    'approved'
-);
-
-
-ALTER TYPE "public"."response_status" OWNER TO "postgres";
+-- Removed redundant CREATE TYPE for pir_status
+-- Removed redundant CREATE TYPE for question_type
+-- Removed redundant CREATE TYPE for relationship_status
+-- Removed redundant CREATE TYPE for response_status
 
 
 CREATE OR REPLACE FUNCTION "public"."create_question_with_tags"("p_subsection_id" "uuid", "p_text" "text", "p_description" "text", "p_type" "public"."question_type", "p_required" boolean, "p_options" "jsonb", "p_tag_ids" "uuid"[], "p_table_config" "jsonb" DEFAULT NULL::"jsonb") RETURNS "json"
