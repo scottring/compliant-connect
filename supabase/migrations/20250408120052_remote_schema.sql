@@ -488,10 +488,7 @@ ALTER TABLE "public"."tags" OWNER TO "postgres";
 
 -- Removed redundant ADD CONSTRAINT for pir_responses_pir_id_question_id_key
 
-ALTER TABLE ONLY "public"."pir_responses"
-    ADD CONSTRAINT "pir_responses_pkey" PRIMARY KEY ("id");
-
-
+-- Removed redundant ADD CONSTRAINT for pir_responses_pkey
 
 ALTER TABLE ONLY "public"."pir_tags"
     ADD CONSTRAINT "pir_tags_pir_id_tag_id_key" UNIQUE ("pir_id", "tag_id");
