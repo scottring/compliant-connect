@@ -424,7 +424,7 @@ const SupplierResponseForm = () => {
         actions={(
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
-            <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit}> Submit Response </Button>
+            <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit} disabled={productSheet?.status !== 'draft'}> Submit Response </Button>
           </div>
         )}
       />
@@ -514,7 +514,7 @@ const SupplierResponseForm = () => {
          <Button variant="outline" onClick={() => navigate(-1)}> Cancel </Button>
         <div className="space-x-2">
           <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
-          <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit}> Submit Response </Button>
+          <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit} disabled={productSheet?.status !== 'draft'}> Submit Response </Button>
         </div>
       </div>
     </div>

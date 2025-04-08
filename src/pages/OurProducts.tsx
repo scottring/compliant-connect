@@ -235,6 +235,7 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                   <TableRow>
                     {/* Update Table Headers for PIRs */}
                     <TableHead>Requesting Customer</TableHead>
+                    <TableHead>Product Name</TableHead>
                     <TableHead>Request Details</TableHead>
                     <TableHead>Date Received</TableHead>
                     <TableHead>Status</TableHead>
@@ -263,6 +264,7 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                           onClick={() => handlePirAction(pir)}
                         >
                           <TableCell className="font-medium">{customerName || 'Unknown Customer'}</TableCell>
+                          <TableCell>{pir.productName || 'N/A'}</TableCell>
                           <TableCell>{requestDetails}</TableCell>
                           <TableCell>{dateReceived}</TableCell>
                           <TableCell>
@@ -319,7 +321,7 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={5} // Adjust colSpan
+                        colSpan={6} // Adjust colSpan
                         className="text-center py-12 text-muted-foreground"
                       >
                         <div className="flex flex-col items-center justify-center gap-2">
