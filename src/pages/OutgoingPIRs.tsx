@@ -30,7 +30,7 @@ interface PirRequestRecord {
 }
 
 
-const ProductSheets = () => {
+const OutgoingPIRs = () => { // Renamed from ProductSheets
   // Use React Query hooks
   const { currentCompany, isLoadingCompanies } = useCompanyData();
   // const { tags, isLoadingTags } = useTags(); // Tags might be fetched within PIR query now
@@ -275,4 +275,4 @@ const ProductSheets = () => {
   );
 };
 
-export default ProductSheets;
+export default OutgoingPIRs; // Renamed from ProductSheets

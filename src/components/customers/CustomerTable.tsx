@@ -1,7 +1,7 @@
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Company } from "@/types";
+import { Company } from "@/types/auth"; // Corrected import path
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -22,18 +22,18 @@ interface CustomerTableProps {
 
 const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredCustomers, setFilteredCustomers] = useState<Company[]>(customers);
+  // const [filteredCustomers, setFilteredCustomers] = useState<Company[]>(customers); // Remove state
   const navigate = useNavigate();
 
-  React.useEffect(() => {
-    setFilteredCustomers(
-      customers.filter((customer) =>
-        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.contactName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.contactEmail && customer.contactEmail.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
+  // Calculate filtered list directly based on props and searchTerm state
+  const filteredCustomers = React.useMemo(() => {
+    if (!customers) return []; // Handle case where customers prop might initially be undefined
+    return customers.filter((customer) =>
+      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (customer.contact_name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (customer.contact_email && customer.contact_email.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-  }, [searchTerm, customers]);
+  }, [customers, searchTerm]); // Recalculate only when customers or searchTerm changes
 
   const handleRowClick = (customer: Company) => {
     navigate(`/customers/${customer.id}`);
@@ -63,12 +63,13 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
             <TableRow>
               <TableHead className="w-[100px]">Customer ID</TableHead>
               <TableHead>Customer Name</TableHead>
-              <TableHead>Task Progress</TableHead>
+              {/* <TableHead>Task Progress</TableHead> */} {/* Removed Progress */}
               <TableHead>Primary Contact</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* Render based on the calculated filteredCustomers */}
             {filteredCustomers.length > 0 ? (
               filteredCustomers.map((customer) => (
                 <TableRow 
@@ -78,10 +79,10 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
                 >
                   <TableCell className="font-medium">{customer.id.padStart(3, '0')}</TableCell>
                   <TableCell>{customer.name}</TableCell>
-                  <TableCell className="max-w-[200px]">
+                  {/* <TableCell className="max-w-[200px]">
                     <TaskProgress value={customer.progress} />
-                  </TableCell>
-                  <TableCell>{customer.contactName}</TableCell>
+                  </TableCell> */} {/* Removed Progress */}
+                  <TableCell>{customer.contact_name}</TableCell> {/* Use snake_case */}
                   <TableCell className="text-right">
                     <Button
                       onClick={(e) => {
@@ -99,10 +100,11 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                  {customers.length === 0 
-                    ? "No customers found. Add your first customer to get started."
-                    : "No customers match your search criteria."}
+                <TableCell colSpan={4} className="text-center py-6 text-muted-foreground"> {/* Adjusted colSpan */}
+                  {/* Check the length of the *filtered* list now */}
+                  {filteredCustomers.length === 0 && searchTerm
+                    ? "No customers match your search criteria."
+                    : "No customers found."}
                 </TableCell>
               </TableRow>
             )}

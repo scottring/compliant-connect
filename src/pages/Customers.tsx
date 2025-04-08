@@ -1,60 +1,80 @@
 
 import React, { useState, useEffect } from "react";
-import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext"; // Use Auth context
+import { useCompanyData } from "@/hooks/use-company-data"; // Use company data hook
+import { useQuery } from '@tanstack/react-query'; // Import query hook
+import { supabase } from "@/integrations/supabase/client"; // Import supabase client
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import CustomerTable from "@/components/customers/CustomerTable";
-import { Company } from "@/types";
+import { Company } from "@/types/auth"; // Assuming Company type is here now
+import { Database } from "@/integrations/supabase/types"; // Import base Database type
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Plus, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Customers = () => {
-  const { companies, addCompany, user } = useApp();
+  const { user } = useAuth(); // Get user from AuthContext
+  const { currentCompany, isLoadingCompanies } = useCompanyData(); // Get current company
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [filteredCustomers, setFilteredCustomers] = useState<Company[]>([]);
+  // Remove old state based on context
+  // const [filteredCustomers, setFilteredCustomers] = useState<Company[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!user) return;
+  // --- Data Fetching with React Query ---
+  // Define the shape of the data returned by the query (reflecting TS inference)
+  type RelationshipWithCustomer = {
+    customer: Company | null // Correct type based on actual query result
+  }
 
-    // Find the current user's company
-    const userCompany = companies.find(company => company.id === user.companyId);
-    
-    if (!userCompany) {
-      // If no company is found, show all customers (admin view)
-      setFilteredCustomers(companies.filter(
-        (company) => company.role === "customer" || company.role === "both"
-      ));
-      return;
+  const fetchCustomers = async (supplierId: string): Promise<Company[]> => {
+    const { data, error } = await supabase
+      .from('company_relationships')
+      .select(`
+        customer:customer_id (
+          id, name, contact_name, contact_email, contact_phone, created_at, updated_at
+        )
+      `) // Simplified join syntax
+      .eq('supplier_id', supplierId)
+      .eq('status', 'active'); // Only show active relationships? Adjust if needed
+
+    if (error) {
+      console.error("Error fetching customers:", error);
+      throw new Error(`Failed to load customers: ${error.message}`);
     }
 
-    if (userCompany.role === "customer") {
-      // Customers should not see other customers
-      setFilteredCustomers([]);
-    } else if (userCompany.role === "supplier" || userCompany.role === "both") {
-      // Suppliers should see customers, but in a real app this would be
-      // filtered to only show related customers
-      setFilteredCustomers(companies.filter(
-        (company) => (company.role === "customer" || company.role === "both") && company.id !== userCompany.id
-      ));
-    } else {
-      // Default case (admin)
-      setFilteredCustomers(companies.filter(
-        (company) => company.role === "customer" || company.role === "both"
-      ));
-    }
-  }, [companies, user]);
+    // Explicitly type the fetched data based on TS inference
+    // Cast raw data to any[] to bypass TS inference issues, then process
+    const rawData = (data || []) as any[];
+
+    // Map to extract the customer object
+    const mappedCustomers = rawData.map(item => item.customer as Company | null);
+
+    // Filter out any nulls
+    const filteredCustomers = mappedCustomers.filter((c): c is Company => c !== null);
+
+    return filteredCustomers;
+  };
+
+  const {
+    data: customers,
+    isLoading: isLoadingCustomers,
+    error: errorCustomers
+  } = useQuery<Company[], Error>({
+    queryKey: ['customers', currentCompany?.id],
+    queryFn: () => fetchCustomers(currentCompany!.id),
+    enabled: !!currentCompany, // Only run query if currentCompany is loaded
+  });
+  // --- End Data Fetching ---
 
   const handleCustomerAction = (customer: Company) => {
     navigate(`/customers/${customer.id}`);
   };
 
   // Check if user is allowed to add customers
-  const canAddCustomers = user && (
-    user.role === "admin" || 
-    (user.companyId && companies.find(c => c.id === user.companyId)?.role !== "customer")
-  );
+  // TODO: Re-evaluate canAddCustomers logic based on new data structure if needed
+  // For now, assume only admins or non-customer roles can add? This might need adjustment.
+  const canAddCustomers = !!user; // Simplified for now, adjust later
 
   const handleAddCustomer = () => {
     toast.info("Open the Add/Invite Customer modal");
@@ -86,7 +106,7 @@ const Customers = () => {
     <div className="space-y-6">
       <PageHeader
         title="Our Customers"
-        subtitle={user?.companyId ? `Viewing as ${user.name} (${companies.find(c => c.id === user.companyId)?.name || 'Unknown Company'})` : 'Admin View'}
+        subtitle={currentCompany ? `Customers related to ${currentCompany.name}` : 'Select a company'}
         actions={
           <>
             <PageHeaderAction
@@ -94,51 +114,39 @@ const Customers = () => {
               variant="outline"
               onClick={() => toast.info("Exporting customer data...")}
             />
-            {canAddCustomers && (
+            {/* TODO: Re-enable Add Customer functionality if needed */}
+            {/* {canAddCustomers && (
               <PageHeaderAction
-                label="Add New Customer"
+                label="Add New Customer" // Or "Invite Customer"
                 onClick={handleAddCustomer}
-                icon={
-                  <svg
-                    className="h-4 w-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                }
+                icon={<Plus className="h-4 w-4" />}
               />
-            )}
+            )} */}
           </>
         }
       />
 
-      {filteredCustomers.length > 0 ? (
+      {isLoadingCompanies || isLoadingCustomers ? (
+         <div className="text-center p-8">Loading...</div>
+      ) : errorCustomers ? (
+         <div className="text-center p-8 text-red-500">Error: {errorCustomers.message}</div>
+      ) : customers && customers.length > 0 ? (
         <CustomerTable
-          customers={filteredCustomers}
-          onAction={handleCustomerAction}
+          customers={customers} // Use data from useQuery
+          onAction={handleCustomerAction} // Keep existing action handler
         />
       ) : (
         <div className="border rounded-md p-8 text-center">
           <div className="flex flex-col items-center gap-2">
             <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold">No customers found</h3>
-            <p className="text-muted-foreground mb-4">
-              {user && companies.find(c => c.id === user.companyId)?.role === "customer" 
-                ? "As a customer, you don't have access to view other customers."
-                : "Add your first customer to get started."}
-            </p>
-            {canAddCustomers && (
+            <p className="text-muted-foreground mb-4">No companies have added you as a supplier yet.</p>
+            {/* Add button might not be relevant here if customers are added via invites */}
+            {/* {canAddCustomers && (
               <Button onClick={handleAddCustomer} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Customer
+                <Plus className="h-4 w-4" /> Add Customer
               </Button>
-            )}
+            )} */}
           </div>
         </div>
       )}

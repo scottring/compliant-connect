@@ -12,7 +12,8 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Suppliers from "./pages/Suppliers";
 import SupplierDetail from "./pages/SupplierDetail";
-import ProductSheets from "./pages/ProductSheets";
+import OutgoingPIRs from "./pages/OutgoingPIRs"; // Renamed from ProductSheets
+import IncomingPIRs from "./pages/IncomingPIRs"; // New page for incoming requests
 import SupplierProducts from "./pages/SupplierProducts";
 import SupplierResponseForm from "./pages/SupplierResponseForm";
 import QuestionBank from "./pages/QuestionBank";
@@ -116,7 +117,8 @@ const App = () => {
                           <Route path="/customer-review/:id" element={<CustomerReview />} />
                           
                           {/* Product Routes */}
-                          <Route path="/product-sheets" element={<ProductSheets />} />
+                          <Route path="/product-sheets" element={<OutgoingPIRs />} /> {/* Renamed component */}
+                          <Route path="/incoming-pirs" element={<IncomingPIRs />} />
                           <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
                           <Route path="/our-products" element={<OurProducts />} />
                           
@@ -152,14 +154,21 @@ const App = () => {
   );
 };
 
+
 // Extract the main layout into a separate component
-const MainLayout = ({ 
-  sidebarOpen, 
-  setSidebarOpen 
-}: { 
-  sidebarOpen: boolean; 
+const MainLayout = ({
+  sidebarOpen,
+  setSidebarOpen
+}: {
+  sidebarOpen: boolean;
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
+  const { currentCompany } = useCompanyData(); // Get currentCompany
+
+  // Log current company ID whenever it changes
+  useEffect(() => {
+    console.log("[DEBUG] Current Company ID:", currentCompany?.id);
+  }, [currentCompany]);
   return (
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
