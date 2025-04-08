@@ -52,68 +52,124 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
   }, [open, reset]);
 
   const onSubmit = async (data: InviteFormData) => {
+    if (!user) { toast.error("User not authenticated."); return; }
+    if (!currentCompany) { toast.error("Current company context is missing."); return; }
+
+    let supplierCompanyId: string | null = null;
+    let proceedWithInvite = true; // Flag to control if invitation should be sent
+
     try {
-      if (!user) throw new Error("User not authenticated.");
-      if (!currentCompany) throw new Error("Current company context is missing.");
-
-      const { data: newSupplierCompany, error: supplierError } = await supabase
+      // 1. Check if company exists by contact email
+      const { data: existingCompany, error: checkError } = await supabase
         .from('companies')
-        .insert({
-          name: data.supplierName,
-          contact_name: data.contactName,
-          contact_email: data.contactEmail,
-          // Add other relevant fields if they exist in your 'companies' table schema
-          // e.g., contact_phone: data.contactPhone (if you add phone to form)
-        })
-        .select()
-        .single();
+        .select('id, name')
+        .eq('contact_email', data.contactEmail)
+        .maybeSingle(); // Use maybeSingle to handle 0 or 1 result
 
-      if (supplierError) throw new Error(`Failed to create supplier company: ${supplierError.message}`);
-      if (!newSupplierCompany) throw new Error("Supplier company created but no data returned.");
+      if (checkError) throw new Error(`Error checking for existing company: ${checkError.message}`);
 
-      const { error: relationshipError } = await supabase
-        .from('company_relationships')
-        .insert({
-          customer_id: currentCompany.id,
-          supplier_id: newSupplierCompany.id,
-          status: 'pending', // Set status to pending
-          type: 'supplier', // Assuming 'supplier' is a valid type
-        });
+      if (existingCompany) {
+        // Company exists
+        supplierCompanyId = existingCompany.id;
+        toast.info(`Company '${existingCompany.name}' already exists.`);
 
-      if (relationshipError) {
-      // --- Invalidate supplier query cache on success ---
+        // 2. Check if supplier relationship already exists
+        const { data: existingRel, error: relCheckError } = await supabase
+          .from('company_relationships')
+          .select('id, status')
+          .eq('customer_id', currentCompany.id)
+          .eq('supplier_id', supplierCompanyId)
+          .maybeSingle();
+
+        if (relCheckError) throw new Error(`Error checking relationship: ${relCheckError.message}`);
+
+        if (existingRel) {
+          // Relationship exists
+          toast.warning(`A supplier relationship with '${existingCompany.name}' already exists (Status: ${existingRel.status}). No new invitation sent.`);
+          proceedWithInvite = false; // Don't send another invite if relationship exists
+        } else {
+          // Company exists, but no supplier relationship - create relationship only
+          // TODO: Ideally, confirm with user here before proceeding. Simulating confirmation for now.
+          console.log(`Creating relationship for existing company ${existingCompany.id}`);
+          const { error: relationshipError } = await supabase
+            .from('company_relationships')
+            .insert({
+              customer_id: currentCompany.id,
+              supplier_id: supplierCompanyId,
+              status: 'pending',
+              type: 'supplier',
+            });
+
+          if (relationshipError) throw new Error(`Failed to create relationship for existing company: ${relationshipError.message}`);
+          toast.info(`Added existing company '${existingCompany.name}' as a supplier.`);
+        }
+      } else {
+        // Company does not exist - create company and relationship
+        console.log("Creating new company and relationship...");
+        const { data: newCompany, error: companyError } = await supabase
+          .from('companies')
+          .insert({
+            name: data.supplierName,
+            contact_name: data.contactName,
+            contact_email: data.contactEmail,
+          })
+          .select()
+          .single();
+
+        if (companyError) throw new Error(`Failed to create company: ${companyError.message}`);
+        if (!newCompany) throw new Error("Company created but no data returned.");
+        supplierCompanyId = newCompany.id;
+
+        const { error: relationshipError } = await supabase
+          .from('company_relationships')
+          .insert({
+            customer_id: currentCompany.id,
+            supplier_id: supplierCompanyId,
+            status: 'pending',
+            type: 'supplier',
+          });
+
+        if (relationshipError) {
+          // Rollback company creation if relationship fails
+          await supabase.from('companies').delete().eq('id', supplierCompanyId);
+          throw new Error(`Failed to create relationship: ${relationshipError.message}`);
+        }
+        toast.success(`New supplier company '${data.supplierName}' created.`);
+      }
+
+      // 3. Invalidate cache regardless of creation/existence
       await queryClient.invalidateQueries({ queryKey: ['suppliers', currentCompany.id] });
-      // --- End Invalidation ---
 
-        await supabase.from('companies').delete().eq('id', newSupplierCompany.id);
-        throw new Error(`Failed to create company relationship: ${relationshipError.message}`);
-      }
-      // --- End New Logic ---
+      // 4. Proceed with user invitation if applicable
+      if (proceedWithInvite && supplierCompanyId) {
+        console.log(`Inviting user ${data.contactEmail} for supplier ${supplierCompanyId}`);
+        const { error: functionError } = await supabase.functions.invoke(
+          "invite-user",
+          {
+            body: {
+              email: data.contactEmail,
+              invitingCompanyId: currentCompany.id,
+              invitingUserId: user.id,
+              supplierName: data.supplierName, // Pass name even if company exists
+              contactName: data.contactName,
+              invited_supplier_company_id: supplierCompanyId // Use determined ID
+            },
+          }
+        );
 
-      // Call the Edge Function
-      const { data: functionResponse, error: functionError } = await supabase.functions.invoke(
-        "invite-user", // Name of the Edge Function
-        {
-          body: {
-            email: data.contactEmail,
-            invitingCompanyId: currentCompany.id,
-            invitingUserId: user.id,
-            supplierName: data.supplierName,
-            contactName: data.contactName,
-            invited_supplier_company_id: newSupplierCompany.id // Pass the created supplier ID
-          },
+        if (functionError) {
+          // Handle specific errors
+          if (functionError.message.includes("User already registered")) {
+            // This might be okay if they exist but aren't linked to this supplier yet
+            toast.info(`User ${data.contactEmail} is already registered. Relationship established/updated.`);
+          } else {
+            throw functionError; // Re-throw other function errors
+          }
+        } else {
+          toast.success(`Invitation sent successfully to ${data.contactEmail}`);
         }
-      );
-
-      if (functionError) {
-        // Handle specific errors returned from the function
-        if (functionError.message.includes("User already registered")) {
-          throw new Error("This user is already registered.");
-        }
-        throw functionError; // Re-throw other function errors
       }
-     
-      toast.success(`Invitation sent successfully to ${data.contactEmail}`);
+
       onOpenChange(false);
       reset();
     } catch (error: any) { // Catch any error type
