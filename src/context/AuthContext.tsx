@@ -50,14 +50,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null); // Set user or null
       setLoading({ auth: false }); // Finish initial loading
     }).catch((error) => {
+        console.error("Error fetching initial session:", error); // Add logging here
         setLoading({ auth: false }); // Ensure loading stops on error too
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth State Change:", event, session); // Add logging here
         setSession(session);
         setUser(session?.user ?? null); // Update user on change
-        // Removed company state reset logic
+        // Ensure loading is false if it hasn't been set already
+        setLoading(prev => prev.auth ? { auth: false } : prev);
       }
     );
     return () => subscription.unsubscribe();

@@ -1,7 +1,8 @@
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Company } from "@/types";
+import { Database } from "@/types/supabase"; // Import generated types
+type Company = Database['public']['Tables']['companies']['Row']; // Use the generated Row type
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -29,14 +30,14 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
     setFilteredCustomers(
       customers.filter((customer) =>
         customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.contactName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.contactEmail && customer.contactEmail.toLowerCase().includes(searchTerm.toLowerCase()))
+        (customer.contact_name && customer.contact_name.toLowerCase().includes(searchTerm.toLowerCase())) || // Use contact_name
+        (customer.contact_email && customer.contact_email.toLowerCase().includes(searchTerm.toLowerCase())) // Use contact_email
       )
     );
   }, [searchTerm, customers]);
 
   const handleRowClick = (customer: Company) => {
-    navigate(`/customers/${customer.id}`);
+    navigate(`/customer/${customer.id}`); // Navigate to singular customer detail route
   };
 
   return (
@@ -61,7 +62,7 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">Customer ID</TableHead>
+              {/* <TableHead className="w-[100px]">Customer ID</TableHead> */} {/* Removed Customer ID Header */}
               <TableHead>Customer Name</TableHead>
               <TableHead>Task Progress</TableHead>
               <TableHead>Primary Contact</TableHead>
@@ -76,12 +77,13 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
                   className="transition-colors hover:bg-muted/50 cursor-pointer"
                   onClick={() => handleRowClick(customer)}
                 >
-                  <TableCell className="font-medium">{customer.id.padStart(3, '0')}</TableCell>
+                  {/* <TableCell className="font-medium">{customer.id.padStart(3, '0')}</TableCell> */} {/* Removed Customer ID Cell */}
                   <TableCell>{customer.name}</TableCell>
                   <TableCell className="max-w-[200px]">
-                    <TaskProgress value={customer.progress} />
+                    {/* <TaskProgress value={customer.progress} /> */} {/* 'progress' not in DB type */}
+                    <span className="text-muted-foreground text-xs">N/A</span> {/* Placeholder */}
                   </TableCell>
-                  <TableCell>{customer.contactName}</TableCell>
+                  <TableCell>{customer.contact_name || 'N/A'}</TableCell> {/* Use contact_name */}
                   <TableCell className="text-right">
                     <Button
                       onClick={(e) => {
@@ -99,7 +101,7 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ customers, onAction }) =>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={4} className="text-center py-6 text-muted-foreground"> {/* Adjusted colSpan */}
                   {customers.length === 0 
                     ? "No customers found. Add your first customer to get started."
                     : "No customers match your search criteria."}

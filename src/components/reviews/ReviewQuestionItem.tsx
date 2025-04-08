@@ -33,7 +33,8 @@ interface ReviewQuestionItemProps {
   onApprove: () => void;
   onFlag: (note: string) => void;
   onUpdateNote: (note: string) => void;
-  // isPreviouslyFlagged?: boolean; // This will be derived internally now
+  onUndoApprove: () => void; // Add handler to undo approval
+  isLocked?: boolean; // Prop to disable actions when PIR is flagged
 }
 
 const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
@@ -44,7 +45,8 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onApprove,
   onFlag,
   onUpdateNote,
-  // isPreviouslyFlagged = false, // Removed from props
+  onUndoApprove, // Destructure new prop
+  isLocked = false, // Destructure isLocked with default value
 }) => {
   console.log(`ReviewQuestionItem Props for Q:${question.id}`, { question, answer, status, note }); // Re-add log
   // Log received props
@@ -194,20 +196,32 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             <div className="flex items-center">
               <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
               <p className="font-medium text-green-800">Approved</p>
+              {!isLocked && ( // Only show Undo if not locked
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto text-xs h-auto p-1 text-muted-foreground hover:text-foreground"
+                  onClick={onUndoApprove} // Use the destructured prop
+                >
+                  Undo
+                </Button>
+              )}
             </div>
           </div>
         ) : (
           <div className="flex space-x-2">
             <div className="flex-1">
-              <Textarea 
+              <Textarea
                 placeholder={
+                  isLocked ? "Review actions disabled (Revision Requested)" :
                   (answer?.flags && answer.flags.length > 0)
-                    ? "Add feedback on the revised answer..." 
+                    ? "Add feedback on the revised answer..."
                     : "Add a review note or flag explanation..."
                 }
                 value={note}
                 onChange={(e) => onUpdateNote(e.target.value)}
                 className="min-h-[80px]"
+                disabled={isLocked} // Disable textarea if locked
               />
             </div>
             <div className="flex flex-col space-y-2">
@@ -215,6 +229,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 variant="outline" 
                 className="border-green-500 text-green-700 hover:bg-green-50"
                 onClick={onApprove}
+                disabled={isLocked} // Disable approve button if locked
               >
                 <CheckCircle className="mr-2 h-4 w-4" />
                 {(answer?.flags && answer.flags.length > 0) ? "Resolve" : "Approve"}
@@ -228,7 +243,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                         variant="outline" 
                         className="border-red-500 text-red-700 hover:bg-red-50"
                         onClick={handleSubmitFlag}
-                        disabled={!note.trim()}
+                        disabled={!note.trim() || isLocked} // Disable flag button if locked
                       >
                         <Flag className="mr-2 h-4 w-4" />
                         {(answer?.flags && answer.flags.length > 0) ? "Flag Again" : "Flag"}

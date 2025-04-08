@@ -20,6 +20,8 @@ import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
 import CustomerReview from "./pages/CustomerReview";
 import Customers from "./pages/Customers";
+import CustomerDetail from "./pages/CustomerDetail"; // Assuming this is the detail page component
+
 import OurProducts from "./pages/OurProducts";
 import Auth from "./pages/Auth";
 import EmailConfirmation from "./components/EmailConfirmation";
@@ -114,6 +116,7 @@ const App = () => {
                           {/* Customer Routes */}
                           <Route path="/customers" element={<Customers />} />
                           <Route path="/customer-review/:id" element={<CustomerReview />} />
+                          <Route path="/customer/:id" element={<CustomerDetail />} /> {/* Added Customer Detail Route */}
                           
                           {/* Product Routes */}
                           <Route path="/product-sheets" element={<ProductSheets />} />

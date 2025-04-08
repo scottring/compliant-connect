@@ -4,13 +4,13 @@ import { useCompanyData } from "@/hooks/use-company-data";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { PIRStatus, PIRSummary } from "@/types/pir"; // Import PIRSummary and PIRStatus
-// Removed duplicate import
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter // Added CardFooter
 } from "@/components/ui/card";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "sonner"; // Keep toast for potential future use
+import { toast } from "sonner";
+import ActionItemsList, { ActionItem } from "@/components/dashboard/ActionItemsList"; // Import the new component
 
 // Define the database record type for the query result (can be shared/moved)
 interface PirRequestRecord {
@@ -26,52 +26,133 @@ interface PirRequestRecord {
 }
 
 const Dashboard = () => {
-  // Use React Query hooks for data
-  const { userCompanies, currentCompany, isLoadingCompanies, errorCompanies } = useCompanyData(); // Get company data
-
+  const { userCompanies, currentCompany, isLoadingCompanies, errorCompanies } = useCompanyData();
   // Fetch PIR Requests relevant to the current company
-  const fetchPirRequests = async (customerId: string): Promise<PIRSummary[]> => { // Return PIRSummary[]
-    const { data: pirData, error: pirError } = await supabase
-      .from('pir_requests')
-      .select(`
-        id, customer_id, updated_at, status,
-        products ( name, supplier_id, companies ( name ) )
-      `)
-      .eq('customer_id', customerId);
+ // --- Existing Query for general stats (Adjusted key and comments) ---
+ const fetchPirRequestsGeneral = async (companyId: string): Promise<PIRSummary[]> => {
+   // This query might need refinement depending on the exact stats needed.
+   // Fetching based only on customer_id might not show supplier-related stats.
+   const { data: pirData, error: pirError } = await supabase
+     .from('pir_requests')
+     .select(`
+       id, customer_id, supplier_company_id, updated_at, status,
+       product:products!pir_requests_product_id_fkey ( name ),
+       supplier:companies!pir_requests_supplier_company_id_fkey ( name )
+     `)
+     // Example: Fetch where the company is either customer OR supplier
+     // .or(`customer_id.eq.${companyId},supplier_company_id.eq.${companyId}`)
+     // For now, keeping it simple based on customer_id for the cards
+      .eq('customer_id', companyId);
 
-    if (pirError) {
-      console.error('Error loading PIR requests:', pirError);
-      throw new Error(`Failed to load PIR Requests: ${pirError.message}`);
-    }
-    if (!pirData) return []; // Return empty array if no data
 
-    const transformedPirs: PIRSummary[] = pirData.map((pir: any) => { // Use PIRSummary type
-      const product = pir.products;
-      const company = product?.companies;
-      return {
-        id: pir.id,
-        productName: product?.name ?? 'Unknown Product',
-        supplierId: product?.supplier_id ?? 'unknown',
-        supplierName: company?.name ?? 'Unknown Supplier',
-        customerId: pir.customer_id,
-        updatedAt: pir.updated_at,
-        status: pir.status || 'draft'
-      };
-    });
-    return transformedPirs;
-  };
+   if (pirError) {
+     console.error('Error loading general PIR requests:', pirError);
+     throw new Error(`Failed to load general PIR Requests: ${pirError.message}`);
+   }
+   if (!pirData) return [];
 
-  const {
-    data: pirRequests,
-    isLoading: loadingPirs,
-    error: errorPirs,
-  } = useQuery<PIRSummary[], Error>({ // Expect PIRSummary[]
-    queryKey: ['pirRequests', currentCompany?.id],
-    queryFn: () => fetchPirRequests(currentCompany!.id),
-    enabled: !!currentCompany,
-    staleTime: 1 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
-  });
+   const transformedPirs: PIRSummary[] = pirData.map((pir: any) => ({
+       id: pir.id,
+       productName: pir.product?.name ?? 'Unknown Product',
+       supplierId: pir.supplier_company_id ?? 'unknown',
+       supplierName: pir.supplier?.name ?? 'Unknown Supplier',
+       customerId: pir.customer_id,
+       updatedAt: pir.updated_at,
+       status: pir.status || 'draft',
+       tags: [], // Placeholder if needed by PIRSummary
+       responseCount: 0, // Placeholder if needed by PIRSummary
+     }));
+   return transformedPirs;
+ };
+ // --- End Existing Query ---
+
+ const {
+   data: pirRequests, // General requests for stats cards
+   isLoading: loadingPirs,
+   error: errorPirs,
+ } = useQuery<PIRSummary[], Error>({
+   queryKey: ['pirRequestsGeneral', currentCompany?.id], // Distinct key
+   queryFn: () => fetchPirRequestsGeneral(currentCompany!.id),
+   enabled: !!currentCompany,
+   staleTime: 1 * 60 * 1000,
+   gcTime: 5 * 60 * 1000,
+ });
+
+
+ // --- NEW Query for Action Items ---
+ const fetchActionItems = async (companyId: string): Promise<ActionItem[]> => {
+   const { data, error } = await supabase
+     .from('pir_requests')
+     .select(`
+       id,
+       status,
+       updated_at,
+       customer_id,
+       supplier_company_id,
+       product:products!pir_requests_product_id_fkey ( name ),
+       supplier:companies!pir_requests_supplier_company_id_fkey ( name ),
+       customer:companies!pir_requests_customer_id_fkey ( name )
+     `)
+     .or(`and(customer_id.eq.${companyId},status.eq.submitted),and(supplier_company_id.eq.${companyId},status.in.("pending","flagged"))`)
+     .order('updated_at', { ascending: false }); // Show most recent first
+
+   if (error) {
+     console.error('Error loading Action Items:', error);
+     throw new Error(`Failed to load Action Items: ${error.message}`);
+   }
+   if (!data) return [];
+
+   // Transform data into ActionItem[]
+   const actionItems: ActionItem[] = data.map((pir: any) => {
+     let actionText = "View Request"; // Default
+     let link = `/supplier-response-form/${pir.id}`; // Default link
+     let description = `Product: ${pir.product?.name ?? 'N/A'}`;
+
+     if (pir.customer_id === companyId) { // Current company is the Customer
+       if (pir.status === 'submitted') {
+         actionText = "Review Submission";
+         link = `/customer-review/${pir.id}`;
+         description = `Review needed for ${pir.product?.name ?? 'N/A'} from ${pir.supplier?.name ?? 'N/A'}`;
+       }
+       // Add other customer actions if needed
+     } else if (pir.supplier_company_id === companyId) { // Current company is the Supplier
+       if (pir.status === 'pending') {
+         actionText = "Respond to Request";
+         link = `/supplier-response-form/${pir.id}`;
+          description = `Response requested for ${pir.product?.name ?? 'N/A'} by ${pir.customer?.name ?? 'N/A'}`;
+       } else if (pir.status === 'flagged') {
+         actionText = "Address Revisions";
+         link = `/supplier-response-form/${pir.id}`;
+          description = `Revisions requested for ${pir.product?.name ?? 'N/A'} by ${pir.customer?.name ?? 'N/A'}`;
+       }
+       // Add other supplier actions if needed
+     }
+
+     return {
+       id: pir.id,
+       actionText: actionText,
+       description: description,
+       link: link,
+       status: pir.status,
+       updatedAt: pir.updated_at,
+     };
+   });
+
+   return actionItems;
+ };
+
+ const {
+   data: actionItems,
+   isLoading: loadingActionItems,
+   error: errorActionItems,
+ } = useQuery<ActionItem[], Error>({
+   queryKey: ['actionItems', currentCompany?.id],
+   queryFn: () => fetchActionItems(currentCompany!.id),
+   enabled: !!currentCompany,
+   staleTime: 30 * 1000, // Shorter stale time for actions
+   gcTime: 5 * 60 * 1000,
+ });
+ // --- End NEW Query ---
 
   // --- Calculations based on fetched data ---
   // Note: Supplier/Customer distinction might need refinement based on relationships,
@@ -82,15 +163,16 @@ const Dashboard = () => {
   const customersCount = 1; // Assuming the currentCompany is the customer
 
   // Use correct statuses from PIRStatus enum: 'submitted', 'in_review', 'flagged', 'rejected'
+  // Use general pirRequests for stats cards
   const pendingSheets = (pirRequests ?? []).filter(
-    (pir) => pir.status === 'submitted' || pir.status === 'in_review' || pir.status === 'flagged' || pir.status === 'rejected'
+    (pir) => ['submitted', 'in_review', 'flagged', 'rejected', 'pending'].includes(pir.status) // Include pending for supplier view if needed
   );
   const approvedSheets = (pirRequests ?? []).filter(
     (pir) => pir.status === "approved"
   );
   // --- End Calculations ---
 
-  const isLoading = isLoadingCompanies || loadingPirs; // Combined loading state
+  const isLoading = isLoadingCompanies || loadingPirs || loadingActionItems; // Add loading state for action items
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -164,6 +246,23 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
+          {/* NEW Action Items Section */}
+          <Card className="col-span-full"> {/* Make it span full width */}
+            <CardHeader>
+              <CardTitle>Action Items</CardTitle>
+              <CardDescription>Tasks requiring your attention.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingActionItems ? (
+                <div className="text-center p-4 text-muted-foreground">Loading action items...</div>
+              ) : errorActionItems ? (
+                <div className="text-center p-4 text-red-500">Error loading action items: {errorActionItems.message}</div>
+              ) : (
+                <ActionItemsList items={actionItems ?? []} />
+              )}
+            </CardContent>
+          </Card>
+          {/* End NEW Section */}
 
           <Tabs defaultValue="recent" className="w-full">
             <TabsList>

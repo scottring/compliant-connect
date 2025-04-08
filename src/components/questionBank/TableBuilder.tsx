@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { UseFormReturn } from "react-hook-form";
+// Remove react-hook-form import
 import { Plus, Trash, ChevronDown, ChevronUp, FileDown, Upload, X } from "lucide-react";
-import { FormLabel, FormDescription } from "@/components/ui/form";
+import { FormLabel, FormDescription } from "@/components/ui/form"; // Keep FormLabel/Desc for styling consistency
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,49 +9,38 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+// Import types from @/types
+import { TableColumn, NestedTableColumns, ColumnType } from "@/types";
 
-export type ColumnType = "text" | "number" | "boolean" | "select";
-
-export interface TableColumn {
-  name: string;
-  type: ColumnType;
-  options?: string[];
-  nested?: boolean;
-  nestedColumns?: NestedTableColumns[];
-}
-
-export interface NestedTableColumns {
-  name: string;
-  type: ColumnType;
-  options?: string[];
-}
-
+// Update props interface
 interface TableBuilderProps {
-  form: UseFormReturn<any>;
+  columns: TableColumn[];
+  onChange: (columns: TableColumn[]) => void;
 }
 
-export function TableBuilder({ form }: TableBuilderProps) {
+export function TableBuilder({ columns, onChange }: TableBuilderProps) {
   const [newColumnOption, setNewColumnOption] = useState("");
   const [expandedNested, setExpandedNested] = useState<number | null>(null);
   const [bulkOptionsText, setBulkOptionsText] = useState("");
   const [showBulkImport, setShowBulkImport] = useState<{column: number, nested?: number} | null>(null);
 
-  const tableColumns = form.watch("tableColumns") || [];
+  // Use the 'columns' prop instead of form.watch
+  // const tableColumns = form.watch("tableColumns") || [];
 
   const addTableColumn = () => {
-    const currentColumns = form.getValues("tableColumns") || [];
-    form.setValue("tableColumns", [
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = columns || [];
+    onChange([
       ...currentColumns,
-      { name: "", type: "text", nested: false },
+      { name: "", type: "text", nested: false, nestedColumns: [] }, // Ensure nestedColumns is initialized
     ]);
   };
 
   const removeTableColumn = (index: number) => {
-    const currentColumns = form.getValues("tableColumns") || [];
-    form.setValue(
-      "tableColumns",
-      currentColumns.filter((_, i) => i !== index)
-    );
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = columns || [];
+    onChange(
+      currentColumns.filter((_, i) => i !== index));
   };
 
   const updateColumnField = (
@@ -59,54 +48,60 @@ export function TableBuilder({ form }: TableBuilderProps) {
     field: keyof TableColumn,
     value: any
   ) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = [...(columns || [])];
     currentColumns[index] = {
       ...currentColumns[index],
       [field]: value,
     };
-    form.setValue("tableColumns", currentColumns);
+    onChange(currentColumns);
   };
 
   const toggleNested = (index: number) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = [...(columns || [])];
     const isNested = currentColumns[index]?.nested || false;
-    
+
     currentColumns[index] = {
       ...currentColumns[index],
       nested: !isNested,
-      nestedColumns: !isNested ? [] : currentColumns[index].nestedColumns,
+      // Initialize nestedColumns if turning nested on, keep existing if turning off (or handle differently if needed)
+      nestedColumns: !isNested ? [] : currentColumns[index].nestedColumns || [],
     };
-    
-    form.setValue("tableColumns", currentColumns);
-    
+
+    onChange(currentColumns);
+
+    // Keep local state for UI expansion
     setExpandedNested(expandedNested === index ? null : index);
   };
 
   const addNestedColumn = (columnIndex: number) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = [...(columns || [])];
     const currentNestedColumns = currentColumns[columnIndex].nestedColumns || [];
-    
+
     currentColumns[columnIndex] = {
       ...currentColumns[columnIndex],
       nestedColumns: [
         ...currentNestedColumns,
-        { name: "", type: "text" },
+        { name: "", type: "text" }, // Default nested column
       ],
     };
-    
-    form.setValue("tableColumns", currentColumns);
+
+    onChange(currentColumns);
   };
 
   const removeNestedColumn = (columnIndex: number, nestedIndex: number) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = [...(columns || [])];
     const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
-    
+
     currentColumns[columnIndex] = {
       ...currentColumns[columnIndex],
       nestedColumns: currentNestedColumns.filter((_, i) => i !== nestedIndex),
     };
-    
-    form.setValue("tableColumns", currentColumns);
+
+    onChange(currentColumns);
   };
 
   const updateNestedColumnField = (
@@ -115,9 +110,10 @@ export function TableBuilder({ form }: TableBuilderProps) {
     field: keyof NestedTableColumns,
     value: any
   ) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = [...(columns || [])];
     const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
-    
+
     currentNestedColumns[nestedIndex] = {
       ...currentNestedColumns[nestedIndex],
       [field]: value,
@@ -127,8 +123,8 @@ export function TableBuilder({ form }: TableBuilderProps) {
       ...currentColumns[columnIndex],
       nestedColumns: currentNestedColumns,
     };
-    
-    form.setValue("tableColumns", currentColumns);
+
+    onChange(currentColumns);
   };
 
   const handleBulkImportOptions = (columnIndex: number, isNested = false, nestedIndex?: number) => {
@@ -137,9 +133,10 @@ export function TableBuilder({ form }: TableBuilderProps) {
         .split(/[\n,]/)
         .map(option => option.trim())
         .filter(option => option !== "");
-      
-      const currentColumns = [...(form.getValues("tableColumns") || [])];
-      
+
+      // Use 'columns' prop and call 'onChange'
+      const currentColumns = [...(columns || [])];
+
       if (isNested && nestedIndex !== undefined) {
         const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
         const currentOptions = currentNestedColumns[nestedIndex].options || [];
@@ -161,17 +158,18 @@ export function TableBuilder({ form }: TableBuilderProps) {
           options: [...currentOptions, ...newOptions],
         };
       }
-      
-      form.setValue("tableColumns", currentColumns);
+
+      onChange(currentColumns);
       setBulkOptionsText("");
-      setShowBulkImport(null);
+      setShowBulkImport(null); // Reset bulk import UI state
     }
   };
 
   const addColumnOption = (columnIndex: number, isNested = false, nestedIndex?: number) => {
     if (newColumnOption.trim()) {
-      const currentColumns = [...(form.getValues("tableColumns") || [])];
-      
+      // Use 'columns' prop and call 'onChange'
+      const currentColumns = [...(columns || [])];
+
       if (isNested && nestedIndex !== undefined) {
         const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
         const currentOptions = currentNestedColumns[nestedIndex].options || [];
@@ -193,9 +191,9 @@ export function TableBuilder({ form }: TableBuilderProps) {
           options: [...currentOptions, newColumnOption.trim()],
         };
       }
-      
-      form.setValue("tableColumns", currentColumns);
-      setNewColumnOption("");
+
+      onChange(currentColumns);
+      setNewColumnOption(""); // Reset input field
     }
   };
 
@@ -205,8 +203,9 @@ export function TableBuilder({ form }: TableBuilderProps) {
     isNested = false, 
     nestedIndex?: number
   ) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
-    
+    // Use 'columns' prop and call 'onChange'
+    const currentColumns = [...(columns || [])];
+
     if (isNested && nestedIndex !== undefined) {
       const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
       const currentOptions = [...(currentNestedColumns[nestedIndex].options || [])];
@@ -228,8 +227,8 @@ export function TableBuilder({ form }: TableBuilderProps) {
         options: currentOptions.filter((_, i) => i !== optionIndex),
       };
     }
-    
-    form.setValue("tableColumns", currentColumns);
+
+    onChange(currentColumns);
   };
 
   return (
@@ -246,9 +245,10 @@ export function TableBuilder({ form }: TableBuilderProps) {
         Configure the columns for this table. You can add nested tables by checking the "Has Nested Data" option.
       </FormDescription>
 
-      {tableColumns.length > 0 ? (
+      {/* Use 'columns' prop for mapping */}
+      {columns.length > 0 ? (
         <div className="space-y-4">
-          {tableColumns.map((column: TableColumn, index: number) => (
+          {columns.map((column: TableColumn, index: number) => (
             <Card key={index} className="overflow-hidden">
               <CardHeader className="bg-muted/50 py-3">
                 <div className="flex items-center justify-between">

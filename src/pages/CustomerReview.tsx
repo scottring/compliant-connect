@@ -11,8 +11,9 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { CheckCircle, Flag, ChevronDown, ChevronUp, Send, Info } from "lucide-react"; // Added Info
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added Alert
 // Import types from central location and generated types
 import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "../types/index"; // Use relative path
 import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse } from "@/types/pir";
@@ -61,6 +62,7 @@ type SubmitReviewInput = {
     supplierEmail?: string | null;
     customerName?: string | null;
     productName?: string | null;
+    customerId?: string; // Added customerId for query invalidation
 };
 type SubmitReviewResult = { finalStatus: PIRStatus };
 
@@ -108,7 +110,14 @@ const useSubmitReviewMutation = (
         },
         onSuccess: async (data, variables) => { // Make async
             queryClient.invalidateQueries({ queryKey: ['pirDetailsForReview', variables.pirId] });
-            queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
+            // Invalidate the specific query key used by ProductSheets
+            if (variables.customerId) {
+                queryClient.invalidateQueries({ queryKey: ['pirRequestsWithDetails', variables.customerId] });
+            } else {
+                // Fallback or broader invalidation if customerId isn't passed (less ideal)
+                queryClient.invalidateQueries({ queryKey: ['pirRequestsWithDetails'] });
+                console.warn("customerId not provided for precise query invalidation in useSubmitReviewMutation");
+            }
             toast.success(`Review submitted. Final status: ${data.finalStatus}`);
 
             // --- Send Email Notification to Supplier via Edge Function ---
@@ -314,7 +323,9 @@ const CustomerReview = () => {
   const sheetQuestions = pirDetails?.questions ?? [];
   const sheetTags = pirDetails?.tags ?? [];
   const sheetResponses = pirDetails?.responses ?? [];
-  const isPreviouslyReviewed = productSheet?.status === "flagged";
+  // Determine if this is a subsequent review round (i.e., has been flagged before)
+  const hasPreviousFlags = sheetResponses.some(r => r.response_flags && r.response_flags.length > 0);
+  const isSubsequentReview = productSheet?.status === 'submitted' && hasPreviousFlags; // Submitted again after being flagged
 
   // Grouping logic
   const questionsBySections = sheetQuestions.reduce(
@@ -376,25 +387,26 @@ const CustomerReview = () => {
         }
 
         // If answer exists, apply tab-specific logic
-        if (activeTab === "flagged") return status === "flagged" || (isPreviouslyReviewed && hasFlags);
+        if (activeTab === "flagged") return status === "flagged" || (isSubsequentReview && hasFlags); // Use isSubsequentReview
         if (activeTab === "approved") return status === "approved";
-        if (activeTab === "pending") return status === "pending" && !(isPreviouslyReviewed && hasFlags);
+        if (activeTab === "pending") return status === "pending" && !(isSubsequentReview && hasFlags); // Use isSubsequentReview
 
         return false; // Should not be reached if tabs cover all cases
     });
   };
 
   // Calculate counts
-  const flaggedCount = sheetResponses.filter(r => (reviewStatus[r.id] === 'flagged') || (isPreviouslyReviewed && r.response_flags && r.response_flags.length > 0)).length;
+  const flaggedCount = sheetResponses.filter(r => (reviewStatus[r.id] === 'flagged') || (isSubsequentReview && r.response_flags && r.response_flags.length > 0)).length; // Use isSubsequentReview
   const approvedCount = sheetResponses.filter(r => reviewStatus[r.id] === 'approved').length;
-  const pendingCount = sheetResponses.filter(r => reviewStatus[r.id] === 'pending' && !(isPreviouslyReviewed && r.response_flags && r.response_flags.length > 0)).length;
+  const pendingCount = sheetResponses.filter(r => reviewStatus[r.id] === 'pending' && !(isSubsequentReview && r.response_flags && r.response_flags.length > 0)).length;
+  const hasPendingActions = Object.values(reviewStatus).some(status => status === 'pending'); // Check if any item is still pending
   const totalAnsweredQuestions = sheetResponses.length;
 
   // Set default tab
   useEffect(() => {
-    if (isPreviouslyReviewed && flaggedCount > 0) setActiveTab("flagged");
+    if (isSubsequentReview && flaggedCount > 0) setActiveTab("flagged"); // Use isSubsequentReview
     else setActiveTab("all");
-  }, [isPreviouslyReviewed, flaggedCount]);
+  }, [isSubsequentReview, flaggedCount]); // Use isSubsequentReview
 
   // --- Event Handlers ---
   const toggleSection = (sectionId: string) => { setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] })); };
@@ -410,14 +422,16 @@ const CustomerReview = () => {
     toast.info("Answer marked as flagged");
    };
   const handleUpdateNote = (responseId: string, note: string) => { setReviewNotes(prev => ({ ...prev, [responseId]: note })); };
+  const handleUndoApprove = (responseId: string) => {
+    setReviewStatus(prev => ({ ...prev, [responseId]: "pending" }));
+    toast.info("Approval undone. Status set back to pending.");
+  };
   const handleSubmitReview = () => {
     if (!user) { toast.error("You must be logged in"); return; }
     if (!pirId) { toast.error("PIR ID missing"); return; }
 
-    const pendingAnswers = sheetResponses.filter(r => reviewStatus[r.id] === 'pending');
-    if (pendingAnswers.length > 0 && !isPreviouslyReviewed) {
-        toast.error(`Please review all ${pendingAnswers.length} pending answers.`); return;
-    }
+    // const pendingAnswers = sheetResponses.filter(r => reviewStatus[r.id] === 'pending'); // No longer needed here
+    // Check for flagged items without notes is still relevant
     const flaggedWithoutNotes = Object.entries(reviewStatus).filter(([id, status]) => status === 'flagged' && !reviewNotes[id]?.trim()).length;
     if (flaggedWithoutNotes > 0) {
         toast.error(`Please add notes to all ${flaggedWithoutNotes} flagged answers.`); return;
@@ -437,7 +451,8 @@ const CustomerReview = () => {
         supplierEmail: pirDetails.supplier?.contact_email,
         customerName: pirDetails.customer?.name,
         productName: pirDetails.product?.name,
-    }, { onSuccess: () => { navigate("/product-sheets"); } }); // Keep existing navigation on success
+        customerId: pirDetails.customer?.id, // Pass customerId
+   }, { onSuccess: () => { navigate("/product-sheets"); } }); // Keep existing navigation on success
   };
   // --- End Event Handlers ---
 
@@ -473,20 +488,36 @@ const CustomerReview = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={pageTitle}
-        subtitle={isPreviouslyReviewed ? "Reviewing flagged issues" : "Initial review"}
-        actions={( // Fixed JSX expression
-          <Button className="bg-brand hover:bg-brand/90" onClick={handleSubmitReview} disabled={submitReviewMutation.isPending}>
+        subtitle={isSubsequentReview ? "Reviewing Revisions" : "Initial Review"}
+        actions={(
+          <Button
+            className="bg-brand hover:bg-brand/90"
+            onClick={handleSubmitReview}
+            disabled={submitReviewMutation.isPending || productSheet.status === 'flagged' || hasPendingActions} // Disable if flagged OR pending actions exist
+          >
             <Send className="mr-2 h-4 w-4" />
-            {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+            {submitReviewMutation.isPending ? "Submitting..." : productSheet.status === 'flagged' ? "Revision Requested" : hasPendingActions ? "Review All Items" : "Submit Review"}
           </Button>
         )}
       />
+      {/* Add Alert here, after PageHeader but before the main content */}
+      {productSheet.status === 'flagged' && (
+        <Alert className="mt-4 border-yellow-500 text-yellow-700"> {/* Basic styling for visibility */}
+          <Info className="h-4 w-4" />
+          <AlertTitle>Revision Requested</AlertTitle>
+          <AlertDescription>
+            This sheet has been sent back to the supplier for revisions. Review actions are disabled until a new response is submitted.
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* Add Alert here, after PageHeader but before the main content */}
+      {/* Add Alert here, after PageHeader but before the main content */}
 
       <Card>
         {/* ... Card Header & Content ... */}
       </Card>
 
-      <Tabs defaultValue={isPreviouslyReviewed ? "flagged" : "all"} value={activeTab} onValueChange={setActiveTab}>
+      <Tabs defaultValue={isSubsequentReview ? "flagged" : "all"} value={activeTab} onValueChange={setActiveTab}> {/* Use isSubsequentReview */}
         <TabsList>
            {/* ... Tabs Triggers ... */}
         </TabsList>
@@ -543,7 +574,8 @@ const CustomerReview = () => {
                             onApprove={() => { if (answer) handleApprove(answer.id); }}
                             onFlag={(note) => { if (answer) handleFlag(answer.id, note); }}
                             onUpdateNote={(note) => { if (answer) handleUpdateNote(answer.id, note); }}
-                            // isPreviouslyFlagged is now handled internally by ReviewQuestionItem
+                            isLocked={productSheet.status === 'flagged'}
+                            onUndoApprove={() => handleUndoApprove(answer.id)} // Pass undo handler
                           />
                           {index < filteredSectionQuestions.length - 1 && <Separator />}
                         </div>

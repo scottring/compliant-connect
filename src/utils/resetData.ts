@@ -29,34 +29,20 @@ export const resetAllData = async () => {
 
     // Only attempt Supabase operations if authenticated
     if (isAuthenticated) {
-      // Clear Supabase data tables in the correct order to avoid foreign key constraints
-      // Comments and flags must be deleted before answers
-      await supabase.from('comments').delete().neq('id', null);
-      await supabase.from('flags').delete().neq('id', null);
-      
-      // Clear junction tables first
-      await supabase.from('question_tags').delete().neq('question_id', null);
-      await supabase.from('product_sheet_tags').delete().neq('product_sheet_id', null);
-      
-      // Clear answers before product sheets
-      await supabase.from('answers').delete().neq('id', null);
-      
-      // Clear questions before sections
-      await supabase.from('questions').delete().neq('id', null);
-      
-      // Clear subsections before sections
-      await supabase.from('subsections').delete().neq('id', null);
-      
-      // Clear main tables
-      await supabase.from('product_sheets').delete().neq('id', null);
-      await supabase.from('sections').delete().neq('id', null);
-      await supabase.from('tags').delete().neq('id', null);
-      
-      // Don't delete company_users as it might break user access
-      // Don't delete companies as it might break user relationships
+      // Call the database function to reset data securely
+      const { error: rpcError } = await supabase.rpc('reset_application_data');
+
+      if (rpcError) {
+        console.error("Error calling reset_application_data RPC:", rpcError);
+        toast.error("Failed to reset Supabase data. Check console for details.");
+        return; // Stop execution if RPC fails
+      }
+    } else {
+      // If not authenticated, we can only clear local storage
+      toast.info("Local data cleared. Log in to reset database data.");
     }
 
-    toast.success("All data has been reset. Reloading page...");
+    toast.success("Application data reset successfully. Reloading page...");
     
     // Give the toast a moment to appear before reloading
     setTimeout(() => {

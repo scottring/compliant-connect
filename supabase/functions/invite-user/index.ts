@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// Import AuthApiError along with createClient
+import { createClient, AuthApiError } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req: Request) => {
@@ -64,14 +65,16 @@ serve(async (req: Request) => {
 
     if (error) {
       console.error("Error inviting user:", error);
-      // Check for specific errors, e.g., user already exists
-      if (error.message.includes("User already registered")) {
-         return new Response(JSON.stringify({ error: "User already registered." }), {
+      // Check for specific errors using the error code for reliability
+      // Check if it's an AuthApiError and if the code matches 'email_exists'
+      if (error instanceof AuthApiError && error.code === 'email_exists') {
+         return new Response(JSON.stringify({ error: "A user with this email address has already been registered." }), {
            headers: { ...corsHeaders, "Content-Type": "application/json" },
-           status: 409, // Conflict
+           status: 409, // Conflict - User already exists
          });
       }
-      throw error; // Re-throw other errors
+      // For any other errors during the invite process, re-throw them
+      throw error;
     }
 
     // Return success response

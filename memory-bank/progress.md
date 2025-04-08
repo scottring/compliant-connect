@@ -220,3 +220,18 @@
     *   Removed extensive `console.log` statements from multiple files.
     *   Fixed syntax errors caused by log removal.
     *   Removed unused imports.
+
+## Today's Progress (April 7, 2025)
+
+*   **Data Reset Functionality:**
+    *   Created `create_reset_data_function.sql` migration to add a `reset_data()` function in Supabase.
+    *   Created `src/utils/resetData.ts` utility function to call the Supabase RPC.
+    *   Added a "Reset Data" button to the `AdminSettings` page that uses this utility.
+*   **List Table Question Type:**
+    *   Added `list_table` enum value to `question_type` in `supabase/migrations/20250407154500_add_list_table_question_type.sql`.
+    *   Updated `create_question_with_tags` function to handle `list_table` type and its `table_schema` in `supabase/migrations/20250407155700_alter_create_question_with_tags_function.sql`.
+    *   Created `src/components/questionBank/TableBuilder.tsx` component to define the schema for `list_table` questions.
+    *   Integrated `TableBuilder` into `src/components/questionBank/QuestionBuilderDialog.tsx`.
+    *   Updated `src/types/index.ts` with `table_schema` property for `Question` type.
+    *   Updated `src/hooks/use-question-bank.ts` to handle the new question type and schema.
+    *   Updated `src/components/supplierResponse/QuestionItem.tsx` to render the `list_table` question type (basic structure, needs table rendering implementation).
