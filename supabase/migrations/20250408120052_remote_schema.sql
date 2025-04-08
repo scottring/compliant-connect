@@ -479,9 +479,7 @@ ALTER TABLE "public"."tags" OWNER TO "postgres";
 -- Removed redundant ADD CONSTRAINT for company_relationships_customer_id_supplier_id_key
 
 
-ALTER TABLE ONLY "public"."company_relationships"
-    ADD CONSTRAINT "company_relationships_pkey" PRIMARY KEY ("id");
-
+-- Removed redundant ADD CONSTRAINT for company_relationships_pkey
 
 
 ALTER TABLE ONLY "public"."company_users"
