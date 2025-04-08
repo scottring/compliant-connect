@@ -61,6 +61,7 @@ type SubmitReviewInput = {
     supplierEmail?: string | null;
     customerName?: string | null;
     productName?: string | null;
+    customerId?: string; // Added customerId for query invalidation
 };
 type SubmitReviewResult = { finalStatus: PIRStatus };
 
@@ -108,7 +109,14 @@ const useSubmitReviewMutation = (
         },
         onSuccess: async (data, variables) => { // Make async
             queryClient.invalidateQueries({ queryKey: ['pirDetailsForReview', variables.pirId] });
-            queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
+            // Invalidate the specific query key used by ProductSheets
+            if (variables.customerId) {
+                queryClient.invalidateQueries({ queryKey: ['pirRequestsWithDetails', variables.customerId] });
+            } else {
+                // Fallback or broader invalidation if customerId isn't passed (less ideal)
+                queryClient.invalidateQueries({ queryKey: ['pirRequestsWithDetails'] });
+                console.warn("customerId not provided for precise query invalidation in useSubmitReviewMutation");
+            }
             toast.success(`Review submitted. Final status: ${data.finalStatus}`);
 
             // --- Send Email Notification to Supplier via Edge Function ---
@@ -437,7 +445,8 @@ const CustomerReview = () => {
         supplierEmail: pirDetails.supplier?.contact_email,
         customerName: pirDetails.customer?.name,
         productName: pirDetails.product?.name,
-    }, { onSuccess: () => { navigate("/product-sheets"); } }); // Keep existing navigation on success
+        customerId: pirDetails.customer?.id, // Pass customerId
+   }, { onSuccess: () => { navigate("/product-sheets"); } }); // Keep existing navigation on success
   };
   // --- End Event Handlers ---
 
