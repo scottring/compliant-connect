@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { Question, Tag, TableColumn } from '@/types'; // Import TableColumn
+// Import only Tag from @/types. DBQuestion and TableColumn are defined/exported here.
+import { Tag } from '@/types'; 
 import { toast } from 'sonner';
 
 // Define separate types based on the actual schema
@@ -34,6 +35,24 @@ export type QuestionType = SupabaseQuestionType | 'LIST_TABLE'; // Manually add 
 // Supabase enum type: 'text' | 'number' | 'boolean' | 'single_select' | 'multi_select' | 'date' | 'file'
 // Combined type: 'text' | 'number' | 'boolean' | 'single_select' | 'multi_select' | 'date' | 'file' | 'LIST_TABLE'
 // Note: 'table' is not in Supabase enum, 'date' is not in local. 'select' maps to 'single_select'.
+
+// Define and export TableColumn type here, aligning with the one previously in @/types
+export type ColumnType = "text" | "number" | "boolean" | "select" | "multi-select"; // Keep this simple for now
+
+export interface NestedTableColumns {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+}
+
+export interface TableColumn {
+  name: string;
+  type: ColumnType;
+  options?: string[];
+  nested?: boolean;
+  nestedColumns?: NestedTableColumns[];
+}
+
 
 // DB Question type matching schema
 export type DBQuestion = {
@@ -103,6 +122,8 @@ export interface UseQuestionBankReturn {
   deleteQuestion: (id: string) => Promise<boolean>;
   addSection: (data: Omit<Section, 'id' | 'created_at' | 'updated_at'>) => Promise<Section>;
   addSubsection: (data: Omit<Subsection, 'id' | 'created_at' | 'updated_at'>) => Promise<Subsection>;
+  deleteSection: (id: string) => Promise<boolean>; // Add deleteSection
+  deleteSubsection: (id: string) => Promise<boolean>; // Add deleteSubsection
 }
 
 // --- Reusable Create Tag Mutation Hook Definition (Module Level) ---
@@ -167,12 +188,16 @@ const useCreateQuestionMutation = (
             const { tags: selectedTags, table_config: tableConfig, ...questionData } = question;
             const tagIds = selectedTags?.map(tag => tag.id) || [];
 
-            // TODO: Update the RPC function 'create_question_with_tags' to accept 'p_table_config JSONB'
-            // Assuming the RPC function is updated, pass table_config
+            // Call the updated RPC function, passing the user ID
             const { data: newQuestionData, error: rpcError } = await supabase.rpc('create_question_with_tags', {
-                p_subsection_id: questionData.subsection_id, p_text: questionData.text,
-                p_description: questionData.description || null, p_type: questionData.type as QuestionType,
-                p_required: questionData.required, p_options: questionData.options || null, p_tag_ids: tagIds,
+                p_user_id: user.id, // Pass the user ID
+                p_subsection_id: questionData.subsection_id,
+                p_text: questionData.text,
+                p_description: questionData.description || null,
+                p_type: questionData.type as QuestionType,
+                p_required: questionData.required,
+                p_options: questionData.options || null,
+                p_tag_ids: tagIds,
                 p_table_config: tableConfig || null // Pass table_config to RPC
             });
             if (rpcError) throw new Error(`RPC Error: ${rpcError.message}`);
@@ -362,6 +387,64 @@ const useAddSubsectionMutation = (
 };
 // --- End Add Subsection Mutation Hook ---
 
+// --- Reusable Delete Section Mutation Hook ---
+const useDeleteSectionMutation = (
+    queryClient: ReturnType<typeof useQueryClient>,
+    user: ReturnType<typeof useAuth>['user'],
+    setError: React.Dispatch<React.SetStateAction<string | null>>
+): UseMutationResult<boolean, Error, string> => {
+    return useMutation<boolean, Error, string>({
+        mutationFn: async (id) => {
+            if (!user) throw new Error('You must be logged in');
+            // Assuming cascade delete is set up in the database for subsections and questions
+            const { error } = await supabase.from('sections').delete().eq('id', id);
+            if (error) throw new Error(`Delete section failed: ${error.message}`);
+            return true;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['sectionsAndSubsections'] });
+            queryClient.invalidateQueries({ queryKey: ['questions'] }); // Invalidate questions too due to cascade
+            toast.success('Section deleted successfully');
+            setError(null);
+        },
+        onError: (error) => {
+            console.error('Error deleting section:', error);
+            setError(error.message);
+            toast.error(`Failed to delete section: ${error.message}`);
+        },
+    });
+};
+// --- End Delete Section Mutation Hook ---
+
+// --- Reusable Delete Subsection Mutation Hook ---
+const useDeleteSubsectionMutation = (
+    queryClient: ReturnType<typeof useQueryClient>,
+    user: ReturnType<typeof useAuth>['user'],
+    setError: React.Dispatch<React.SetStateAction<string | null>>
+): UseMutationResult<boolean, Error, string> => {
+    return useMutation<boolean, Error, string>({
+        mutationFn: async (id) => {
+            if (!user) throw new Error('You must be logged in');
+            // Assuming cascade delete is set up in the database for questions
+            const { error } = await supabase.from('subsections').delete().eq('id', id);
+            if (error) throw new Error(`Delete subsection failed: ${error.message}`);
+            return true;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['sectionsAndSubsections'] });
+            queryClient.invalidateQueries({ queryKey: ['questions'] }); // Invalidate questions too due to cascade
+            toast.success('Subsection deleted successfully');
+            setError(null);
+        },
+        onError: (error) => {
+            console.error('Error deleting subsection:', error);
+            setError(error.message);
+            toast.error(`Failed to delete subsection: ${error.message}`);
+        },
+    });
+};
+// --- End Delete Subsection Mutation Hook ---
+
 
 // --- Main Hook Definition ---
 export const useQuestionBank = (): UseQuestionBankReturn => {
@@ -466,7 +549,9 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
   const updateQuestionMutation = useUpdateQuestionMutation(queryClient, user, setError);
   const deleteQuestionMutation = useDeleteQuestionMutation(queryClient, user, setError);
   const addSectionMutation = useAddSectionMutation(queryClient, user, setError);
-  const addSubsectionMutation = useAddSubsectionMutation(queryClient, user, setError); // Call the hook
+  const addSubsectionMutation = useAddSubsectionMutation(queryClient, user, setError);
+  const deleteSectionMutation = useDeleteSectionMutation(queryClient, user, setError); // Call delete hook
+  const deleteSubsectionMutation = useDeleteSubsectionMutation(queryClient, user, setError); // Call delete hook
 
   // --- Manual Mutation Functions (None remaining) ---
 
@@ -532,6 +617,24 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
     addSubsection: (data: Omit<Subsection, 'id' | 'created_at' | 'updated_at'>) => {
       return new Promise<Subsection>((resolve, reject) => {
         addSubsectionMutation.mutate(data, {
+          onSuccess: (result) => resolve(result),
+          onError: (error) => reject(error),
+        });
+      });
+    },
+    // Add deleteSection promise wrapper
+    deleteSection: (id: string) => {
+      return new Promise<boolean>((resolve, reject) => {
+        deleteSectionMutation.mutate(id, {
+          onSuccess: (result) => resolve(result),
+          onError: (error) => reject(error),
+        });
+      });
+    },
+    // Add deleteSubsection promise wrapper
+    deleteSubsection: (id: string) => {
+      return new Promise<boolean>((resolve, reject) => {
+        deleteSubsectionMutation.mutate(id, {
           onSuccess: (result) => resolve(result),
           onError: (error) => reject(error),
         });

@@ -20,9 +20,9 @@ DECLARE
     new_question_id uuid;
     tag_id uuid;
 BEGIN
-    -- Insert the new question, including the table_config
-    INSERT INTO public.questions (subsection_id, text, description, type, required, options, table_config, created_by)
-    VALUES (p_subsection_id, p_text, p_description, p_type, p_required, p_options, p_table_config, auth.uid())
+    -- Insert the new question, including the table_config (removed created_by)
+    INSERT INTO public.questions (subsection_id, text, description, type, required, options, table_config)
+    VALUES (p_subsection_id, p_text, p_description, p_type, p_required, p_options, p_table_config)
     RETURNING id INTO new_question_id;
 
     -- Associate tags with the new question

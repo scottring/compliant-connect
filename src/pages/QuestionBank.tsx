@@ -26,7 +26,9 @@ const QuestionBank = () => {
     errorTags,
     errorStructure,
     deleteQuestion,
-    addSection
+    addSection,
+    deleteSection,    // Get deleteSection from context
+    deleteSubsection // Get deleteSubsection from context
   } = useQuestionBankContext();
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,9 +37,10 @@ const QuestionBank = () => {
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
   const [previewQuestion, setPreviewQuestion] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [currentSubsectionId, setCurrentSubsectionId] = useState("");
+  const [currentSubsectionId, setCurrentSubsectionId] = useState(""); // Still needed? Maybe not if dialog handles it. Let's keep for now.
   const [isAddingSectionOpen, setIsAddingSectionOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
+  const [initialSectionId, setInitialSectionId] = useState<string | undefined>(undefined); // State for the newly created section ID
 
   const toggleTag = (tagId: string) => {
     if (selectedTags.some((tag) => tag.id === tagId)) {
@@ -72,17 +75,19 @@ const QuestionBank = () => {
   const handleCreateSection = async () => {
     if (newSectionName.trim()) {
       try {
-        await addSection({
+        const newSection = await addSection({ // Get the returned section
           name: newSectionName.trim(),
           description: "",
           order_index: sections.length
         });
         setNewSectionName("");
         setIsAddingSectionOpen(false);
-        setIsDialogOpen(true); // Open question dialog after creating section
-        toast.success("Section created successfully");
+        setInitialSectionId(newSection.id); // Store the new section ID
+        setIsDialogOpen(true); // Open question dialog
+        // Toast is handled by the hook
       } catch (error) {
-        toast.error("Failed to create section");
+        // Toast is handled by the hook
+        console.error("Failed to create section:", error);
       }
     }
   };
@@ -155,13 +160,15 @@ const QuestionBank = () => {
             setEditingQuestion(id);
             setIsDialogOpen(true);
           }}
-          onPreviewQuestion={(id) => {
-            setPreviewQuestion(id);
-            setIsPreviewOpen(true);
-          }}
-          onDeleteQuestion={handleDeleteQuestion}
-        />
-      )}
+            onPreviewQuestion={(id) => {
+              setPreviewQuestion(id);
+              setIsPreviewOpen(true);
+            }}
+            onDeleteQuestion={handleDeleteQuestion}
+            onDeleteSection={deleteSection} // Pass deleteSection
+            onDeleteSubsection={deleteSubsection} // Pass deleteSubsection
+          />
+        )}
 
       <QuestionBuilderDialog
         open={isDialogOpen}
@@ -170,8 +177,11 @@ const QuestionBank = () => {
         onClose={() => {
           setEditingQuestion(null);
           setIsDialogOpen(false);
+          setInitialSectionId(undefined); // Clear initial section ID when closing
         }}
-        subsectionId={currentSubsectionId}
+        // Pass initialSectionId and potentially subsectionId (though subsectionId might be better handled inside dialog now)
+        initialSectionId={initialSectionId} 
+        // subsectionId={currentSubsectionId} // Let's remove this for now, dialog handles its own defaults
       />
 
       <QuestionPreviewDialog

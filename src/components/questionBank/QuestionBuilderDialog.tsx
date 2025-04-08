@@ -3,7 +3,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuestionBankContext } from "@/context/QuestionBankContext";
-import { Question, Tag, TableColumn } from "@/types"; // Import TableColumn
+// Import Tag from @/types, but Question and TableColumn types will come from the hook
+import { Tag } from "@/types"; 
 import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload, Loader2 } from "lucide-react";
 // Import DialogDescription
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,8 +20,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import TagBadge from "@/components/tags/TagBadge";
 import { toast } from "sonner";
 import { TableBuilder } from "./TableBuilder"; // Import TableBuilder
-// Import correct types from hook
-import { Section, Subsection, QuestionType } from "@/hooks/use-question-bank";
+// Import correct types from hook, including DBQuestion and TableColumn
+import { Section, Subsection, QuestionType, DBQuestion, TableColumn } from "@/hooks/use-question-bank"; // Import TableColumn here
 
 const formSchema = z.object({
   sectionId: z.string().min(1, "Section is required"),
@@ -41,7 +42,8 @@ interface QuestionBuilderDialogProps {
   onOpenChange: (open: boolean) => void;
   questionId: string | null;
   onClose: () => void;
-  subsectionId?: string;
+  subsectionId?: string; // Keep this if needed for direct opening to subsection
+  initialSectionId?: string; // Add new prop
 }
 
 export function QuestionBuilderDialog({
@@ -49,7 +51,8 @@ export function QuestionBuilderDialog({
   onOpenChange,
   questionId,
   onClose,
-  subsectionId,
+  subsectionId, // Keep receiving
+  initialSectionId, // Receive new prop
 }: QuestionBuilderDialogProps) {
   const { 
     questions, 
@@ -75,10 +78,13 @@ export function QuestionBuilderDialog({
   const [showNewSubsectionForm, setShowNewSubsectionForm] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [newSubsectionName, setNewSubsectionName] = useState("");
+  const [isCreatingSection, setIsCreatingSection] = useState(false); // Loading state for section
+  const [isCreatingSubsection, setIsCreatingSubsection] = useState(false); // Loading state for subsection
   // State for table configuration
   const [tableConfig, setTableConfig] = useState<TableColumn[]>([]);
 
-  const editingQuestion = questionId ? questions.find(q => q.id === questionId) : null;
+  // Explicitly type editingQuestion with DBQuestion from the hook
+  const editingQuestion: DBQuestion | null | undefined = questionId ? questions.find(q => q.id === questionId) : null;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -149,18 +155,25 @@ export function QuestionBuilderDialog({
           setTableConfig([]);
         }
       } else {
-        // If subsectionId is provided, find its parent section
-        let sectionId = "";
+        // --- Logic for NEW question ---
+        let defaultSectionId = initialSectionId || ""; // Prioritize initialSectionId if provided
+        let defaultSubsectionId = "";
+
+        // If a subsectionId prop was passed directly (e.g., clicking '+' next to a subsection)
         if (subsectionId) {
-          const subsection = allSubsections?.find(s => s.id === subsectionId);
-          if (subsection?.section_id) {
-            sectionId = subsection.section_id; // Use section_id
+          const directSubsection = allSubsections?.find(s => s.id === subsectionId);
+          if (directSubsection?.section_id) {
+            defaultSectionId = directSubsection.section_id; // Ensure parent section is selected
+            defaultSubsectionId = subsectionId;
           }
+        } else if (initialSectionId) {
+           // If only initialSectionId is provided, leave subsection empty
+           defaultSubsectionId = "";
         }
         
         form.reset({
-          sectionId,
-          subsectionId: subsectionId || "", // Default to empty string
+          sectionId: defaultSectionId,
+          subsectionId: defaultSubsectionId,
           text: "",
           description: "",
           required: true,
@@ -173,7 +186,8 @@ export function QuestionBuilderDialog({
     } else {
        setTableConfig([]); // Reset table config when dialog closes
     }
-  }, [open, editingQuestion, sections, form, subsectionId, allSubsections]); // Added allSubsections
+     // Add initialSectionId to dependency array
+  }, [open, editingQuestion, sections, form, subsectionId, initialSectionId, allSubsections]);
 
   const toggleTag = (tag: Tag) => {
     if (selectedTags.some((t) => t.id === tag.id)) {
@@ -239,44 +253,49 @@ export function QuestionBuilderDialog({
   };
 
   const handleCreateSection = async () => {
-    if (newSectionName.trim()) {
+    if (newSectionName.trim() && !isCreatingSection) {
+      setIsCreatingSection(true);
       try {
-        // Call addSection with data matching the Section type
-        const newSection = await addSection({ 
+        const newSection = await addSection({
           name: newSectionName.trim(),
-          description: "", // Assuming description is optional or handled
-          order_index: parentSections.length 
+          description: "",
+          order_index: parentSections.length
         });
-        if (newSection) {
-          form.setValue("sectionId", newSection.id);
-          setNewSectionName("");
-          setShowNewSectionForm(false);
-          toast.success("Section created successfully");
-        }
+        // The query invalidation in the hook should trigger a refetch.
+        // We set the value *after* the promise resolves.
+        form.setValue("sectionId", newSection.id, { shouldValidate: true }); // Set value and trigger validation
+        setNewSectionName("");
+        setShowNewSectionForm(false);
+        // Toast is handled by the mutation hook now
       } catch (error) {
-        toast.error("Failed to create section");
+        // Error toast is handled by the mutation hook
+        console.error("Failed to create section:", error);
+      } finally {
+        setIsCreatingSection(false);
       }
     }
   };
 
   const handleCreateSubsection = async () => {
-    if (newSubsectionName.trim() && selectedSectionId) {
+    if (newSubsectionName.trim() && selectedSectionId && !isCreatingSubsection) {
+      setIsCreatingSubsection(true);
       try {
-        // Call addSubsection with data matching the Subsection type
-        const newSubsection = await addSubsection({ 
+        const newSubsection = await addSubsection({
           name: newSubsectionName.trim(),
-          description: "", // Assuming description is optional or handled
-          section_id: selectedSectionId, // Pass the parent section ID
-          order_index: subsections.length 
+          description: "",
+          section_id: selectedSectionId,
+          order_index: subsections.length
         });
-        if (newSubsection) {
-          form.setValue("subsectionId", newSubsection.id);
-          setNewSubsectionName("");
-          setShowNewSubsectionForm(false);
-          toast.success("Subsection created successfully");
-        }
+        // Set value *after* the promise resolves.
+        form.setValue("subsectionId", newSubsection.id, { shouldValidate: true }); // Set value and trigger validation
+        setNewSubsectionName("");
+        setShowNewSubsectionForm(false);
+        // Toast is handled by the mutation hook now
       } catch (error) {
-        toast.error("Failed to create subsection");
+        // Error toast is handled by the mutation hook
+        console.error("Failed to create subsection:", error);
+      } finally {
+        setIsCreatingSubsection(false);
       }
     }
   };
@@ -392,9 +411,9 @@ export function QuestionBuilderDialog({
                       <Button
                         type="button"
                         onClick={handleCreateSection}
-                        disabled={!newSectionName.trim()}
+                        disabled={!newSectionName.trim() || isCreatingSection}
                       >
-                        Create
+                        {isCreatingSection ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
                       </Button>
                       <Button
                         type="button"
@@ -460,9 +479,9 @@ export function QuestionBuilderDialog({
                       <Button
                         type="button"
                         onClick={handleCreateSubsection}
-                        disabled={!newSubsectionName.trim()}
+                        disabled={!newSubsectionName.trim() || isCreatingSubsection}
                       >
-                        Create
+                        {isCreatingSubsection ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
                       </Button>
                       <Button
                         type="button"
