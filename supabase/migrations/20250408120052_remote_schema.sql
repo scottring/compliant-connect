@@ -473,9 +473,7 @@ CREATE TABLE IF NOT EXISTS "public"."tags" (
 ALTER TABLE "public"."tags" OWNER TO "postgres";
 
 
-ALTER TABLE ONLY "public"."companies"
-    ADD CONSTRAINT "companies_pkey" PRIMARY KEY ("id");
-
+-- Removed redundant ADD CONSTRAINT for companies_pkey (already created in an earlier migration)
 
 
 ALTER TABLE ONLY "public"."company_relationships"
