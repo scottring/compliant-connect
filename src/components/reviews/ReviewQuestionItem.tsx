@@ -33,8 +33,8 @@ interface ReviewQuestionItemProps {
   onApprove: () => void;
   onFlag: (note: string) => void;
   onUpdateNote: (note: string) => void;
-  // isPreviouslyFlagged?: boolean; // This will be derived internally now
-  isLocked?: boolean; // Add prop to disable actions when PIR is flagged
+  onUndoApprove: () => void; // Add handler to undo approval
+  isLocked?: boolean; // Prop to disable actions when PIR is flagged
 }
 
 const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
@@ -45,7 +45,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onApprove,
   onFlag,
   onUpdateNote,
-  // isPreviouslyFlagged = false, // Removed from props
+  onUndoApprove, // Destructure new prop
   isLocked = false, // Destructure isLocked with default value
 }) => {
   console.log(`ReviewQuestionItem Props for Q:${question.id}`, { question, answer, status, note }); // Re-add log
@@ -196,6 +196,16 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             <div className="flex items-center">
               <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
               <p className="font-medium text-green-800">Approved</p>
+              {!isLocked && ( // Only show Undo if not locked
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto text-xs h-auto p-1 text-muted-foreground hover:text-foreground"
+                  onClick={onUndoApprove} // Use the destructured prop
+                >
+                  Undo
+                </Button>
+              )}
             </div>
           </div>
         ) : (

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TagBadge from "@/components/tags/TagBadge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 // Import types from central location
-import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/index"; // Use relative path
+import { Tag, Company, Subsection, Section, SupplierResponse, Flag } from "../types/index"; // Use relative path, Added Flag
 // Import PIRRequest from pir.ts, but use Database types for enums and responses
 import { PIRRequest } from "@/types/pir";
 import { Database } from "@/types/supabase"; // Import generated types
@@ -19,7 +19,8 @@ import TaskProgress from "@/components/ui/progress/TaskProgress";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { toast } from "sonner";
-import { useCompanyData } from '@/hooks/use-company-data'; // Import useCompanyData
+import { useCompanyData } from '@/hooks/use-company-data';
+import { useAuth } from '@/context/AuthContext'; // Import useAuth to get user ID
 
 // Type for the combined PIR data fetched by the query
 interface PirDetails {
@@ -31,7 +32,7 @@ interface PirDetails {
     questions: (DBQuestion & {
         subsection?: Subsection & { section?: Section };
     })[];
-    responses: DBPIRResponse[]; // Use generated response type
+    responses: (DBPIRResponse & { response_flags?: DBFlag[] })[]; // Include flags in response type
 }
 
 // Type definition for DBQuestion
@@ -54,7 +55,8 @@ const SupplierResponseForm = () => {
   const { id: pirId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { currentCompany } = useCompanyData(); // Get current company context
+  const { currentCompany } = useCompanyData();
+  const { user } = useAuth(); // Get user for comment creation
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
@@ -134,7 +136,7 @@ const SupplierResponseForm = () => {
       // Step 4: Fetch existing Responses for this PIR (to populate answers)
       const { data: responsesData, error: responsesError } = await supabase
           .from('pir_responses')
-          .select('*')
+          .select('*, response_flags(*)') // Fetch nested flags
           .eq('pir_id', id);
 
       if (responsesError) throw new Error(`Failed to fetch existing PIR responses: ${responsesError.message}`);
@@ -149,7 +151,7 @@ const SupplierResponseForm = () => {
           customer: pirData.customer as Company | null,
           tags: pirTags, // PIR-specific tags
           questions: questions, // Questions fetched via PIR tags
-          responses: (responsesData || []) as DBPIRResponse[], // Existing responses
+          responses: (responsesData || []) as (DBPIRResponse & { response_flags?: DBFlag[] })[], // Cast to include flags
       };
   };
 
@@ -213,17 +215,28 @@ const SupplierResponseForm = () => {
       return acc;
     }, {} as Record<string, Record<string, (DBQuestion & { subsection?: Subsection & { section?: Section } })[]>>);
 
-  // Map DBPIRResponse to SupplierResponse for QuestionItem component
+  // Map DBPIRResponse to SupplierResponse, including flags
   const answersMap = sheetResponses.reduce((acc, response) => {
     acc[response.question_id!] = {
         id: response.id,
         questionId: response.question_id!,
         value: response.answer as any, // Map 'answer' (Json) to 'value'
         comments: [], // Map to empty array - Fetch actual comments if needed
-        // flags: [], // Flags are not part of SupplierResponse type
-    } as SupplierResponse; // Use SupplierResponse type from @/types
+        // Map flags directly from the fetched data
+        flags: (response.response_flags || []).map(flag => ({
+            id: flag.id,
+            answerId: flag.response_id || '',
+            comment: flag.description || '',
+            createdBy: flag.created_by || '',
+            createdByName: '', // Not available directly
+            createdAt: flag.created_at ? new Date(flag.created_at) : new Date(),
+            response_id: flag.response_id,
+            created_by: flag.created_by,
+            created_at: flag.created_at || new Date().toISOString(),
+        })) as Flag[], // Use imported Flag type
+    } as SupplierResponse & { flags?: Flag[] }; // Add flags to the mapped type
     return acc;
-  }, {} as Record<string, SupplierResponse>);
+  }, {} as Record<string, SupplierResponse & { flags?: Flag[] }>); // Adjust accumulator type
 
   // --- End Derived State ---
 
@@ -337,6 +350,35 @@ const SupplierResponseForm = () => {
     },
   });
 
+  // Mutation for adding a comment specifically responding to a flag
+  const addFlagResponseCommentMutation = useMutation({
+      mutationFn: async ({ flagId, comment }: { flagId: string; comment: string }) => {
+          if (!user) throw new Error("User not authenticated");
+
+          const { data, error } = await supabase
+              .from('response_comments')
+              .insert({
+                  flag_id: flagId,
+                  comment: comment,
+                  user_id: user.id, // Associate comment with the current user
+              })
+              .select() // Select to confirm insertion
+              .single(); // Expecting a single row back
+
+          if (error) throw error;
+          return data;
+      },
+      onSuccess: (data, variables) => {
+          toast.success(`Response to flag saved.`);
+          // Optionally, invalidate queries if comments need to be refetched immediately,
+          // though often just showing success is enough for this type of comment.
+          // queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
+      },
+      onError: (error: Error) => {
+          toast.error(`Failed to save response to flag: ${error.message}`);
+      },
+  });
+
 
   // --- Event Handlers ---
   // Updated handler to use the submit mutation
@@ -424,7 +466,7 @@ const SupplierResponseForm = () => {
         actions={(
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
-            <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit} disabled={productSheet?.status !== 'draft'}> Submit Response </Button>
+            <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit} disabled={!(productSheet?.status === 'draft' || productSheet?.status === 'flagged')}> Submit Response </Button>
           </div>
         )}
       />
@@ -487,16 +529,25 @@ const SupplierResponseForm = () => {
                     <div key={subsectionId} className="space-y-6">
                       <h3 className="font-medium text-lg border-b pb-2">{getSubsectionName(sectionId, subsectionId)}</h3>
                       {questions.map((question, index) => {
-                        const answer: SupplierResponse | undefined = answersMap[question.id];
+                        // Explicitly type answer here to include flags
+                        const answer: (SupplierResponse & { flags?: Flag[] }) | undefined = answersMap[question.id];
+                        const latestFlag = answer?.flags?.reduce((latest, current) =>
+                            new Date(latest.created_at!) > new Date(current.created_at!) ? latest : current
+                        , answer.flags[0]); // Provide initial value for reduce
+
                         return (
                           <div key={question.id} className="border-t pt-6 first:border-t-0 first:pt-0">
                             <QuestionItem
                               question={question}
-                              answer={answer} // Pass the correctly typed answer
-                              productSheetId={productSheet.id} // Pass PIR ID
-                              pirStatus={productSheet.status} // Pass the PIR status
+                              answer={answer} // Pass the answer which might include flags
+                              productSheetId={productSheet.id}
+                              pirStatus={productSheet.status}
                               onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
                               onAddComment={(text) => { if (answer) handleAddComment(answer.id, text); }}
+                              latestFlagId={latestFlag?.id} // Pass the ID of the latest flag
+                              onAddFlagResponseComment={(flagId, comment) => { // Pass the mutation function
+                                  addFlagResponseCommentMutation.mutate({ flagId, comment });
+                              }}
                             />
                           </div>
                         );
@@ -514,7 +565,7 @@ const SupplierResponseForm = () => {
          <Button variant="outline" onClick={() => navigate(-1)}> Cancel </Button>
         <div className="space-x-2">
           <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
-          <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit} disabled={productSheet?.status !== 'draft'}> Submit Response </Button>
+          <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit} disabled={!(productSheet?.status === 'draft' || productSheet?.status === 'flagged')}> Submit Response </Button>
         </div>
       </div>
     </div>

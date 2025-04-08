@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Flag as FlagType } from "@/types/index"; // Import Flag type and alias it
 import { Question, SupplierResponse, Comment } from "@/types/index"; // Correct import path
 import { DBQuestion } from "@/hooks/use-question-bank";
 import { useForm } from "react-hook-form";
@@ -12,6 +13,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea"; // Import Textarea
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -35,11 +37,13 @@ type PIRStatus = Database['public']['Enums']['pir_status']; // Use generated enu
 
 interface QuestionItemProps {
   question: Question | DBQuestion;
-  answer?: SupplierResponse;
+  answer?: SupplierResponse & { flags?: FlagType[] }; // Use the aliased FlagType
   productSheetId: string;
   pirStatus: PIRStatus; // Add PIR status prop
   onAnswerUpdate: (value: string | boolean | number | string[]) => void;
-  onAddComment: (text: string) => void;
+  onAddComment: (text: string) => void; // For general comments on the answer
+  latestFlagId?: string; // ID of the latest flag to respond to
+  onAddFlagResponseComment: (flagId: string, comment: string) => void; // Function to save flag response
 }
 
 const QuestionItem: React.FC<QuestionItemProps> = ({
@@ -48,11 +52,14 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   pirStatus, // Destructure pirStatus
   productSheetId,
   onAnswerUpdate,
-  onAddComment
+  onAddComment,
+  latestFlagId, // Destructure new props
+  onAddFlagResponseComment,
 }) => {
   const [commentsOpen, setCommentsOpen] = React.useState(false);
-  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined); // Add type assertion
+  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [flagResponseComment, setFlagResponseComment] = useState<string>(""); // State for flag response input
 
   // Determine if the form should be disabled based on PIR status
   const isLocked = ['submitted', 'in_review', 'approved', 'rejected'].includes(pirStatus);
@@ -129,12 +136,14 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   }, [saveTimeout]);
 
   // Check if this answer has been flagged
-  const hasFlags = answer?.flags && answer.flags.length > 0;
-  
+  // Check if this answer has been flagged (using the passed flags)
+  const flags = answer?.flags;
+  const hasFlags = flags && flags.length > 0;
+
   // Get the most recent flag
   const latestFlag = hasFlags
-    ? answer?.flags?.reduce((latest, current) =>
-        latest.created_at! > current.created_at! ? latest : current // Use created_at and add non-null assertion
+    ? flags.reduce((latest, current) =>
+        new Date(latest.created_at!) > new Date(current.created_at!) ? latest : current // Compare dates correctly
       )
     : null;
 
@@ -296,14 +305,47 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
         </div>
       </div>
       
+      {/* Display Flag Alert if flags exist */}
       {hasFlags && latestFlag && (
-        <Alert variant="destructive" className="bg-red-50 text-red-800 border-red-200">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>This answer has been flagged for revision</AlertTitle>
+        <Alert variant="destructive" className="bg-yellow-50 text-yellow-800 border-yellow-200"> {/* Use warning colors */}
+          <Flag className="h-4 w-4" /> {/* Use Flag icon */}
+          <AlertTitle>Revision Requested</AlertTitle>
           <AlertDescription>
-            {latestFlag.comment}
+            <span className="font-medium">Comment:</span> {latestFlag.comment} {/* Display flag comment */}
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* Section for responding to the flag */}
+      {hasFlags && latestFlag && !isLocked && (
+        <div className="mt-4 space-y-2 border-t pt-4">
+           <label htmlFor={`flag-response-${question.id}`} className="text-sm font-medium text-gray-700 block mb-1">
+               Respond to Flag Comment:
+           </label>
+          <Textarea
+            id={`flag-response-${question.id}`}
+            placeholder="Explain how you addressed the issue..."
+            value={flagResponseComment}
+            onChange={(e) => setFlagResponseComment(e.target.value)}
+            className="min-h-[60px]"
+          />
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!flagResponseComment.trim() || !latestFlagId}
+              onClick={() => {
+                if (latestFlagId && flagResponseComment.trim()) {
+                  onAddFlagResponseComment(latestFlagId, flagResponseComment);
+                  setFlagResponseComment(""); // Clear input after saving
+                }
+              }}
+            >
+              Save Response to Flag
+            </Button>
+          </div>
+        </div>
       )}
       
       <Form {...form}>
