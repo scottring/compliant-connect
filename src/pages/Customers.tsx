@@ -11,7 +11,6 @@ import { Database } from "@/integrations/supabase/types"; // Import base Databas
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Plus, UserPlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 const Customers = () => {
   const { user } = useAuth(); // Get user from AuthContext
