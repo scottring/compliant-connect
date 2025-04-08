@@ -165,7 +165,7 @@ const useCreatePIRMutation = (
 
                 // Invoke the Edge Function
                 const { error: functionError } = await supabase.functions.invoke(
-                    'send-email', // Use the correct function name
+                    'send-pir-notification', // Use the correct function name
                     { body: payload }
                 );
 
