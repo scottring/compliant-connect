@@ -23,11 +23,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient, useMutation, UseMutationResult } from '@tanstack/react-query';
 import { Company } from "@/types/auth"; // Import Company type
+import { Database } from "@/integrations/supabase/types"; // Import base Database type
 
 // Form schema
 const formSchema = z.object({
   name: z.string().min(2, "Company name must be at least 2 characters"),
-  role: z.enum(["supplier", "customer", "both"]), // Assuming role still exists on companies table? Check schema.
+  // role: z.enum(["supplier", "customer", "both"]), // Role might be determined by flow now
   contact_name: z.string().min(2, "Contact name is required"),
   contact_email: z.string().email("Please enter a valid email"),
   contact_phone: z.string().min(5, "Please enter a valid phone number"),
@@ -37,6 +38,16 @@ type FormValues = z.infer<typeof formSchema>;
 
 // --- Reusable Create Company & Associate User Mutation Hook ---
 type CreateCompanyInput = FormValues & { userId: string };
+// Input type for updating an invited company
+type UpdateInvitedCompanyInput = FormValues & {
+    userId: string;
+    supplierCompanyId: string; // ID of the company record to update
+    customerCompanyId: string; // ID of the company that invited this supplier
+};
+// Result type for update mutation
+type UpdateInvitedCompanyResult = { company: Company };
+
+// --- Create Company Mutation Hook ---
 type CreateCompanyResult = { company: Company }; // Example result
 
 const useCreateCompanyAndAssociateUserMutation = (
@@ -95,6 +106,77 @@ const useCreateCompanyAndAssociateUserMutation = (
 };
 // --- End Create Company Mutation Hook ---
 
+// --- NEW: Update Invited Company & Link User Mutation Hook ---
+const useUpdateInvitedCompanyMutation = (
+    queryClient: ReturnType<typeof useQueryClient>
+): UseMutationResult<UpdateInvitedCompanyResult, Error, UpdateInvitedCompanyInput> => {
+    return useMutation<UpdateInvitedCompanyResult, Error, UpdateInvitedCompanyInput>({
+        mutationFn: async (input) => {
+            const { userId, supplierCompanyId, customerCompanyId, ...companyUpdateData } = input;
+
+            // 1. Update the existing supplier company record
+            const { data: updatedCompany, error: companyUpdateError } = await supabase
+                .from("companies")
+                .update({
+                    name: companyUpdateData.name, // Update name if needed
+                    contact_name: companyUpdateData.contact_name,
+                    contact_email: companyUpdateData.contact_email,
+                    contact_phone: companyUpdateData.contact_phone,
+                    // role: companyUpdateData.role, // Role might not be on companies table
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', supplierCompanyId)
+                .select()
+                .single();
+
+            if (companyUpdateError) throw new Error(`Failed to update company details: ${companyUpdateError.message}`);
+            if (!updatedCompany) throw new Error("Company update failed: No data returned.");
+
+            // 2. Associate the user with this supplier company (e.g., as 'member')
+            const { error: associationError } = await supabase
+                .from("company_users")
+                .insert({
+                    user_id: userId,
+                    company_id: supplierCompanyId,
+                    role: "member", // Or appropriate role for invited supplier user
+                });
+
+            // Allow association errors if user might already be linked (e.g., re-onboarding)
+            if (associationError && associationError.code !== '23505') { // Ignore unique violation errors
+                 console.warn(`Failed to associate user (might already exist): ${associationError.message}`);
+                 // Decide if this should be a hard error or just a warning
+                 // throw new Error(`Failed to associate user: ${associationError.message}`);
+            }
+
+            // 3. Update the existing relationship status to 'active'
+            const { error: relationshipError } = await supabase
+                .from('company_relationships')
+                .update({ status: 'active' }) // Update status
+                .eq('customer_id', customerCompanyId) // Find the specific relationship
+                .eq('supplier_id', supplierCompanyId);
+
+            // Log error if update fails, but maybe don't throw if company/user steps succeeded
+            if (relationshipError) {
+                 console.error(`Failed to update company relationship status: ${relationshipError.message}`);
+                 toast.warning("Company profile updated, but failed to activate relationship link.");
+                 // throw new Error(`Failed to update company relationship status: ${relationshipError.message}`);
+            }
+
+            return { company: updatedCompany as Company };
+        },
+        onSuccess: (data, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['userCompanies', variables.userId] });
+            // Invalidate customer list for the inviting company if possible/needed
+            // queryClient.invalidateQueries({ queryKey: ['suppliers', variables.customerCompanyId] });
+            toast.success("Company profile updated and linked successfully!");
+        },
+        onError: (error) => {
+            toast.error(error.message || "Failed to update company profile. Please try again.");
+        },
+    });
+};
+// --- End Update Invited Company Mutation Hook ---
+
 
 const Onboarding = () => {
   const { user } = useAuth(); // Keep useAuth for user object
@@ -110,7 +192,8 @@ const Onboarding = () => {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      role: "both",
+      // role: "both", // Remove role default
+      // role: "both", // Removed role default
       contact_name: "", // Removed profile dependency
       contact_email: user?.email || "",
       contact_phone: "",
@@ -145,32 +228,50 @@ const Onboarding = () => {
   // --- End Diagnostics ---
 
   // Create Company Mutation
-  const createCompanyMutation = useCreateCompanyAndAssociateUserMutation(queryClient);
+  const createCompanyMutation = useCreateCompanyAndAssociateUserMutation(queryClient); // Restore the correct declaration
+  // Update Invited Company Mutation
+  const updateInvitedCompanyMutation = useUpdateInvitedCompanyMutation(queryClient);
+  // const createCompanyMutation = useCreateCompanyAndAssociateUserMutation(queryClient); // Removed duplicate
 
   const onSubmit = async (data: FormValues) => {
     if (!user) { toast.error("You must be logged in"); return; }
+
+    // Log the entire user object and specific metadata fields
+    console.log("[DEBUG] Onboarding User Object:", JSON.stringify(user, null, 2));
+    const invitedSupplierCompanyId = user.user_metadata?.invited_supplier_company_id; // Read from user_metadata
+    const invitedByCompanyId = user.user_metadata?.invited_to_company_id; // Read from user_metadata
+    console.log("[DEBUG] Onboarding Metadata - Supplier ID:", invitedSupplierCompanyId);
+    console.log("[DEBUG] Onboarding Metadata - Customer ID:", invitedByCompanyId);
+
     try {
-        // Try emergency function first
-        const emergencyResult = await createCompanyDirectly({
+      if (invitedSupplierCompanyId && invitedByCompanyId) {
+        // --- Invited Supplier Flow ---
+        console.log("[DEBUG] Onboarding: Invited supplier flow detected.");
+        await updateInvitedCompanyMutation.mutateAsync({
+          ...data,
+          userId: user.id,
+          supplierCompanyId: invitedSupplierCompanyId,
+          customerCompanyId: invitedByCompanyId,
+        });
+      } else {
+        // --- New User/Company Flow ---
+        console.log("[DEBUG] Onboarding: New company flow detected.");
+        // Try emergency function first (Consider removing if main mutation is reliable)
+        /* const emergencyResult = await createCompanyDirectly({
             userId: user.id,
             companyName: data.name,
             contactName: data.contact_name,
             contactEmail: data.contact_email,
             contactPhone: data.contact_phone
-        });
-
-        if (emergencyResult.success) {
-            toast.success("Company created successfully!");
-            queryClient.invalidateQueries({ queryKey: ['userCompanies', user.id] });
-            forceNavigateToEntryPoint();
-            return;
-        }
-
-        // If emergency function fails, try the mutation
+        }); */
+        // Use the standard create mutation
         await createCompanyMutation.mutateAsync({ ...data, userId: user.id });
-        forceNavigateToEntryPoint();
-    } catch (error) {
-        toast.error("Failed to create company. Please try again.");
+      }
+      forceNavigateToEntryPoint(); // Navigate after success in either flow
+    } catch (error: any) {
+      // Error toast is handled within the mutation hooks, but log here too
+      console.error("Onboarding submission failed:", error);
+      // toast.error("Failed to complete onboarding. Please try again."); // Redundant?
     }
   };
 
@@ -191,13 +292,13 @@ const Onboarding = () => {
       }
       toast.error("Direct method failed: " + directResult.error);
 
-      const sqlResult = await createCompanyWithSQL({ userId: user.id, companyName: formData.name, role: formData.role, contactName: formData.contact_name, contactEmail: formData.contact_email, contactPhone: formData.contact_phone }); // Added role back
-      if (sqlResult.success) {
-        toast.success("SQL method succeeded!");
-        await queryClient.invalidateQueries({ queryKey: ['userCompanies', user.id] }); // Invalidate
-        forceNavigateToEntryPoint(); return;
-      }
-      toast.error("SQL method failed: " + sqlResult.error);
+      // const sqlResult = await createCompanyWithSQL({ userId: user.id, companyName: formData.name, /* role: formData.role, */ contactName: formData.contact_name, contactEmail: formData.contact_email, contactPhone: formData.contact_phone }); // Removed role
+      // if (sqlResult.success) {
+      //   toast.success("SQL method succeeded!");
+      //   await queryClient.invalidateQueries({ queryKey: ['userCompanies', user.id] }); // Invalidate
+      //   forceNavigateToEntryPoint(); return;
+      // }
+      // toast.error("SQL method failed: " + sqlResult.error); // Removed call to deprecated function
 
       // Add other fallback methods if necessary, ensuring query invalidation on success
       toast.error("All emergency creation methods failed.");
@@ -261,7 +362,8 @@ const Onboarding = () => {
                 </FormItem>
               )} />
               {/* Role field might need removal if not in DB schema */}
-              <FormField control={form.control} name="role" render={({ field }) => (
+              {/* Role field might need removal if not in DB schema */}
+              {/* <FormField control={form.control} name="role" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Primary Role</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
@@ -274,7 +376,7 @@ const Onboarding = () => {
                   </Select>
                   <FormMessage />
                 </FormItem>
-              )} />
+              )} /> */}
               <FormField control={form.control} name="contact_name" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Contact Name</FormLabel>
