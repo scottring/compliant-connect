@@ -11,8 +11,9 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { CheckCircle, Flag, ChevronDown, ChevronUp, Send, Info } from "lucide-react"; // Added Info
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added Alert
 // Import types from central location and generated types
 import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "../types/index"; // Use relative path
 import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse } from "@/types/pir";
@@ -483,13 +484,29 @@ const CustomerReview = () => {
       <PageHeader
         title={pageTitle}
         subtitle={isPreviouslyReviewed ? "Reviewing flagged issues" : "Initial review"}
-        actions={( // Fixed JSX expression
-          <Button className="bg-brand hover:bg-brand/90" onClick={handleSubmitReview} disabled={submitReviewMutation.isPending}>
+        actions={(
+          <Button
+            className="bg-brand hover:bg-brand/90"
+            onClick={handleSubmitReview}
+            disabled={submitReviewMutation.isPending || productSheet.status === 'flagged'} // Disable if flagged
+          >
             <Send className="mr-2 h-4 w-4" />
-            {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+            {submitReviewMutation.isPending ? "Submitting..." : productSheet.status === 'flagged' ? "Revision Requested" : "Submit Review"}
           </Button>
         )}
       />
+      {/* Add Alert here, after PageHeader but before the main content */}
+      {productSheet.status === 'flagged' && (
+        <Alert className="mt-4 border-yellow-500 text-yellow-700"> {/* Basic styling for visibility */}
+          <Info className="h-4 w-4" />
+          <AlertTitle>Revision Requested</AlertTitle>
+          <AlertDescription>
+            This sheet has been sent back to the supplier for revisions. Review actions are disabled until a new response is submitted.
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* Add Alert here, after PageHeader but before the main content */}
+      {/* Add Alert here, after PageHeader but before the main content */}
 
       <Card>
         {/* ... Card Header & Content ... */}
@@ -552,7 +569,7 @@ const CustomerReview = () => {
                             onApprove={() => { if (answer) handleApprove(answer.id); }}
                             onFlag={(note) => { if (answer) handleFlag(answer.id, note); }}
                             onUpdateNote={(note) => { if (answer) handleUpdateNote(answer.id, note); }}
-                            // isPreviouslyFlagged is now handled internally by ReviewQuestionItem
+                            isLocked={productSheet.status === 'flagged'} // Pass locked status
                           />
                           {index < filteredSectionQuestions.length - 1 && <Separator />}
                         </div>

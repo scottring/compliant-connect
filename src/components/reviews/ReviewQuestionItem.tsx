@@ -34,6 +34,7 @@ interface ReviewQuestionItemProps {
   onFlag: (note: string) => void;
   onUpdateNote: (note: string) => void;
   // isPreviouslyFlagged?: boolean; // This will be derived internally now
+  isLocked?: boolean; // Add prop to disable actions when PIR is flagged
 }
 
 const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
@@ -45,6 +46,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onFlag,
   onUpdateNote,
   // isPreviouslyFlagged = false, // Removed from props
+  isLocked = false, // Destructure isLocked with default value
 }) => {
   console.log(`ReviewQuestionItem Props for Q:${question.id}`, { question, answer, status, note }); // Re-add log
   // Log received props
@@ -199,15 +201,17 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
         ) : (
           <div className="flex space-x-2">
             <div className="flex-1">
-              <Textarea 
+              <Textarea
                 placeholder={
+                  isLocked ? "Review actions disabled (Revision Requested)" :
                   (answer?.flags && answer.flags.length > 0)
-                    ? "Add feedback on the revised answer..." 
+                    ? "Add feedback on the revised answer..."
                     : "Add a review note or flag explanation..."
                 }
                 value={note}
                 onChange={(e) => onUpdateNote(e.target.value)}
                 className="min-h-[80px]"
+                disabled={isLocked} // Disable textarea if locked
               />
             </div>
             <div className="flex flex-col space-y-2">
@@ -215,6 +219,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 variant="outline" 
                 className="border-green-500 text-green-700 hover:bg-green-50"
                 onClick={onApprove}
+                disabled={isLocked} // Disable approve button if locked
               >
                 <CheckCircle className="mr-2 h-4 w-4" />
                 {(answer?.flags && answer.flags.length > 0) ? "Resolve" : "Approve"}
@@ -228,7 +233,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                         variant="outline" 
                         className="border-red-500 text-red-700 hover:bg-red-50"
                         onClick={handleSubmitFlag}
-                        disabled={!note.trim()}
+                        disabled={!note.trim() || isLocked} // Disable flag button if locked
                       >
                         <Flag className="mr-2 h-4 w-4" />
                         {(answer?.flags && answer.flags.length > 0) ? "Flag Again" : "Flag"}

@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string
-          query?: string
-          variables?: Json
-          extensions?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       companies: {
@@ -153,6 +128,7 @@ export type Database = {
           id: string
           product_id: string | null
           status: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name: string | null
           supplier_company_id: string | null
           title: string | null
           updated_at: string | null
@@ -165,6 +141,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name?: string | null
           supplier_company_id?: string | null
           title?: string | null
           updated_at?: string | null
@@ -177,6 +154,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name?: string | null
           supplier_company_id?: string | null
           title?: string | null
           updated_at?: string | null
@@ -498,33 +476,39 @@ export type Database = {
       questions: {
         Row: {
           created_at: string | null
+          created_by: string | null
           description: string | null
           id: string
           options: Json | null
           required: boolean | null
           subsection_id: string | null
+          table_config: Json | null
           text: string
           type: Database["public"]["Enums"]["question_type"]
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          created_by?: string | null
           description?: string | null
           id?: string
           options?: Json | null
           required?: boolean | null
           subsection_id?: string | null
+          table_config?: Json | null
           text: string
           type: Database["public"]["Enums"]["question_type"]
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          created_by?: string | null
           description?: string | null
           id?: string
           options?: Json | null
           required?: boolean | null
           subsection_id?: string | null
+          table_config?: Json | null
           text?: string
           type?: Database["public"]["Enums"]["question_type"]
           updated_at?: string | null
@@ -805,26 +789,33 @@ export type Database = {
     }
     Functions: {
       create_question_with_tags: {
-        Args: {
-          p_subsection_id: string
-          p_text: string
-          p_description: string
-          p_type: Database["public"]["Enums"]["question_type"]
-          p_required: boolean
-          p_options: Json
-          p_tag_ids: string[]
-        }
-        Returns: {
-          created_at: string | null
-          description: string | null
-          id: string
-          options: Json | null
-          required: boolean | null
-          subsection_id: string | null
-          text: string
-          type: Database["public"]["Enums"]["question_type"]
-          updated_at: string | null
-        }
+        Args:
+          | {
+              p_user_id: string
+              p_subsection_id: string
+              p_text: string
+              p_description: string
+              p_type: Database["public"]["Enums"]["question_type"]
+              p_required: boolean
+              p_options: Json
+              p_tag_ids: string[]
+              p_table_config?: Json
+            }
+          | {
+              p_subsection_id: string
+              p_text: string
+              p_description: string
+              p_type: Database["public"]["Enums"]["question_type"]
+              p_required: boolean
+              p_options: Json
+              p_tag_ids: string[]
+              p_table_config?: Json
+            }
+        Returns: Json
+      }
+      reset_application_data: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
     }
     Enums: {
@@ -836,6 +827,7 @@ export type Database = {
         | "flagged"
         | "approved"
         | "rejected"
+        | "pending"
       question_type:
         | "text"
         | "number"
@@ -844,6 +836,7 @@ export type Database = {
         | "multi_select"
         | "date"
         | "file"
+        | "LIST_TABLE"
       relationship_status: "pending" | "active" | "inactive" | "rejected"
       response_status: "draft" | "submitted" | "flagged" | "approved"
     }
@@ -959,9 +952,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       flag_status: ["open", "in_progress", "resolved", "rejected"],
@@ -972,6 +962,7 @@ export const Constants = {
         "flagged",
         "approved",
         "rejected",
+        "pending",
       ],
       question_type: [
         "text",
@@ -981,10 +972,10 @@ export const Constants = {
         "multi_select",
         "date",
         "file",
+        "LIST_TABLE",
       ],
       relationship_status: ["pending", "active", "inactive", "rejected"],
       response_status: ["draft", "submitted", "flagged", "approved"],
     },
   },
 } as const
-

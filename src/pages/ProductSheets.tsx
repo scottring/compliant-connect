@@ -44,10 +44,10 @@ const ProductSheets = () => {
       .from('pir_requests')
       .select(`
         id, customer_id, supplier_company_id, product_id, updated_at, status,
-        products ( name ),
+        product:products!pir_requests_product_id_fkey ( name ),
         supplier:companies!pir_requests_supplier_company_id_fkey ( name ),
         pir_tags ( tags ( id, name ) ),
-        pir_responses ( id, question_id ) // Corrected table name
+        pir_responses ( id, question_id )
       `)
       .eq('customer_id', customerId);
 
@@ -59,7 +59,7 @@ const ProductSheets = () => {
 
     // Transform data
     const transformedPirs: PIRSummary[] = pirData.map((pir: any) => {
-      const productName = pir.products?.name ?? 'Unknown Product';
+      const productName = pir.product?.name ?? 'Unknown Product'; // Use the 'product' alias
       // Use direct company join for supplier name as fallback
       const supplierName = pir.supplier?.name ?? 'Unknown Supplier'; // Use the aliased supplier
       const tags = (pir.pir_tags?.map((pt: any) => pt.tags).filter(Boolean) || []) as { id: string; name: string }[];
