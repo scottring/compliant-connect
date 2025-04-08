@@ -494,75 +494,34 @@ ALTER TABLE "public"."tags" OWNER TO "postgres";
 
 -- Removed redundant ADD CONSTRAINT for pir_tags_pkey
 
-ALTER TABLE ONLY "public"."product_answer_history"
-    ADD CONSTRAINT "product_answer_history_pkey" PRIMARY KEY ("id");
+-- Removed redundant ADD CONSTRAINT for product_answer_history_pkey
+
+-- Removed redundant ADD CONSTRAINT for product_answers_pkey
 
 
+-- Removed redundant ADD CONSTRAINT for product_answers_product_id_question_id_key
 
-ALTER TABLE ONLY "public"."product_answers"
-    ADD CONSTRAINT "product_answers_pkey" PRIMARY KEY ("id");
+-- Removed redundant ADD CONSTRAINT for products_pkey
 
+-- Removed redundant ADD CONSTRAINT for profiles_pkey
 
+-- Removed redundant ADD CONSTRAINT for question_tags_pkey
 
-ALTER TABLE ONLY "public"."product_answers"
-    ADD CONSTRAINT "product_answers_product_id_question_id_key" UNIQUE ("product_id", "question_id");
+-- Removed redundant ADD CONSTRAINT for question_tags_question_id_tag_id_key
 
+-- Removed redundant ADD CONSTRAINT for questions_pkey
 
+-- Removed redundant ADD CONSTRAINT for response_comments_pkey
 
-ALTER TABLE ONLY "public"."products"
-    ADD CONSTRAINT "products_pkey" PRIMARY KEY ("id");
+-- Removed redundant ADD CONSTRAINT for response_flags_pkey
 
+-- Removed redundant ADD CONSTRAINT for sections_pkey
 
+-- Removed redundant ADD CONSTRAINT for subsections_pkey
 
-ALTER TABLE ONLY "public"."profiles"
-    ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
+-- Removed redundant ADD CONSTRAINT for tags_name_key
 
-
-
-ALTER TABLE ONLY "public"."question_tags"
-    ADD CONSTRAINT "question_tags_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."question_tags"
-    ADD CONSTRAINT "question_tags_question_id_tag_id_key" UNIQUE ("question_id", "tag_id");
-
-
-
-ALTER TABLE ONLY "public"."questions"
-    ADD CONSTRAINT "questions_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."response_comments"
-    ADD CONSTRAINT "response_comments_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."response_flags"
-    ADD CONSTRAINT "response_flags_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."sections"
-    ADD CONSTRAINT "sections_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."subsections"
-    ADD CONSTRAINT "subsections_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."tags"
-    ADD CONSTRAINT "tags_name_key" UNIQUE ("name");
-
-
-
-ALTER TABLE ONLY "public"."tags"
-    ADD CONSTRAINT "tags_pkey" PRIMARY KEY ("id");
-
-
+-- Removed redundant ADD CONSTRAINT for tags_pkey
 
 CREATE OR REPLACE TRIGGER "set_companies_updated_at" BEFORE UPDATE ON "public"."companies" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
