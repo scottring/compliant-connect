@@ -7,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client"; // Import supabase cl
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import CustomerTable from "@/components/customers/CustomerTable";
 import { Company } from "@/types/auth"; // Assuming Company type is here now
-import { Database } from "@/integrations/supabase/types"; // Import base Database type
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Plus, UserPlus } from "lucide-react";
