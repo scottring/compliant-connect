@@ -46,8 +46,8 @@ serve(async (req: Request) => {
       body: JSON.stringify({
         personalizations: [{ to: [{ email: payload.to }] }], // SendGrid structure
         from: {
-          email: payload.from_email || 'notifications@yourverifieddomain.com', // CHANGE THIS to your verified SendGrid sender email
-          name: payload.from_name || 'CompliantConnect' // Default sender name
+          email: payload.from_email || 'admin@stacksdata.com', // CHANGE THIS to your verified SendGrid sender email
+          name: payload.from_name || 'Stacks Data' // Default sender name
         },
         subject: payload.subject,
         content: [
