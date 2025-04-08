@@ -135,7 +135,34 @@ const InviteRegistration = () => {
         console.error("Password set, but failed to update profile:", profileError);
         toast.warning("Password set, but failed to update profile details.");
       } else {
-        toast.success("Registration complete! Redirecting...");
+        toast.success("Profile updated!");
+      }
+
+      // 3. Create Company Relationship
+      const customerCompanyId = user.app_metadata?.invited_to_company_id;
+      const supplierCompanyId = user.app_metadata?.invited_supplier_company_id; // Get supplier ID from metadata
+
+      if (!customerCompanyId || !supplierCompanyId) {
+        // This shouldn't happen if the invite function worked correctly
+        console.error("Missing inviter or supplier company ID in user metadata!");
+        toast.error("Registration complete, but failed to link companies. Please contact support.");
+      } else {
+        const { error: relationshipError } = await supabase
+          .from('company_relationships')
+          .insert({
+            customer_id: customerCompanyId,
+            supplier_id: supplierCompanyId,
+            status: 'active', // Set status to active upon registration completion
+            type: 'supplier' // Assuming the invited user is always a supplier in this flow
+          });
+
+        if (relationshipError) {
+          // Log the detailed error object from Supabase
+          console.error("Failed to create company relationship:", JSON.stringify(relationshipError, null, 2));
+          toast.error("Registration complete, but failed to link companies. Please contact support.");
+        } else {
+          toast.success("Registration complete! Companies linked. Redirecting...");
+        }
       }
 
       // Redirect to dashboard or appropriate page after successful registration
