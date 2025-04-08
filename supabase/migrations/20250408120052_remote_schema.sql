@@ -70,15 +70,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
-CREATE TYPE "public"."flag_status" AS ENUM (
-    'open',
-    'in_progress',
-    'resolved',
-    'rejected'
-);
-
-
-ALTER TYPE "public"."flag_status" OWNER TO "postgres";
+-- Removed redundant CREATE TYPE for flag_status (already created in an earlier migration)
 
 
 CREATE TYPE "public"."pir_status" AS ENUM (
