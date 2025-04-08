@@ -112,7 +112,7 @@ const Customers = () => {
   }, [authUser, authLoading]);
 
   const handleCustomerAction = (customer: Company) => {
-    navigate(`/customers/${customer.id}`);
+    navigate(`/customer/${customer.id}`); // Navigate to singular customer detail route
   };
 
   // Determine if the current user can add customers
