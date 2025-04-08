@@ -476,9 +476,7 @@ ALTER TABLE "public"."tags" OWNER TO "postgres";
 -- Removed redundant ADD CONSTRAINT for companies_pkey (already created in an earlier migration)
 
 
-ALTER TABLE ONLY "public"."company_relationships"
-    ADD CONSTRAINT "company_relationships_customer_id_supplier_id_key" UNIQUE ("customer_id", "supplier_id");
-
+-- Removed redundant ADD CONSTRAINT for company_relationships_customer_id_supplier_id_key
 
 
 ALTER TABLE ONLY "public"."company_relationships"
