@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string
-          query?: string
-          variables?: Json
-          extensions?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       companies: {
@@ -153,6 +128,7 @@ export type Database = {
           id: string
           product_id: string | null
           status: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name: string | null
           supplier_company_id: string | null
           title: string | null
           updated_at: string | null
@@ -165,6 +141,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name?: string | null
           supplier_company_id?: string | null
           title?: string | null
           updated_at?: string | null
@@ -177,6 +154,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: Database["public"]["Enums"]["pir_status"]
+          suggested_product_name?: string | null
           supplier_company_id?: string | null
           title?: string | null
           updated_at?: string | null
@@ -264,6 +242,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "questions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pir_responses_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "v_question_bank_numbered"
+            referencedColumns: ["question_id"]
           },
         ]
       }
@@ -398,6 +383,13 @@ export type Database = {
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "v_question_bank_numbered"
+            referencedColumns: ["question_id"]
+          },
         ]
       }
       products: {
@@ -459,6 +451,44 @@ export type Database = {
         }
         Relationships: []
       }
+      question_sections: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          order_index: number
+          parent_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          order_index: number
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_sections_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "question_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_tags: {
         Row: {
           created_at: string | null
@@ -487,6 +517,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "question_tags_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "v_question_bank_numbered"
+            referencedColumns: ["question_id"]
+          },
+          {
             foreignKeyName: "question_tags_tag_id_fkey"
             columns: ["tag_id"]
             isOneToOne: false
@@ -501,8 +538,9 @@ export type Database = {
           description: string | null
           id: string
           options: Json | null
+          order_index: number
           required: boolean | null
-          subsection_id: string | null
+          section_id: string | null
           text: string
           type: Database["public"]["Enums"]["question_type"]
           updated_at: string | null
@@ -512,8 +550,9 @@ export type Database = {
           description?: string | null
           id?: string
           options?: Json | null
+          order_index?: number
           required?: boolean | null
-          subsection_id?: string | null
+          section_id?: string | null
           text: string
           type: Database["public"]["Enums"]["question_type"]
           updated_at?: string | null
@@ -523,18 +562,19 @@ export type Database = {
           description?: string | null
           id?: string
           options?: Json | null
+          order_index?: number
           required?: boolean | null
-          subsection_id?: string | null
+          section_id?: string | null
           text?: string
           type?: Database["public"]["Enums"]["question_type"]
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "questions_subsection_id_fkey"
-            columns: ["subsection_id"]
+            foreignKeyName: "questions_section_id_fkey"
+            columns: ["section_id"]
             isOneToOne: false
-            referencedRelation: "subsections"
+            referencedRelation: "question_sections"
             referencedColumns: ["id"]
           },
         ]
@@ -611,71 +651,6 @@ export type Database = {
             columns: ["response_id"]
             isOneToOne: false
             referencedRelation: "pir_responses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sections: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          id: string
-          name: string
-          order_index: number
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          name: string
-          order_index: number
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          name?: string
-          order_index?: number
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      subsections: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          id: string
-          name: string
-          order_index: number
-          section_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          name: string
-          order_index: number
-          section_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          name?: string
-          order_index?: number
-          section_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subsections_section_id_fkey"
-            columns: ["section_id"]
-            isOneToOne: false
-            referencedRelation: "sections"
             referencedColumns: ["id"]
           },
         ]
@@ -802,6 +777,24 @@ export type Database = {
           },
         ]
       }
+      v_question_bank_numbered: {
+        Row: {
+          hierarchical_number: string | null
+          question_created_at: string | null
+          question_description: string | null
+          question_id: string | null
+          question_options: Json | null
+          question_order_index: number | null
+          question_required: boolean | null
+          question_text: string | null
+          question_type: Database["public"]["Enums"]["question_type"] | null
+          question_updated_at: string | null
+          section_id: string | null
+          section_level: number | null
+          section_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       create_question_with_tags: {
@@ -819,8 +812,9 @@ export type Database = {
           description: string | null
           id: string
           options: Json | null
+          order_index: number
           required: boolean | null
-          subsection_id: string | null
+          section_id: string | null
           text: string
           type: Database["public"]["Enums"]["question_type"]
           updated_at: string | null
@@ -844,6 +838,7 @@ export type Database = {
         | "multi_select"
         | "date"
         | "file"
+        | "LIST_TABLE"
       relationship_status: "pending" | "active" | "inactive" | "rejected"
       response_status: "draft" | "submitted" | "flagged" | "approved"
     }
@@ -959,9 +954,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       flag_status: ["open", "in_progress", "resolved", "rejected"],
@@ -981,10 +973,10 @@ export const Constants = {
         "multi_select",
         "date",
         "file",
+        "LIST_TABLE",
       ],
       relationship_status: ["pending", "active", "inactive", "rejected"],
       response_status: ["draft", "submitted", "flagged", "approved"],
     },
   },
 } as const
-

@@ -10,6 +10,7 @@ import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/in
 // Import PIRRequest from pir.ts, but use Database types for enums and responses
 import { PIRRequest } from "@/types/pir";
 import { Database } from "@/types/supabase"; // Import generated types
+import { Json } from '@/types/supabase'; // Import Json type
 type PIRStatus = Database['public']['Enums']['pir_status']; // Use generated enum
 type DBPIRResponse = Database['public']['Tables']['pir_responses']['Row']; // Use generated row type
 type DBFlag = Database['public']['Tables']['response_flags']['Row']; // Use generated row type for flags
@@ -29,7 +30,10 @@ interface PirDetails {
     customer: Company | null;
     tags: Tag[];
     questions: (DBQuestion & {
-        subsection?: Subsection & { section?: Section };
+        // Use generated types for the actual structure based on question_sections
+        question_sections?: Database['public']['Tables']['question_sections']['Row'] & {
+            parent_section?: Database['public']['Tables']['question_sections']['Row']; // Parent section via parent_id
+        };
     })[];
     responses: DBPIRResponse[]; // Use generated response type
 }
@@ -38,15 +42,16 @@ interface PirDetails {
 export type QuestionType = Database['public']['Enums']['question_type'];
 export type DBQuestion = {
   id: string;
-  subsection_id: string;
+  section_id: string | null; // Matches schema
   text: string;
   description: string | null;
   type: QuestionType;
-  required: boolean;
-  options: any | null;
-  created_at: string;
-  updated_at: string;
-  tags: Tag[];
+  required: boolean | null; // Corrected type to match schema
+  options: Json | null; // Corrected type to match schema (assuming Json is imported or defined)
+  created_at: string | null; // Corrected type to match schema
+  updated_at: string | null; // Corrected type to match schema
+  order_index: number; // Added missing property from schema
+  tags: Tag[]; // Keep locally added tags property
 };
 // End DBQuestion definition
 
@@ -91,7 +96,7 @@ const SupplierResponseForm = () => {
               .from('questions')
               .select(`
                   *,
-                  subsection:subsections(*, section:sections(*)),
+                  question_sections(*, parent_section:question_sections(*)),
                   question_tags!inner ( tags (*) )
               `)
               // Fetch questions whose tags intersection with pirTagIds is not empty
@@ -109,24 +114,37 @@ const SupplierResponseForm = () => {
 
           // Process fetched questions to include tags
           questions = (questionsData || []).map((q: any) => {
-              const subsection = q.subsection as any;
-              const section = subsection?.section as any;
+              const currentSection = q.question_sections as any; // Renamed from subsection
+              const parentSection = currentSection?.parent_section as any; // Renamed from section
               const questionTags = (q.question_tags?.map((qt: any) => qt.tags).filter(Boolean).flat() || []) as Tag[];
               return {
                   ...q,
                   tags: questionTags,
-                  subsection: subsection ? { ...subsection, order_index: subsection.order_index, section: section ? { ...section, order_index: section.order_index } : undefined } : undefined // Use order_index consistently
+                  // Keep the nested structure consistent with PirDetails interface
+                  question_sections: currentSection ? {
+                      ...currentSection,
+                      parent_section: parentSection ? { ...parentSection } : undefined
+                  } : undefined
               };
           });
 
           // Sort Questions
-          questions.sort((a, b) => {
-              const sectionOrderA = a.subsection?.section?.order_index || 0; // Use order_index
-              const sectionOrderB = b.subsection?.section?.order_index || 0; // Use order_index
-              if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB;
-              const subsectionOrderA = a.subsection?.order_index || 0; // Use order_index
-              const subsectionOrderB = b.subsection?.order_index || 0; // Use order_index
-              return subsectionOrderA - subsectionOrderB;
+          // Explicitly type a and b based on the updated PirDetails['questions'] element type
+          questions.sort((a: PirDetails['questions'][number], b: PirDetails['questions'][number]) => {
+              // Sort by parent section order_index first, then current section order_index, then question order_index
+              // Use 0 for null order_index to ensure consistent sorting
+              const parentOrderA = a.question_sections?.parent_section?.order_index ?? 0;
+              const parentOrderB = b.question_sections?.parent_section?.order_index ?? 0;
+              if (parentOrderA !== parentOrderB) return parentOrderA - parentOrderB;
+
+              const currentOrderA = a.question_sections?.order_index ?? 0;
+              const currentOrderB = b.question_sections?.order_index ?? 0;
+              if (currentOrderA !== currentOrderB) return currentOrderA - currentOrderB;
+
+              // Access order_index directly from the question object (DBQuestion type)
+              const questionOrderA = a.order_index ?? 0; // Use the order_index from the question itself
+              const questionOrderB = b.order_index ?? 0; // Use the order_index from the question itself
+              return questionOrderA - questionOrderB;
           });
       } else {
           }
@@ -193,25 +211,23 @@ const SupplierResponseForm = () => {
 
 
   // Grouping logic
-  const questionsBySection = sheetQuestions.reduce(
+  // Group questions first by their parent section ID (top-level sections), then by their own section ID (subsections)
+  const questionsGrouped = sheetQuestions.reduce(
     (acc, question) => {
-      const sectionId = question.subsection?.section?.id || "unsectioned";
-      if (!acc[sectionId]) acc[sectionId] = [];
-      acc[sectionId].push(question);
-      return acc;
-    }, {} as Record<string, (DBQuestion & { subsection?: Subsection & { section?: Section } })[]>);
+      // Determine the parent section ID. If no parent, use the section's own ID as the key for top-level grouping.
+      const parentSectionId = question.question_sections?.parent_section?.id ?? question.question_sections?.id ?? "root";
+      const currentSectionId = question.section_id ?? "unsectioned"; // Use the direct section_id from the question
 
-  const questionsBySubsection = Object.entries(questionsBySection).reduce(
-    (acc, [sectionId, sectionQuestions]) => {
-      acc[sectionId] = sectionQuestions.reduce(
-        (subAcc, question) => {
-          const subsectionId = question.subsection_id || "unsubsectioned";
-          if (!subAcc[subsectionId]) subAcc[subsectionId] = [];
-          subAcc[subsectionId].push(question);
-          return subAcc;
-        }, {} as Record<string, (DBQuestion & { subsection?: Subsection & { section?: Section } })[]>);
+      if (!acc[parentSectionId]) {
+        acc[parentSectionId] = {};
+      }
+      if (!acc[parentSectionId][currentSectionId]) {
+        acc[parentSectionId][currentSectionId] = [];
+      }
+      acc[parentSectionId][currentSectionId].push(question);
       return acc;
-    }, {} as Record<string, Record<string, (DBQuestion & { subsection?: Subsection & { section?: Section } })[]>>);
+    // Adjust the type based on the updated PirDetails['questions'] type
+    }, {} as Record<string, Record<string, PirDetails['questions']>>);
 
   // Map DBPIRResponse to SupplierResponse for QuestionItem component
   const answersMap = sheetResponses.reduce((acc, response) => {
@@ -365,19 +381,35 @@ const SupplierResponseForm = () => {
   const toggleSection = (sectionId: string) => { setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] })); };
 
   // Helper functions
-  const getSectionName = (sectionId: string): string => {
-      if (sectionId === "unsectioned") return "General Questions";
-      const questionInSection = sheetQuestions.find(q => q.subsection?.section?.id === sectionId);
-      const section = questionInSection?.subsection?.section;
-      return section ? `${section.order_index || '?'}. ${section.name}` : "Unknown Section"; // Use order_index
+  // Helper to get the name of a top-level section (group key)
+  const getParentSectionName = (parentSectionId: string): string => {
+      if (parentSectionId === "root" || parentSectionId === "unsectioned") return "General Questions";
+      // Find a question belonging to this parent group to get the parent section's details
+      // This assumes parentSectionId is the ID of the actual parent section OR the ID of the top-level section itself
+      const questionInGroup = sheetQuestions.find(q => (q.question_sections?.parent_section?.id ?? q.question_sections?.id) === parentSectionId);
+      const sectionInfo = questionInGroup?.question_sections?.parent_section ?? questionInGroup?.question_sections; // Get parent if exists, else the section itself
+      return sectionInfo ? `${sectionInfo.order_index ?? '?'}. ${sectionInfo.name}` : "Unknown Section";
   };
-  const getSubsectionName = (sectionId: string, subsectionId: string): string => {
-      if (subsectionId === "unsubsectioned") return "General";
-      const questionInSubsection = sheetQuestions.find(q => q.subsection_id === subsectionId);
-      const subsection = questionInSubsection?.subsection;
-      const section = subsection?.section;
-      if (!section || !subsection) return "Unknown Subsection";
-      return `${section.order_index || '?'}.${subsection.order_index || '?'} ${subsection.name}`; // Use order_index
+
+  // Helper to get the name of a subsection (the question's direct section)
+  const getCurrentSectionName = (parentSectionId: string, currentSectionId: string): string => {
+      if (currentSectionId === "unsectioned") return "General";
+      // Find a question with this section_id to get its details
+      const questionInSection = sheetQuestions.find(q => q.section_id === currentSectionId);
+      const currentSection = questionInSection?.question_sections;
+      const parentSection = currentSection?.parent_section; // Check if it actually has a parent in the data
+
+      if (!currentSection) return "Unknown Subsection";
+
+      // Format with hierarchical numbering if a parent exists
+      if (parentSection && parentSection.id === parentSectionId) {
+          // This is a true subsection
+          return `${parentSection.order_index ?? '?'}.${currentSection.order_index ?? '?'} ${currentSection.name}`;
+      } else {
+          // This is likely a top-level section being rendered (parentSectionId matches currentSectionId or is 'root')
+          // Only show its own index and name
+          return `${currentSection.order_index ?? '?'}. ${currentSection.name}`;
+      }
   };
 
   const answeredQuestions = Object.keys(answersMap).length;
@@ -467,25 +499,31 @@ const SupplierResponseForm = () => {
       </Card>
 
       <div className="space-y-4">
-        {Object.entries(questionsBySubsection).map(([sectionId, subsections]) => (
-          <Card key={sectionId}>
-            <Collapsible open={expandedSections[sectionId] !== false} onOpenChange={() => toggleSection(sectionId)}>
+        {/* Iterate through the grouped questions: Parent Section -> Current Section -> Questions */}
+        {Object.entries(questionsGrouped).map(([parentSectionId, sections]) => (
+          <Card key={parentSectionId}>
+            {/* Use parentSectionId for the collapsible state key */}
+            <Collapsible open={expandedSections[parentSectionId] !== false} onOpenChange={() => toggleSection(parentSectionId)}>
               <CollapsibleTrigger asChild>
                 <CardHeader className="cursor-pointer hover:bg-muted/50">
                   <CardTitle className="flex items-center justify-between">
-                    <span>{getSectionName(sectionId)}</span>
+                    {/* Display the name of the parent section group */}
+                    <span>{getParentSectionName(parentSectionId)}</span>
                     <div className="flex items-center text-sm font-normal text-muted-foreground">
-                      <span className="mr-2">{Object.values(subsections).flat().length} questions</span>
-                      {expandedSections[sectionId] === false ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+                      {/* Calculate total questions in this parent group */}
+                      <span className="mr-2">{Object.values(sections).flat().length} questions</span>
+                      {expandedSections[parentSectionId] === false ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
                     </div>
                   </CardTitle>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="space-y-8 pt-0">
-                  {Object.entries(subsections).map(([subsectionId, questions]) => (
-                    <div key={subsectionId} className="space-y-6">
-                      <h3 className="font-medium text-lg border-b pb-2">{getSubsectionName(sectionId, subsectionId)}</h3>
+                  {/* Iterate through the actual sections (subsections) within the parent group */}
+                  {Object.entries(sections).map(([currentSectionId, questions]) => (
+                    <div key={currentSectionId} className="space-y-6">
+                      {/* Display the name of the current section (subsection) */}
+                      <h3 className="font-medium text-lg border-b pb-2">{getCurrentSectionName(parentSectionId, currentSectionId)}</h3>
                       {questions.map((question, index) => {
                         const answer: SupplierResponse | undefined = answersMap[question.id];
                         return (
