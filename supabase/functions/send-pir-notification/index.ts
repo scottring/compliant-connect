@@ -4,14 +4,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2' // Keep fo
 import { corsHeaders } from '../_shared/cors.ts'
 
 interface NotificationPayload {
-  to: string; // Recipient email
-  subject: string;
-  html_body: string; // HTML content for the email
-  from_email?: string; // Optional: Sender email (defaults below)
-  from_name?: string; // Optional: Sender name
+  to: string
+  subject: string
+  html_body: string
+  from_email: string
+  from_name: string
 }
 
 serve(async (req: Request) => {
+  console.log('Received PIR notification request:', req.method, req.url)
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -20,6 +21,7 @@ serve(async (req: Request) => {
   try {
     // --- Environment Variable Check ---
     const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
+    console.log('SENDGRID_API_KEY:', SENDGRID_API_KEY ? SENDGRID_API_KEY : 'Missing');
     if (!SENDGRID_API_KEY) {
       throw new Error('Missing SENDGRID_API_KEY. Configure Supabase secrets.');
     }
@@ -32,11 +34,29 @@ serve(async (req: Request) => {
 
     // --- Parse Request Body ---
     const payload: NotificationPayload = await req.json();
-    if (!payload.to || !payload.subject || !payload.html_body) {
-      throw new Error('Missing required fields: to, subject, html_body');
+    console.log('payload.from_email:', payload.from_email ? payload.from_email : 'Missing');
+    if (!payload.from_email) {
+      throw new Error('Missing from_email in payload. Please provide a sender email.');
+    }
+    console.log('payload.from_name:', payload.from_name ? payload.from_name : 'Missing');
+    if (!payload.from_name) {
+      throw new Error('Missing from_name in payload. Please provide a sender name.');
+    }
+    console.log('payload.to:', payload.to ? payload.to : 'Missing');
+    if (!payload.to) {
+      throw new Error('Missing to in payload. Please provide a recipient email.');
+    }
+    console.log('payload.subject:', payload.subject ? payload.subject : 'Missing');
+    if (!payload.subject) {
+      throw new Error('Missing subject in payload. Please provide a subject.');
+    }
+    console.log('payload.html_body:', payload.html_body ? payload.html_body : 'Missing');
+    if (!payload.html_body) {
+      throw new Error('Missing html_body in payload. Please provide HTML content for the email.');
     }
 
     // --- SendGrid API Call ---
+    console.log(`Sending email to ${payload.to} with subject "${payload.subject}"`)
     const sendgridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
@@ -44,23 +64,25 @@ serve(async (req: Request) => {
         'Authorization': `Bearer ${SENDGRID_API_KEY}`,
       },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: payload.to }] }], // SendGrid structure
+        personalizations: [{ to: [{ email: payload.to }] }],
         from: {
-          email: payload.from_email || 'notifications@yourverifieddomain.com', // CHANGE THIS to your verified SendGrid sender email
-          name: payload.from_name || 'CompliantConnect' // Default sender name
+          email: payload.from_email,
+          name: payload.from_name
         },
         subject: payload.subject,
         content: [
           {
             type: 'text/html',
-            value: payload.html_body, // Use the HTML body directly
+            value: payload.html_body
           },
         ],
       }),
     });
+    console.log(`Sent email to ${payload.to} with subject ${payload.subject} with status ${sendgridResponse.status}`);
 
     // --- Check SendGrid Response ---
     if (!sendgridResponse.ok) {
+      console.log('SendGrid response not ok:', sendgridResponse.status, sendgridResponse.statusText);
       // Try to get more details from the error response body
       let errorBodyText = await sendgridResponse.text(); // Read as text first
       let errorDetails = errorBodyText;
@@ -68,6 +90,8 @@ serve(async (req: Request) => {
         errorDetails = JSON.stringify(JSON.parse(errorBodyText)); // Try parsing as JSON
       } catch (e) { /* Ignore parsing error, use raw text */ }
       throw new Error(`SendGrid API Error: ${sendgridResponse.status} ${sendgridResponse.statusText} - ${errorDetails}`);
+    } else {
+      console.log('SendGrid response ok:', sendgridResponse.status, sendgridResponse.statusText);
     }
 
     // Assuming success if response is ok (status 2xx)

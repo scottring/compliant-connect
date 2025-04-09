@@ -18,7 +18,7 @@ const Index = () => {
         />
         
         <h1 className="text-4xl font-bold tracking-tight mb-3 text-gray-900">
-          Product Compliance Management Platform
+          Product Compliance Management Platform!
         </h1>
         
         <p className="text-xl text-gray-600 mb-8">
