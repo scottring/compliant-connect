@@ -4,7 +4,7 @@ import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query"; // Import useQueryClient
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuestionBankContext } from "@/context/QuestionBankContext";
-import { Tag } from "@/types"; // Keep Tag import
+import { Tag } from "../../types/index"; // Use explicit relative path
 import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";

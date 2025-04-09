@@ -1,5 +1,5 @@
 import React from "react";
-import { Tag } from "@/types";
+import { Tag } from "../../types/index"; // Use explicit relative path
 import { Button } from "@/components/ui/button";
 import TagBadge from "@/components/tags/TagBadge";
 

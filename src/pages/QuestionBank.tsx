@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus } from "lucide-react";
 import { QuestionBuilderDialog } from "@/components/questionBank/QuestionBuilderDialog";
 import { QuestionPreviewDialog } from "@/components/questionBank/QuestionPreviewDialog";
-import { Tag } from "@/types";
+import { Tag } from "../types/index"; // Use explicit relative path
 import { QuestionList } from "@/components/questionBank/QuestionList";
 import { TagSelector } from "@/components/questionBank/TagSelector";
 import { toast } from "sonner";

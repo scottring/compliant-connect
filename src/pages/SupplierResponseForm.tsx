@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TagBadge from "@/components/tags/TagBadge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 // Import types from central location
-import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/index"; // Use relative path
+import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/index"; // Explicit relative path
 // Import PIRRequest from pir.ts, but use Database types for enums and responses
 import { PIRRequest } from "@/types/pir";
 import { Database } from "@/types/supabase"; // Import generated types
@@ -445,7 +445,7 @@ const SupplierResponseForm = () => {
   if (errorPir) { return <div className="p-12 text-center text-red-500">Error loading PIR: {errorPir.message}</div>; }
   if (!pirDetails || !productSheet) { return ( <div className="py-12 text-center"> <h2 className="text-2xl font-bold mb-4">PIR not found</h2> <Button onClick={() => navigate(-1)}>Go Back</Button> </div> ); }
 
-  const productName = pirDetails.product?.name ?? 'Unknown Product';
+  const productName = pirDetails.product?.name ?? pirDetails.pir.suggested_product_name ?? 'Unknown Product';
   const pageTitle = productSheet.title || `Supplier Response Form: ${productName}`;
 
   return (
@@ -526,10 +526,28 @@ const SupplierResponseForm = () => {
                       <h3 className="font-medium text-lg border-b pb-2">{getCurrentSectionName(parentSectionId, currentSectionId)}</h3>
                       {questions.map((question, index) => {
                         const answer: SupplierResponse | undefined = answersMap[question.id];
+
+                        // Calculate hierarchical number
+                        const parentOrder = question.question_sections?.parent_section?.order_index;
+                        const currentOrder = question.question_sections?.order_index;
+                        const questionOrder = index + 1; // 1-based index within the subsection
+
+                        let hierarchicalNumber = '';
+                        if (parentOrder !== null && parentOrder !== undefined) {
+                          // Use parentOrder + 1 and currentOrder + 1 if they are 0-based, otherwise use as is. Assuming they are 1-based from DB.
+                          hierarchicalNumber = `${parentOrder}.${currentOrder ?? '?'}.${questionOrder}`;
+                        } else if (currentOrder !== null && currentOrder !== undefined) {
+                           // Use currentOrder + 1 if 0-based. Assuming 1-based.
+                          hierarchicalNumber = `${currentOrder}.${questionOrder}`;
+                        } else {
+                          hierarchicalNumber = `${questionOrder}`; // Fallback if no section info
+                        }
+
                         return (
                           <div key={question.id} className="border-t pt-6 first:border-t-0 first:pt-0">
                             <QuestionItem
-                              question={question}
+                              // Pass the calculated number along with the question data
+                              question={{ ...question, hierarchical_number: hierarchicalNumber }}
                               answer={answer} // Pass the correctly typed answer
                               productSheetId={productSheet.id} // Pass PIR ID
                               onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}

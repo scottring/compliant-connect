@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Question, SupplierResponse, Comment } from "@/types"; // Revert to alias
+import { Question, SupplierResponse, Comment } from "../../types/index"; // Explicit relative path
 import { DBQuestion } from "@/hooks/use-question-bank";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -245,6 +245,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       <div className="flex items-start justify-between">
         <div>
           <h3 className="font-medium text-base">
+            {question.hierarchical_number && <span className="mr-2 text-muted-foreground">{question.hierarchical_number}</span>}
             {question.text}
             {question.required && <span className="text-red-500 ml-1">*</span>}
           </h3>

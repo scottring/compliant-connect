@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
-import { Tag } from '@/types'; // Removed Question import
+import { Tag } from '../types/index'; // Use explicit relative path
 import { toast } from 'sonner';
 
 // Type for the new self-referencing sections table
