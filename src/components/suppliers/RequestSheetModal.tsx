@@ -157,6 +157,12 @@ const useCreatePIRMutation = (
                     return; // Exit early if no email
                 }
 
+                if (!import.meta.env.VITE_SITE_URL) {
+                    console.error("VITE_SITE_URL is not defined. Cannot send notification.");
+                    toast.error("Failed to send notification: Site URL is not defined.");
+                    return; // Exit early if URL is not defined
+                }
+
                 // Construct the correct payload for send-pir-notification
                 const notificationPayload = {
                     to: supplier.contact_email,
