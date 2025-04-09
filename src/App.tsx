@@ -21,7 +21,7 @@ import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
 import CustomerReview from "./pages/CustomerReview";
 import Customers from "./pages/Customers";
-import OurProducts from "./pages/OurProducts";
+import SupplierIncomingRequests from "./pages/SupplierIncomingRequests";
 import Auth from "./pages/Auth";
 import EmailConfirmation from "./components/EmailConfirmation";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -120,7 +120,7 @@ const App = () => {
                           <Route path="/product-sheets" element={<OutgoingPIRs />} /> {/* Renamed component */}
                           <Route path="/incoming-pirs" element={<IncomingPIRs />} />
                           <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
-                          <Route path="/our-products" element={<OurProducts />} />
+                          <Route path="/our-products" element={<SupplierIncomingRequests />} />
                           
                           {/* Admin Routes */}
                           <Route path="/question-bank" element={<QuestionBank />} />
