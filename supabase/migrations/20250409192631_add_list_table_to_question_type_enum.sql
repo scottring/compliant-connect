@@ -1,1 +1,0 @@
-ALTER TYPE public.question_type ADD VALUE 'LIST_TABLE';

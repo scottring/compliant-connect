@@ -12,6 +12,7 @@ import { TagSelector } from "@/components/questionBank/TagSelector";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { arrayMove } from '@dnd-kit/sortable'; // Import arrayMove
 
 const QuestionBank = () => {
   const { 
@@ -26,7 +27,8 @@ const QuestionBank = () => {
     errorTags,
     // errorStructure, // Removed
     deleteQuestion,
-    addSection
+    addSection,
+    updateQuestionOrder // Destructure the new function
   } = useQuestionBankContext();
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -104,6 +106,46 @@ const QuestionBank = () => {
   const isLoading = isLoadingQuestions || isLoadingTags; // Removed isLoadingStructure
   const hasError = errorQuestions || errorTags; // Removed errorStructure
 
+  // Handler for question order changes via drag-and-drop
+  const handleOrderChange = async (activeId: string, overId: string, sectionId: string) => {
+    console.log(`Question ${activeId} moved over ${overId} in section ${sectionId}`);
+
+    // Find the questions belonging to the affected section from the original (filtered) list
+    // Use the main 'questions' state from context for reliable index calculation before filtering
+    const sectionQuestions = questions.filter(q => (q.section_id || 'unsectioned') === sectionId);
+
+    // Find original indices within the section's context
+    const oldIndex = sectionQuestions.findIndex(q => q.id === activeId);
+    const newIndex = sectionQuestions.findIndex(q => q.id === overId);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      console.error("Could not find dragged items in section list.");
+      toast.error("Failed to reorder questions: Item not found.");
+      return;
+    }
+
+    // Create the new order for this section
+    const reorderedSectionQuestions = arrayMove(sectionQuestions, oldIndex, newIndex);
+
+    // Prepare the update payload for the backend
+    const updates = reorderedSectionQuestions.map((question, index) => ({
+      question_id: question.id,
+      order_index: index // New 0-based index reflects the new order
+    }));
+
+    console.log("Order updates to send:", updates);
+
+    try {
+      // Call the mutation to update the backend
+      await updateQuestionOrder(updates);
+      // No need to manually update local state here, as the query invalidation
+      // in the mutation's onSuccess will trigger a refetch.
+      // The QuestionList component's useEffect will update its internal state based on the refetched data.
+    } catch (error) {
+      console.error("Error updating question order:", error);
+      // Error toast is handled by the mutation hook
+    }
+  };
   if (hasError) {
     return (
       <div className="p-8 text-center text-red-500">
@@ -162,6 +204,7 @@ const QuestionBank = () => {
             setIsPreviewOpen(true);
           }}
           onDeleteQuestion={handleDeleteQuestion}
+          onOrderChange={handleOrderChange} // Add the new handler prop
         />
       )}
 
