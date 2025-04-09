@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { PirRequest, Company } from "../types/index"; // Explicitly importing from index file
 
-const OurProducts = () => { // Was IncomingRequests, renamed back for file consistency
+const SupplierIncomingRequests = () => { // Renamed from OurProducts
   const { user } = useAuth(); // Get user from AuthContext
   // Log initial render
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -235,6 +235,7 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                   <TableRow>
                     {/* Update Table Headers for PIRs */}
                     <TableHead>Requesting Customer</TableHead>
+                    <TableHead>Product Name</TableHead> {/* Added Product Name Header */}
                     <TableHead>Request Details</TableHead>
                     <TableHead>Date Received</TableHead>
                     <TableHead>Status</TableHead>
@@ -263,6 +264,7 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                           onClick={() => handlePirAction(pir)}
                         >
                           <TableCell className="font-medium">{customerName || 'Unknown Customer'}</TableCell>
+                          <TableCell>{pir.productName}</TableCell> {/* Added Product Name Cell */}
                           <TableCell>{requestDetails}</TableCell>
                           <TableCell>{dateReceived}</TableCell>
                           <TableCell>
@@ -319,7 +321,7 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={5} // Adjust colSpan
+                        colSpan={6} // Adjust colSpan for added column
                         className="text-center py-12 text-muted-foreground"
                       >
                         <div className="flex flex-col items-center justify-center gap-2">
@@ -346,4 +348,4 @@ const OurProducts = () => { // Was IncomingRequests, renamed back for file consi
   );
 };
 
-export default OurProducts;
+export default SupplierIncomingRequests;

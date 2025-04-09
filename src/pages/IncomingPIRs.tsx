@@ -15,7 +15,7 @@ interface IncomingPIRRecord {
   customer_id: string;
   updated_at: string;
   status: PIRStatus;
-  product: { name: string }[] | null; // Product name (Can be array from query)
+  products: { name: string }[] | null; // Kept name 'products', reverted type back to array
   customer: { name: string }[] | null; // Customer company name (Can be array from query)
   // Add other fields as needed, e.g., tags, response count
 }
@@ -33,7 +33,7 @@ const IncomingPIRs = () => {
         customer_id,
         updated_at,
         status,
-        product:products ( name ),
+        products!pir_requests_product_id_fkey ( name ),
         customer:companies!pir_requests_customer_id_fkey ( name )
       `)
       .eq('supplier_company_id', supplierId)
@@ -93,7 +93,7 @@ const IncomingPIRs = () => {
               {incomingPirs && incomingPirs.length > 0 ? (
                 incomingPirs.map((pir) => (
                   <TableRow key={pir.id}>
-                    <TableCell className="font-medium">{pir.product?.[0]?.name ?? 'N/A'}</TableCell>
+                    <TableCell className="font-medium">{pir.products?.[0]?.name ?? 'N/A'}</TableCell>
                     <TableCell>{pir.customer?.[0]?.name ?? 'N/A'}</TableCell>
                     <TableCell>
                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
