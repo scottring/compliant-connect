@@ -159,7 +159,7 @@ const useCreateQuestionMutation = (
             const { tags: selectedTags, ...questionData } = question;
             const tagIds = selectedTags?.map(tag => tag.id) || [];
             const { data: newQuestionData, error: rpcError } = await supabase.rpc('create_question_with_tags', {
-                p_subsection_id: questionData.section_id, p_text: questionData.text, // Pass section_id (assuming RPC is updated)
+                p_subsection_id: questionData.section_id, p_text: questionData.text, // Use the correct parameter name p_subsection_id
                 p_description: questionData.description || null, p_type: questionData.type as QuestionType, // Ensure type matches Supabase enum
                 p_required: questionData.required, p_options: questionData.options || null, p_tag_ids: tagIds
             });
@@ -286,8 +286,9 @@ const useAddSectionMutation = (
             if (!data) throw new Error("Add section failed: No data returned.");
             return data;
         },
-        onSuccess: () => { /* ... implementation ... */
-            queryClient.invalidateQueries({ queryKey: ['questions'] }); // Invalidate questions query as view depends on sections
+        onSuccess: () => {
+            // Only invalidate the query, remove manual cache update
+            queryClient.invalidateQueries({ queryKey: ['questions'] });
             toast.success('Section added successfully');
             setError(null);
         },
@@ -326,20 +327,20 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
   // --- Fetch Questions using React Query ---
   const fetchQuestionsWithTags = async (): Promise<DBQuestion[]> => { /* ... implementation ... */
     const { data: questionsData, error: questionsError } = await supabase
-      // Query the new view instead of the questions table directly
+      // Query the new view using the column names defined in the view
       .from('v_question_bank_numbered')
       .select(`
-        question_id:id, section_id, question_text:text, question_description:description,
-        question_type:type, question_required:required, question_options:options,
-        question_created_at:created_at, question_updated_at:updated_at,
+        question_id, section_id, question_text, question_description,
+        question_type, question_required, question_options,
+        question_created_at, question_updated_at,
         hierarchical_number, section_name, section_level
       `);
     if (questionsError) { console.error('Error loading questions:', questionsError); throw new Error(questionsError.message); }
     if (!questionsData) return [];
     // Removed incorrect questionIds declaration here
-    // Map view results to DBQuestion structure
+    // Map view results to DBQuestion structure using view column names
     const mappedQuestions = questionsData.map(q => ({
-        id: q.question_id,
+        id: q.question_id, // Use question_id from view result
         section_id: q.section_id,
         text: q.question_text,
         description: q.question_description,
@@ -354,7 +355,7 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
         tags: [] // Placeholder, tags will be added next
     }));
 
-    const questionIds = mappedQuestions.map(q => q.id);
+    const questionIds = mappedQuestions.map(q => q.id); // Use the mapped 'id' field
     if (questionIds.length === 0) return mappedQuestions;
     const { data: tagsData, error: tagsError } = await supabase.from('question_tags')
       .select(`question_id, tags ( id, name, description, created_at, updated_at )`).in('question_id', questionIds); // Added created_at, updated_at for tags

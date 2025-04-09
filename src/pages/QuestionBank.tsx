@@ -82,7 +82,7 @@ const QuestionBank = () => {
         setNewSectionName("");
         setIsAddingSectionOpen(false);
         setIsDialogOpen(true); // Open question dialog after creating section
-        toast.success("Section created successfully");
+        toast.success("Section created successfully!");
       } catch (error) {
         toast.error("Failed to create section");
       }
