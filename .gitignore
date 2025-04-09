@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 ../stacks-local/temp-next/
+.vercel
+
+/.env*
