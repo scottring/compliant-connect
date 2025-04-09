@@ -169,8 +169,8 @@ const useCreatePIRMutation = (
                         <p><a href="${import.meta.env.VITE_SITE_URL}/supplier-response-form/${pirId}">Respond to Request</a></p>
                         <p>Thank you,<br/>CompliantConnect Team</p>
                     `,
-                    from_email: variables.currentCompany?.contact_email || 'noreply@compliantconnect.ai', // Use customer contact email or a default
-                    from_name: variables.currentCompany?.name || 'CompliantConnect' // Use customer company name or a default
+                    from_email: 'admin@stacksdata.com', // Use customer contact email or a default
+                    from_name: 'StacksData' // Use customer company name or a default
                 };
 
                 console.log("[DEBUG] Invoking send-pir-notification with payload:", notificationPayload);
