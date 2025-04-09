@@ -230,12 +230,6 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
             label="Our Products"
             collapsed={collapsed}
           />
-          <SidebarLink
-            to="/incoming-pirs"
-            icon={<FileText />} // Or a different icon if desired
-            label="Incoming Requests"
-            collapsed={collapsed}
-          />
         </SidebarNavGroup>
 
         <div className="border-b border-sidebar-border/50 my-2"></div> {/* Divider */}
