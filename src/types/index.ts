@@ -32,8 +32,8 @@ export interface Tag {
   id: string;
   name: string;
   description?: string | null;
-  created_at?: string;
-  updated_at?: string | null;
+  created_at?: string | null; // Ensure optional and nullable to match potential DB values
+  updated_at?: string | null; // Ensure optional and nullable
 }
 
 export interface Question {
@@ -47,6 +47,7 @@ export interface Question {
   created_at: string;
   updated_at: string | null; // Match generated type
   subsection_id: string | null; // Match generated type
+  hierarchical_number?: string; // Add optional hierarchical number
 }
 
 export interface Section {

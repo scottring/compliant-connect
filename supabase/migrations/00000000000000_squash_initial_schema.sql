@@ -115,10 +115,17 @@ CREATE OR REPLACE FUNCTION "public"."create_question_with_tags"("p_subsection_id
 DECLARE
     new_question public.questions;
     tag_id uuid;
+    next_order_index integer;
 BEGIN
-    -- Insert the new question
-    INSERT INTO public.questions (section_id, text, description, type, required, options)
-    VALUES (p_subsection_id, p_text, p_description, p_type, p_required, p_options)
+    -- Calculate the next order index for the given section
+    SELECT COALESCE(MAX(order_index), -1) + 1
+    INTO next_order_index
+    FROM public.questions
+    WHERE section_id = p_subsection_id;
+
+    -- Insert the new question with the calculated order index
+    INSERT INTO public.questions (section_id, text, description, type, required, options, order_index)
+    VALUES (p_subsection_id, p_text, p_description, p_type, p_required, p_options, next_order_index)
     RETURNING * INTO new_question;
 
     -- Insert associations into question_tags
