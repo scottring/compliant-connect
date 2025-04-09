@@ -143,37 +143,51 @@ const useCreatePIRMutation = (
             toast.success(`Product Information Request (PIR) created (ID: ${data.pirId})`);
 
             // --- Send Email Notification via Edge Function ---
+            // --- Send Email Notification via Edge Function ---
             try {
-                // Fetch the newly created PIR record to pass to the function
-                // Ensure all fields needed by the edge function's getCompanyDetails/getProductName are selected
-                const { data: newPirRecord, error: fetchError } = await supabase
-                    .from('pir_requests')
-                    .select('*, products(name)') // Select needed fields + product name
-                    .eq('id', data.pirId)
-                    .single();
+                // Find the supplier details from the mutation variables
+                const supplier = variables.relatedSuppliers?.find(s => s.id === variables.supplierId);
+                const customerName = variables.currentCompany?.name ?? 'A customer';
+                const productName = variables.productName; // Already available in variables
+                const pirId = data.pirId; // Get PIR ID from mutation result
 
-                if (fetchError || !newPirRecord) {
-                    throw new Error(`Failed to fetch created PIR record: ${fetchError?.message || 'Not found'}`);
+                if (!supplier?.contact_email) {
+                    console.warn(`Supplier ${variables.supplierId} has no contact email. Skipping notification.`);
+                    toast.warning("PIR created, but supplier has no contact email for notification.");
+                    return; // Exit early if no email
                 }
 
-                // Construct the payload expected by the 'send-email' function
-                const payload = {
-                    type: 'PIR_STATUS_UPDATE', // Trigger the status update logic
-                    record: newPirRecord, // Pass the full record
-                    old_record: null // No old record for creation
+                // Construct the correct payload for send-pir-notification
+                const notificationPayload = {
+                    to: supplier.contact_email,
+                    subject: `New Product Information Request for ${productName}`,
+                    // Basic HTML body - Function could potentially enhance this or use templates
+                    html_body: `
+                        <p>Hello ${supplier.contact_name ?? supplier.name},</p>
+                        <p>${customerName} has requested information for the product: <strong>${productName}</strong>.</p>
+                        <p>You can view and respond to the request here:</p>
+                        <p><a href="${import.meta.env.VITE_SITE_URL}/supplier-response-form/${pirId}">Respond to Request</a></p>
+                        <p>Thank you,<br/>CompliantConnect Team</p>
+                    `,
+                    // from_email and from_name will use defaults in the Edge Function if not provided
                 };
+
+                console.log("[DEBUG] Invoking send-pir-notification with payload:", notificationPayload);
 
                 // Invoke the Edge Function
                 const { error: functionError } = await supabase.functions.invoke(
-                    'send-email', // Use the correct function name
-                    { body: payload }
+                    'send-pir-notification', // Correct function name
+                    { body: notificationPayload } // Send the correct payload
                 );
 
                 if (functionError) {
-                    throw functionError; // Throw to be caught by outer catch
+                    // Log the specific error from the function invocation
+                    console.error("Error invoking send-pir-notification:", functionError);
+                    throw new Error(`Edge function error: ${functionError.message}`);
                 }
-                // Success toast can be generic or removed if function handles it
-                toast.info(`Notification process initiated for PIR ${data.pirId}.`);
+
+                toast.info(`Notification sent for PIR ${pirId}.`);
+
             } catch (notificationError: any) {
                 console.error("Failed to send PIR creation notification:", notificationError);
                 // Show error, but PIR itself was created successfully earlier
