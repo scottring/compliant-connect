@@ -13,7 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import Suppliers from "./pages/Suppliers";
 import SupplierDetail from "./pages/SupplierDetail";
 import OutgoingPIRs from "./pages/OutgoingPIRs"; // Renamed from ProductSheets
-import IncomingPIRs from "./pages/IncomingPIRs"; // New page for incoming requests
+// import IncomingPIRs from "./pages/IncomingPIRs"; // Removed as per request
 import SupplierProducts from "./pages/SupplierProducts";
 import SupplierResponseForm from "./pages/SupplierResponseForm";
 import QuestionBank from "./pages/QuestionBank";
@@ -118,7 +118,7 @@ const App = () => {
                           
                           {/* Product Routes */}
                           <Route path="/product-sheets" element={<OutgoingPIRs />} /> {/* Renamed component */}
-                          <Route path="/incoming-pirs" element={<IncomingPIRs />} />
+                          {/* <Route path="/incoming-pirs" element={<IncomingPIRs />} /> Removed as per request */}
                           <Route path="/product-sheets/:id" element={<SupplierResponseForm />} />
                           <Route path="/our-products" element={<SupplierIncomingRequests />} />
                           

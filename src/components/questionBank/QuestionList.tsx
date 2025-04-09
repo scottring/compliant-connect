@@ -1,5 +1,5 @@
 import React from "react";
-import { DBQuestion, Section, Subsection } from "@/hooks/use-question-bank";
+import { DBQuestion } from "@/hooks/use-question-bank"; // Removed Section and Subsection imports
 import {
   Table,
   TableBody,
@@ -15,8 +15,8 @@ import TagBadge from "@/components/tags/TagBadge";
 
 export interface QuestionListProps {
   questions: DBQuestion[];
-  sections: Section[];
-  subsections: Subsection[];
+  // sections: Section[]; // Removed
+  // subsections: Subsection[]; // Removed
   onEditQuestion: (id: string) => void;
   onPreviewQuestion: (id: string) => void;
   onDeleteQuestion: (id: string) => Promise<boolean>;
@@ -24,8 +24,8 @@ export interface QuestionListProps {
 
 export const QuestionList = ({
   questions,
-  sections,
-  subsections,
+  // sections, // Removed
+  // subsections, // Removed
   onEditQuestion,
   onPreviewQuestion,
   onDeleteQuestion
@@ -35,6 +35,7 @@ export const QuestionList = ({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[80px]">Number</TableHead> {/* Added Number column */}
             <TableHead>Question</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Required</TableHead>
@@ -46,6 +47,7 @@ export const QuestionList = ({
           {questions.length > 0 ? (
             questions.map((question) => (
               <TableRow key={question.id}>
+                <TableCell className="font-mono text-xs text-muted-foreground">{question.hierarchical_number}</TableCell> {/* Display number */}
                 <TableCell className="font-medium">{question.text}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="bg-secondary capitalize">
@@ -109,7 +111,7 @@ export const QuestionList = ({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={5} className="h-24 text-center">
+              <TableCell colSpan={6} className="h-24 text-center"> {/* Updated colspan */}
                 <p className="text-muted-foreground">No questions found</p>
               </TableCell>
             </TableRow>

@@ -11,6 +11,7 @@ import {
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner"; // Keep toast for potential future use
+import ActionItemsList from '@/components/dashboard/ActionItemsList'; // Import the new component
 
 // Define the database record type for the query result (can be shared/moved)
 interface PirRequestRecord {
@@ -164,6 +165,9 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Action Items Section */}
+          <ActionItemsList />
 
           <Tabs defaultValue="recent" className="w-full">
             <TabsList>

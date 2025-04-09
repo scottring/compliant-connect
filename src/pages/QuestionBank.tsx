@@ -17,14 +17,14 @@ const QuestionBank = () => {
   const { 
     questions,
     tags,
-    sections,
-    subsections,
+    // sections, // Removed
+    // subsections, // Removed
     isLoadingQuestions,
     isLoadingTags,
-    isLoadingStructure,
+    // isLoadingStructure, // Removed
     errorQuestions,
     errorTags,
-    errorStructure,
+    // errorStructure, // Removed
     deleteQuestion,
     addSection
   } = useQuestionBankContext();
@@ -62,10 +62,11 @@ const QuestionBank = () => {
   });
 
   const handleOpenDialog = () => {
-    if (!sections || sections.length === 0) {
-      setIsAddingSectionOpen(true);
-      return;
-    }
+    // Removed check for sections before opening dialog
+    // if (!sections || sections.length === 0) {
+    //   setIsAddingSectionOpen(true);
+    //   return;
+    // }
     setIsDialogOpen(true);
   };
 
@@ -75,7 +76,8 @@ const QuestionBank = () => {
         await addSection({
           name: newSectionName.trim(),
           description: "",
-          order_index: sections.length
+          order_index: 0, // Default order index, might need better logic
+          parent_id: null // Create as top-level section for now
         });
         setNewSectionName("");
         setIsAddingSectionOpen(false);
@@ -99,13 +101,13 @@ const QuestionBank = () => {
     }
   };
 
-  const isLoading = isLoadingQuestions || isLoadingTags || isLoadingStructure;
-  const hasError = errorQuestions || errorTags || errorStructure;
+  const isLoading = isLoadingQuestions || isLoadingTags; // Removed isLoadingStructure
+  const hasError = errorQuestions || errorTags; // Removed errorStructure
 
   if (hasError) {
     return (
       <div className="p-8 text-center text-red-500">
-        Error loading question bank: {errorQuestions?.message || errorTags?.message || errorStructure?.message}
+        Error loading question bank: {errorQuestions?.message || errorTags?.message}
       </div>
     );
   }
@@ -149,8 +151,8 @@ const QuestionBank = () => {
       ) : (
         <QuestionList
           questions={filteredQuestions}
-          sections={sections}
-          subsections={subsections}
+          // sections={sections} // Removed
+          // subsections={subsections} // Removed
           onEditQuestion={(id) => {
             setEditingQuestion(id);
             setIsDialogOpen(true);

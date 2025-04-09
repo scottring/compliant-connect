@@ -15,7 +15,9 @@ serve(async (req: Request) => {
   console.log('Received PIR notification request:', req.method, req.url)
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    // Explicitly allow POST for the actual request following the preflight
+    const headers = { ...corsHeaders, 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+    return new Response('ok', { headers: headers })
   }
 
   try {
