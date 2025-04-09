@@ -42,6 +42,7 @@ export type DBQuestion = {
   hierarchical_number?: string;
   section_name?: string;
   section_level?: number;
+  order_index: number; // Add order_index from the base table (via view)
 };
 
 // Input type for creating/updating questions (maps UI state to DB structure)
@@ -96,6 +97,7 @@ export interface UseQuestionBankReturn {
   // Updated addSection signature to accept parent_id
   addSection: (data: Omit<QuestionSection, 'id' | 'created_at' | 'updated_at'>) => Promise<QuestionSection>;
   // addSubsection: (data: Omit<Subsection, 'id' | 'created_at' | 'updated_at'>) => Promise<Subsection>; // Removed
+  updateQuestionOrder: (updates: Array<{ question_id: string; order_index: number }>) => Promise<void>; // Add new function type
 }
 
 // --- Reusable Create Tag Mutation Hook Definition (Module Level) ---
@@ -300,9 +302,45 @@ const useAddSectionMutation = (
     });
 };
 // --- End Add Section Mutation Hook ---
-
 // --- Add Subsection Mutation Hook Removed ---
 
+// --- Reusable Update Question Order Mutation Hook ---
+const useUpdateQuestionOrderMutation = (
+    queryClient: ReturnType<typeof useQueryClient>,
+    user: ReturnType<typeof useAuth>['user'],
+    setError: React.Dispatch<React.SetStateAction<string | null>>
+): UseMutationResult<void, Error, Array<{ question_id: string; order_index: number }>> => {
+    return useMutation<void, Error, Array<{ question_id: string; order_index: number }>>({
+        mutationFn: async (updates) => {
+            if (!user) throw new Error('You must be logged in');
+            if (!updates || updates.length === 0) {
+                console.log("No order updates to send.");
+                return; // Nothing to do
+            }
+
+            const { error } = await supabase.rpc('update_question_order', {
+                p_updates: updates
+            });
+
+            if (error) {
+                console.error('Error calling update_question_order RPC:', error);
+                throw new Error(`Failed to update question order: ${error.message}`);
+            }
+        },
+        onSuccess: () => {
+            // Invalidate questions query to refetch with new order
+            queryClient.invalidateQueries({ queryKey: ['questions'] });
+            toast.success('Question order updated successfully');
+            setError(null);
+        },
+        onError: (error) => {
+            console.error('Error updating question order:', error);
+            setError(error.message);
+            toast.error(`Failed to update question order: ${error.message}`);
+        },
+    });
+};
+// --- End Update Question Order Mutation Hook ---
 
 // --- Main Hook Definition ---
 export const useQuestionBank = (): UseQuestionBankReturn => {
@@ -333,7 +371,8 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
         question_id, section_id, question_text, question_description,
         question_type, question_required, question_options,
         question_created_at, question_updated_at,
-        hierarchical_number, section_name, section_level
+        hierarchical_number, section_name, section_level,
+        question_order_index
       `);
     if (questionsError) { console.error('Error loading questions:', questionsError); throw new Error(questionsError.message); }
     if (!questionsData) return [];
@@ -352,6 +391,7 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
         hierarchical_number: q.hierarchical_number,
         section_name: q.section_name,
         section_level: q.section_level,
+        order_index: q.question_order_index, // Map the order index
         tags: [] // Placeholder, tags will be added next
     }));
 
@@ -392,7 +432,7 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
   const deleteQuestionMutation = useDeleteQuestionMutation(queryClient, user, setError);
   const addSectionMutation = useAddSectionMutation(queryClient, user, setError);
   // const addSubsectionMutation = useAddSubsectionMutation(queryClient, user, setError); // Removed
-
+  const updateQuestionOrderMutation = useUpdateQuestionOrderMutation(queryClient, user, setError); // Instantiate the new mutation
   // --- Manual Mutation Functions (None remaining) ---
 
   // --- Return Value ---
@@ -456,6 +496,14 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
       });
     },
     // addSubsection removed
+    updateQuestionOrder: (updates: Array<{ question_id: string; order_index: number }>) => {
+        return new Promise<void>((resolve, reject) => {
+            updateQuestionOrderMutation.mutate(updates, {
+                onSuccess: () => resolve(),
+                onError: (error) => reject(error),
+            });
+        });
+    },
   };
 };
 
