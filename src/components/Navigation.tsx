@@ -50,7 +50,7 @@ const navigationItems: NavigationItem[] = [
   },
   {
     title: "Product Sheets",
-    href: "/product-sheets",
+    href: "/supplier-products",
     icon: ClipboardList,
   },
   {

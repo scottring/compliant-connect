@@ -108,10 +108,17 @@ export const QuestionList = ({
 
   // Group questions by section_id
   const groupedQuestions = useMemo(() => {
-    return questions.reduce((acc, question) => {
+    // Default to empty array if questions is undefined or null
+    const safeQuestions = questions || [];
+    
+    return safeQuestions.reduce((acc, question) => {
+      // Handle potential nulls in question properties
       const sectionId = question.section_id || 'unsectioned'; // Group questions without a section
       if (!acc[sectionId]) {
-        acc[sectionId] = { name: question.section_name || 'Unsectioned Questions', questions: [] };
+        acc[sectionId] = { 
+          name: question.section_name || 'Unsectioned Questions', 
+          questions: [] 
+        };
       }
       acc[sectionId].questions.push(question);
       // Ensure questions within a section are sorted by their current order_index or hierarchical number
@@ -128,7 +135,12 @@ export const QuestionList = ({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (over && active.id !== over.id) {
+    // If no drag over target or empty data, do nothing
+    if (!over || !active.id || !over.id || Object.keys(groupedQuestions).length === 0) {
+      return;
+    }
+
+    if (active.id !== over.id) {
       // Find the section the active item belongs to
       let activeSectionId: string | null = null;
       let overSectionId: string | null = null;
@@ -136,8 +148,10 @@ export const QuestionList = ({
       let overItemIndex = -1;
 
       Object.entries(groupedQuestions).forEach(([sectionId, group]) => {
-          const activeIndexInSection = group.questions.findIndex(q => q.id === active.id);
-          const overIndexInSection = group.questions.findIndex(q => q.id === over.id);
+          // Ensure questions array exists and is not null
+          const questions = group.questions || [];
+          const activeIndexInSection = questions.findIndex(q => q.id === active.id);
+          const overIndexInSection = questions.findIndex(q => q.id === over.id);
 
           if (activeIndexInSection !== -1) {
               activeSectionId = sectionId;
@@ -153,7 +167,7 @@ export const QuestionList = ({
       if (activeSectionId && overSectionId && activeSectionId === overSectionId && activeItemIndex !== -1 && overItemIndex !== -1) {
           setQuestions((prevQuestions) => {
               // Create a new array reflecting the change within the specific section
-              const sectionQuestions = groupedQuestions[activeSectionId!].questions;
+              const sectionQuestions = groupedQuestions[activeSectionId!].questions || [];
               const newSectionOrder = arrayMove(sectionQuestions, activeItemIndex, overItemIndex);
 
               // Create a map of the new order for the affected section
@@ -200,54 +214,55 @@ export const QuestionList = ({
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        {Object.entries(groupedQuestions).map(([sectionId, group]) => (
-          <div key={sectionId} className="rounded-md border">
-            <h3 className="text-lg font-semibold p-4 border-b bg-muted/40">
-              {group.name} ({group.questions.length})
-            </h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[40px]"></TableHead> {/* Handle Col */}
-                  <TableHead className="w-[80px]">Number</TableHead>
-                  <TableHead>Question</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Required</TableHead>
-                  <TableHead>Tags</TableHead>
-                  <TableHead className="text-right w-[150px]">Actions</TableHead> {/* Adjusted width */}
-                </TableRow>
-              </TableHeader>
-              <SortableContext
-                items={group.questions.map(q => q.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <TableBody>
-                  {group.questions.length > 0 ? (
-                    group.questions.map((question) => (
-                      <SortableQuestionRow
-                        key={question.id}
-                        question={question}
-                        onEditQuestion={onEditQuestion}
-                        onPreviewQuestion={onPreviewQuestion}
-                        onDeleteQuestion={onDeleteQuestion}
-                      />
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center"> {/* Updated colspan */}
-                        <p className="text-muted-foreground">No questions found in this section</p>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </SortableContext>
-            </Table>
+        {Object.entries(groupedQuestions).length === 0 ? (
+          <div className="rounded-md border p-10 text-center">
+            <p className="text-muted-foreground">No questions match the current filters.</p>
           </div>
-        ))}
-        {Object.keys(groupedQuestions).length === 0 && (
-           <div className="rounded-md border p-10 text-center">
-               <p className="text-muted-foreground">No questions match the current filters.</p>
-           </div>
+        ) : (
+          Object.entries(groupedQuestions).map(([sectionId, group]) => (
+            <div key={sectionId} className="rounded-md border">
+              <h3 className="text-lg font-semibold p-4 border-b bg-muted/40">
+                {group.name} ({(group.questions || []).length})
+              </h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40px]"></TableHead>
+                    <TableHead className="w-[80px]">Number</TableHead>
+                    <TableHead>Question</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Required</TableHead>
+                    <TableHead>Tags</TableHead>
+                    <TableHead className="text-right w-[150px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <SortableContext
+                  items={Array.isArray(group.questions) ? group.questions.map(q => q.id).filter(Boolean) : []}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <TableBody>
+                    {Array.isArray(group.questions) && group.questions.length > 0 ? (
+                      group.questions.map((question) => (
+                        <SortableQuestionRow
+                          key={question.id}
+                          question={question}
+                          onEditQuestion={onEditQuestion}
+                          onPreviewQuestion={onPreviewQuestion}
+                          onDeleteQuestion={onDeleteQuestion}
+                        />
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="h-24 text-center">
+                          <p className="text-muted-foreground">No questions found in this section</p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </SortableContext>
+              </Table>
+            </div>
+          ))
         )}
       </div>
     </DndContext>

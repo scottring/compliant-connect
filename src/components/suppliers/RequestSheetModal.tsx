@@ -57,15 +57,15 @@ const useFetchSupplierProducts = (supplierId: string | undefined) => {
   });
 };
 
-// Updated formSchema to require productName
+// Updated formSchema to remove sectionId
 const formSchema = z.object({
   supplierId: z.string().min(1, "Please select a supplier"),
-  productName: z.string().min(1, "Please select or enter a product name"), // Updated message
+  productName: z.string().min(1, "Please select or enter a product name"),
   note: z.string().optional(),
 });
 type FormValues = z.infer<typeof formSchema>;
 
-// Input type for mutation - productName can be existing or new suggestion
+// Updated input type for mutation to remove sectionId
 type CreatePIRInput = {
   productName: string;
   supplierId: string;
@@ -99,18 +99,16 @@ const useCreatePIRMutation = (
       // Prepare PIR data
       const pirInsertData: {
         customer_id: string;
-        supplier_company_id: string; // Ensure this is included
+        supplier_company_id: string;
         status: 'draft';
         product_id: string | null;
         suggested_product_name?: string | null;
-        // note?: string | null; // Note: This field doesn't exist in schema yet
       } = {
         customer_id: input.customerId,
-        supplier_company_id: input.supplierId, // Set the supplier ID
+        supplier_company_id: input.supplierId,
         status: 'draft',
-        product_id: productId, // Will be null if product doesn't exist
-        suggested_product_name: suggestedProductName, // Will be null if product exists
-        // note: input.note || null, // Removed note as column doesn't exist
+        product_id: productId,
+        suggested_product_name: suggestedProductName,
       };
 
       // Ensure product_id is explicitly null if suggesting a new product
@@ -213,12 +211,12 @@ const useCreatePIRMutation = (
   });
 };
 
-const RequestSheetModal: React.FC<RequestSheetModalProps> = ({
+const RequestSheetModal = ({
   open,
   onOpenChange,
   supplierId,
   supplierName,
-}) => {
+}: RequestSheetModalProps): React.ReactNode => {
   const { currentCompany, isLoadingCompanies: isLoadingCurrentCompany } = useCompanyData();
   const { data: relatedSuppliers, isLoading: isLoadingSuppliers, error: errorSuppliers } = useRelatedSuppliers(currentCompany?.id);
   const { tags: appTags, isLoadingTags, errorTags } = useTags();

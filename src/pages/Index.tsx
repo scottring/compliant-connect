@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -64,9 +63,9 @@ const Index = () => {
             action: () => navigate(user ? "/question-bank" : "/auth")
           },
           {
-            title: "Product Sheets",
-            description: "Collect and review compliance information for specific products.",
-            action: () => navigate(user ? "/product-sheets" : "/auth")
+            title: "Supplier Management",
+            description: "Manage your suppliers and track their compliance information.",
+            action: () => navigate(user ? "/suppliers" : "/auth")
           },
           {
             title: "Tags & Categories",

@@ -134,7 +134,7 @@ const ActionItemsList = () => {
                 <ActionItem
                   count={actionItemsData.pirsToReview}
                   label="PIRs Ready for Review"
-                  link="/product-sheets" // Link to outgoing PIRs page
+                  link="/supplier-products" // Updated link to supplier products page
                   icon={<CheckSquare className="h-4 w-4" />}
                 />
                 <ActionItem
