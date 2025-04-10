@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
 // Remove useApp import as it's not providing the needed data
 // import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
@@ -21,14 +21,16 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { PirRequest, Company } from "../types/index"; // Explicitly importing from index file
+import { useQuery, useQueryClient } from '@tanstack/react-query'; // Import query hooks
 
 const SupplierIncomingRequests = () => { // Renamed from OurProducts
   const { user } = useAuth(); // Get user from AuthContext
   // Log initial render
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [incomingPirs, setIncomingPirs] = useState<PirRequest[]>([]);
-  const [requestingCompanies, setRequestingCompanies] = useState<Company[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Combined loading state
+  // Removed useState for incomingPirs and isLoading, managed by useQuery now
+  // const [incomingPirs, setIncomingPirs] = useState<PirRequest[]>([]);
+  const [requestingCompanies, setRequestingCompanies] = useState<Company[]>([]); // Keep if needed elsewhere, or remove
+  // const [isLoading, setIsLoading] = useState(true); // Combined loading state
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("pending"); // Default tab for suppliers
   const navigate = useNavigate();
@@ -71,70 +73,46 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
     fetchCompanyId();
   }, [user]);
 
-  // 2. Fetch incoming PIRs based on company ID
-  useEffect(() => {
-    // This effect fetches PIRs AND manages the main loading state
-    const fetchPirs = async () => {
-      // Start loading only when we have a user and are attempting to fetch
-      // based on the companyId derived from that user.
-      if (user) {
-        setIsLoading(true);
-        // Only proceed if companyId is actually determined
-        if (companyId) {
-        try {
-          const { data: pirsData, error: pirsError } = await supabase
-            .from('pir_requests')
-            .select(`
-              *,
-              customer:companies!pir_requests_customer_id_fkey(*),
-              product:products(*)
-            `) // Fetch customer name explicitly, keep product join
-            .eq('supplier_company_id', companyId);
+  // 2. Fetch incoming PIRs using useQuery
+  const fetchIncomingPirs = useCallback(async (supplierCompanyId: string): Promise<PirRequest[]> => {
+    if (!supplierCompanyId) return []; // Don't fetch if no company ID
 
-          if (pirsError) {
-            toast.error("Failed to load incoming requests.");
-            setIncomingPirs([]);
-          } else {
-            // Process fetched data
-            const processedPirs = (pirsData || []).map((pir: any) => ({
-              ...pir,
-              // Use suggested name if product join is null
-              productName: pir.product?.name ?? pir.suggested_product_name ?? 'Unknown Product',
-              // Use explicitly fetched customer name
-              customerName: pir.customer?.name ?? 'Unknown Customer',
-            }));
-            setIncomingPirs(processedPirs);
-            // Log state update
+    const { data: pirsData, error: pirsError } = await supabase
+      .from('pir_requests')
+      .select(`
+        *,
+        customer:companies!pir_requests_customer_id_fkey(*),
+        product:products(*)
+      `)
+      .eq('supplier_company_id', supplierCompanyId);
 
-            // No longer need to fetch requestingCompanies separately as it's joined
-            // const customerIds = [...new Set(pirsData?.map(pir => pir.customer_id).filter(id => id))];
-            // ... removed separate company fetch ...
-            setRequestingCompanies([]); // Clear or remove this state if not used elsewhere
-          }
-        } catch (err) {
-          toast.error("An error occurred while loading requests.");
-          setIncomingPirs([]);
-        } finally {
-          // Removed leftover log comment
-          setIsLoading(false); // Set loading false after fetch attempt
-        }
-        } else {
-          // Handle case where companyId is null (either initially or after fetch error)
-          setIncomingPirs([]);
-          setRequestingCompanies([]);
-          setIsLoading(false); // Set loading false as fetch attempt is complete (skipped)
-        }
-      } else {
-        // No user logged in
-        // Removed leftover log comment
-        setIsLoading(false);
-        setIncomingPirs([]);
-        setRequestingCompanies([]);
-      }
-    };
+    if (pirsError) {
+      toast.error("Failed to load incoming requests.");
+      console.error("PIR Fetch Error:", pirsError);
+      throw new Error(pirsError.message); // Throw error for useQuery
+    }
 
-    fetchPirs();
-  }, [companyId]);
+    // Process fetched data
+    const processedPirs = (pirsData || []).map((pir: any) => ({
+      ...pir,
+      productName: pir.product?.name ?? pir.suggested_product_name ?? 'Unknown Product',
+      customerName: pir.customer?.name ?? 'Unknown Customer',
+    }));
+    return processedPirs;
+  }, []); // useCallback ensures function identity doesn't change unnecessarily
+
+  const {
+    data: incomingPirs = [], // Default to empty array
+    isLoading, // Use loading state from useQuery
+    error: fetchError, // Use error state from useQuery
+    refetch: refetchPirs, // Function to manually refetch
+  } = useQuery<PirRequest[], Error>({
+    queryKey: ['incomingPirs', companyId], // Query key includes companyId
+    queryFn: () => fetchIncomingPirs(companyId!), // Call fetch function
+    enabled: !!companyId, // Only run query if companyId is available
+    staleTime: 1 * 60 * 1000, // Example: 1 minute stale time
+    gcTime: 5 * 60 * 1000, // Example: 5 minutes cache time
+  });
 
   // --- Helper Functions --- Moved Up ---
   // Removed getCompanyName as customer name is now directly on the pir object
@@ -144,11 +122,7 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
   //   return company ? company.name : "Loading..."; // Or "Unknown ID"
   // };
   // --- Helper Functions --- Moved Up --- // Keep this comment structure if needed
-  const getCompanyName = (customerId: string | null): string => { // Keep function signature for now if used elsewhere, but data comes from pir.customer
-      // This function might become redundant if customerName is always accessed directly
-      const pirWithCustomer = incomingPirs.find(p => p.customer_id === customerId);
-      return pirWithCustomer?.customer?.name ?? "Unknown Customer";
-  };
+  // Removed getCompanyName helper as customerName is directly on the pir object from processing
 
   // --- Filtering Logic (Restored) ---
   const getFilteredPirs = () => {
@@ -193,16 +167,27 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
         // Removed "Add Product" action for suppliers on this page
       />
 
-      {isLoading && <p>Loading requests...</p>}
+      {/* Display loading state from useQuery */}
+      {isLoading && !fetchError && <p>Loading requests...</p>}
 
-      {!isLoading && !companyId && user && (
+      {/* Display fetch error from useQuery */}
+      {fetchError && (
+        <div className="rounded-md border p-4 my-4 bg-red-50 text-red-800">
+          <p className="font-medium">Error Loading Requests</p>
+          <p className="text-sm mt-1">{fetchError.message}</p>
+        </div>
+      )}
+
+      {/* Display company not found message (only if not loading and no fetch error) */}
+      {!isLoading && !fetchError && !companyId && user && (
         <div className="rounded-md border p-4 my-4 bg-yellow-50 text-yellow-800">
           <p className="font-medium">Company Not Found</p>
           <p className="text-sm mt-1">Could not determine the company associated with your user account.</p>
         </div>
       )}
 
-      {!isLoading && companyId && (
+      {/* Render main content only if not loading, no error, and companyId exists */}
+      {!isLoading && !fetchError && companyId && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2"> {/* Adjust grid cols as needed */}
             <TabsTrigger value="pending">
@@ -296,8 +281,9 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                               }}
                               size="sm"
                               variant={(pir.status === 'draft' || pir.status === 'flagged') ? "default" : "outline"} // Highlight actionable button
+                              disabled={!(pir.status === 'draft' || pir.status === 'flagged')} // Disable if not draft or flagged
                               className={`ml-auto ${(pir.status === 'draft' || pir.status === 'flagged') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
-                            >
+                           >
                               {pir.status === 'draft' || pir.status === 'flagged' ? (
                                 <> <SendHorizontal className="h-4 w-4 mr-2" /> Respond </>
                               ) : (

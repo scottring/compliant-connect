@@ -244,34 +244,32 @@ const SupplierProducts = () => {
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       pir.status === 'approved' ? 'bg-green-100 text-green-800' :
                       pir.status === 'in_review' ? 'bg-blue-100 text-blue-800' :
+                      pir.status === 'submitted' ? 'bg-orange-100 text-orange-800' : // Added style for submitted
                       pir.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                      'bg-yellow-100 text-yellow-800'
+                      'bg-yellow-100 text-yellow-800' // Default/flagged
                     }`}>
                       {pir.status.charAt(0).toUpperCase() + pir.status.slice(1)}
                     </span>
                   </TableCell>
                   <TableCell>
-                    {/* Conditionally render actions based on status */}
-                    {(pir.status === 'submitted' || pir.status === 'flagged') ? (
-                      // Show Review button when it's customer's turn
-                      <Button
-                        onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
-                        size="sm"
-                        variant="default" // Use default variant for primary action
-                        className="bg-brand hover:bg-brand/90 text-white"
-                      >
-                        <ClipboardCheck className="h-4 w-4 mr-2" /> Review
-                      </Button>
-                    ) : (
-                      // Show View button for other statuses
-                      <Button
-                        onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Eye className="h-4 w-4 mr-2" /> View
-                      </Button>
-                    )}
+                    {/* Action Button Logic for Supplier View */}
+                    <Button
+                      onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
+                      size="sm"
+                      variant={ (pir.status === 'draft' || pir.status === 'in_review') ? 'default' : 'outline' }
+                      disabled={ pir.status === 'submitted' || pir.status === 'approved' || pir.status === 'flagged' } // Disable if submitted, approved, or flagged
+                      className={ (pir.status === 'draft' || pir.status === 'in_review') ? "bg-brand hover:bg-brand/90 text-white" : "" }
+                    >
+                      { (pir.status === 'draft' || pir.status === 'in_review') ? (
+                        <>
+                          <ClipboardCheck className="h-4 w-4 mr-2" /> Respond
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4 mr-2" /> View
+                        </>
+                      )}
+                    </Button>
                     {/* Removed DropdownMenu for simplicity, can be added back if more actions needed */}
                   </TableCell>
                 </TableRow>
