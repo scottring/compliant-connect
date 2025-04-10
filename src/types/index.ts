@@ -123,6 +123,7 @@ export interface SupplierResponse {
   value: Json | null; // Match pir_responses.answer
   comments?: Comment[];
   flags?: Flag[];
+  status?: Database['public']['Enums']['flag_status']; // Status for reviewed responses
 }
 
 export interface PIR {
