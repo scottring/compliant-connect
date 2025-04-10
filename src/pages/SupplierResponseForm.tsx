@@ -121,17 +121,17 @@ const useSubmitResponsesMutation = (
                 }
             }
 
-            // 4. Update PIR status last - if this fails, responses are still valid
+            // 4. Update PIR status to 'submitted'
             const { error: pirUpdateError } = await supabase
                 .from('pir_requests')
-                .update({
+                .update({ 
                     status: 'submitted' as PIRStatus,
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString() 
                 })
                 .eq('id', pirId);
 
             if (pirUpdateError) {
-                throw new Error(`Responses saved but failed to update PIR status: ${pirUpdateError.message}. Please try submitting again.`);
+                throw new Error(`Failed to update PIR status: ${pirUpdateError.message}`);
             }
         },
         onSuccess: async (_, variables) => {
@@ -140,6 +140,7 @@ const useSubmitResponsesMutation = (
             toast.success('Responses submitted successfully');
 
             try {
+                console.log("Fetching updated PIR record for notification...");
                 const { data: updatedPirRecord, error: fetchError } = await supabase
                     .from('pir_requests')
                     .select('*, products(name), customer:companies!pir_requests_customer_id_fkey(name, contact_email)')
@@ -150,16 +151,27 @@ const useSubmitResponsesMutation = (
                     throw new Error('Failed to fetch updated PIR record for notification');
                 }
 
-                await supabase.functions.invoke('send-email', {
+                console.log("Updated PIR record fetched:", updatedPirRecord);
+                console.log("Sending email notification with type PIR_RESPONSE_SUBMITTED");
+
+                // Use the correct project ID and function name
+                const { data, error: functionError } = await supabase.functions.invoke('send-email', {
                     body: {
                         type: 'PIR_RESPONSE_SUBMITTED',
                         record: updatedPirRecord,
                     }
                 });
 
+                if (functionError) {
+                    console.error("Edge function error:", functionError);
+                    throw new Error(`Edge function error: ${functionError.message}`);
+                }
+
+                console.log("Function response:", data);
                 toast.info('Notification sent to customer about response submission.');
             } catch (notificationError: any) {
                 console.error("Failed to send notification:", notificationError);
+                console.error("Notification error details:", notificationError.stack || notificationError);
                 toast.warning('Responses submitted successfully, but notification failed to send.');
             }
             
