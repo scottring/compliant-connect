@@ -54,9 +54,12 @@ export interface Section {
   id: string;
   dbId?: string; // Database ID for integration with Supabase
   name: string;
-  description?: string;
-  order?: number; // Keep for potential legacy use?
-  order_index?: number | null; // Add the actual DB column name
+  description?: string | null; // Align with DB
+  order?: number | null; // Align with DB order_index
+  parent_id?: string | null; // Add parent_id for hierarchy
+  created_at?: Date | null; // Add timestamps if needed
+  updated_at?: Date | null; // Add timestamps if needed
+  // Remove order_index if 'order' is used consistently
 }
 
 export interface Subsection {

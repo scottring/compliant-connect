@@ -1,4 +1,6 @@
-import { Database } from '@/types/supabase'; // Use generated types as source of truth
+import { Database } from './supabase';
+import type { Company } from './company';
+import type { Tag } from './tag';
 
 // Use generated Enums directly
 export type QuestionType = Database['public']['Enums']['question_type'];
@@ -6,6 +8,49 @@ export type PIRStatus = Database['public']['Enums']['pir_status'];
 export type ResponseStatus = Database['public']['Enums']['response_status'];
 export type FlagStatus = Database['public']['Enums']['flag_status'];
 export type RelationshipStatus = Database['public']['Enums']['relationship_status'];
+
+// Valid status transitions
+export const PIR_STATUS_TRANSITIONS: Record<PIRStatus, PIRStatus[]> = {
+  'draft': ['submitted'],
+  'submitted': ['in_review'],
+  'in_review': ['approved', 'flagged', 'rejected'],
+  'flagged': ['submitted'],
+  'approved': [],
+  'rejected': []
+} as const;
+
+export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[]> = {
+  'draft': ['submitted'],
+  'submitted': ['approved', 'flagged'],
+  'flagged': ['submitted'],
+  'approved': []
+} as const;
+
+// Status display names for UI
+export const PIR_STATUS_DISPLAY: Record<PIRStatus, string> = {
+  'draft': 'Draft',
+  'submitted': 'Submitted',
+  'in_review': 'In Review',
+  'flagged': 'Changes Requested',
+  'approved': 'Approved',
+  'rejected': 'Rejected'
+} as const;
+
+export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {
+  'draft': 'Draft',
+  'submitted': 'Submitted',
+  'flagged': 'Changes Requested',
+  'approved': 'Approved'
+} as const;
+
+// Type guard functions
+export const isValidPIRStatusTransition = (from: PIRStatus, to: PIRStatus): boolean => {
+  return PIR_STATUS_TRANSITIONS[from].includes(to);
+};
+
+export const isValidResponseStatusTransition = (from: ResponseStatus, to: ResponseStatus): boolean => {
+  return RESPONSE_STATUS_TRANSITIONS[from].includes(to);
+};
 
 // Define local types based on generated Row types, adding relationships if needed
 
@@ -19,13 +64,10 @@ export type Question = Database['public']['Tables']['questions']['Row'] & {
 export type PIRRequest = Database['public']['Tables']['pir_requests']['Row'];
 
 // Corresponds to public.pir_responses table
-export type PIRResponse = Database['public']['Tables']['pir_responses']['Row'] & {
-    // Add related data fetched separately, like flags
-    response_flags?: FlagType[]; // Use response_flags based on schema
-};
+export type PIRResponse = Database['public']['Tables']['pir_responses']['Row'];
 
 // Corresponds to public.response_flags table
-export type FlagType = Database['public']['Tables']['response_flags']['Row'];
+export type ResponseFlag = Database['public']['Tables']['response_flags']['Row'];
 
 // Corresponds to public.pir_tags table (useful for joins)
 export type PIRTag = Database['public']['Tables']['pir_tags']['Row'];
@@ -65,9 +107,45 @@ export type InsertPIRRequest = Database['public']['Tables']['pir_requests']['Ins
 export type UpdatePIRRequest = Database['public']['Tables']['pir_requests']['Update'];
 export type InsertPIRResponse = Database['public']['Tables']['pir_responses']['Insert'];
 export type UpdatePIRResponse = Database['public']['Tables']['pir_responses']['Update'];
-export type InsertFlag = Database['public']['Tables']['response_flags']['Insert'];
-export type UpdateFlag = Database['public']['Tables']['response_flags']['Update'];
-// Add others as needed (e.g., InsertPIRTag)
+export type InsertResponseFlag = Database['public']['Tables']['response_flags']['Insert'];
+export type UpdateResponseFlag = Database['public']['Tables']['response_flags']['Update'];
 
-// Re-export Tag from main types if needed here, or import it where used
-import { Tag } from '@/types/index';
+// Base PIR types
+export interface PIRBase {
+  id: string;
+  title: string | null;
+  description: string | null;
+  status: PIRStatus;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string | null;
+  customer_id: string | null;
+  supplier_company_id: string | null;
+  product_id: string | null;
+  suggested_product_name: string | null;
+}
+
+// Extended PIR type with related data
+export interface PIRWithRelations extends PIRRequest {
+  customer?: Company | null;
+  supplier?: Company | null;
+  product?: { id: string; name: string; } | null;
+  tags?: Tag[];
+  responses?: (PIRResponse & { response_flags?: ResponseFlag[] })[];
+}
+
+// Review types
+export interface ReviewStatus {
+  responseId: string;
+  status: 'approved' | 'flagged';
+  note?: string;
+}
+
+export interface ReviewSubmission {
+  pirId: string;
+  reviewStatuses: Record<string, 'approved' | 'flagged'>;
+  reviewNotes: Record<string, string>;
+  userId: string;
+  userName: string;
+  productId?: string;
+}

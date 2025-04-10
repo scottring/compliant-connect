@@ -15,7 +15,7 @@ import { CheckCircle, Flag, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { toast } from "sonner";
 // Import types from central location and generated types
 import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "../types/index"; // Use relative path
-import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse } from "@/types/pir";
+import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse, ResponseStatus, isValidPIRStatusTransition, isValidResponseStatusTransition } from "@/types/pir";
 import { Database } from "@/types/supabase";
 type DBFlag = Database['public']['Tables']['response_flags']['Row'];
 type DBQuestionType = Database['public']['Enums']['question_type'];
@@ -25,7 +25,7 @@ import TaskProgress from "@/components/ui/progress/TaskProgress";
 // Type definition for DBQuestion used in this component
 type DBQuestionForReview = {
   id: string;
-  subsection_id: string | null;
+  // subsection_id: string | null; // Removed, info is in subsection object
   text: string;
   description: string | null;
   type: DBQuestionType;
@@ -34,7 +34,8 @@ type DBQuestionForReview = {
   created_at: string | null;
   updated_at: string | null;
   tags?: Tag[];
-  subsection?: Subsection & { section?: Section };
+  subsection?: Section; // Represents the joined question_sections record (acting as subsection)
+  section?: Section;    // Represents the parent section, looked up from sectionMap
 };
 // End DBQuestion definition
 
@@ -56,6 +57,7 @@ type SubmitReviewInput = {
     userId: string; // Reviewer's ID
     userName: string; // Reviewer's name/email
     reviewStatuses: Record<string, "approved" | "flagged" | "pending">;
+    productId?: string | null; // Add product ID for linking on approval
     reviewNotes: Record<string, string>;
     // Add context for notification
     supplierEmail?: string | null;
@@ -69,10 +71,34 @@ const useSubmitReviewMutation = (
 ): UseMutationResult<SubmitReviewResult, Error, SubmitReviewInput> => {
     return useMutation<SubmitReviewResult, Error, SubmitReviewInput>({
         mutationFn: async (input) => {
-            const { pirId, userId, userName, reviewStatuses, reviewNotes } = input;
+            const { pirId, userId, userName, reviewStatuses, reviewNotes, productId } = input;
             let hasFlags = false;
             const flagInserts: Database['public']['Tables']['response_flags']['Insert'][] = [];
 
+            // First update PIR status to 'in_review'
+            const { data: currentPir, error: pirFetchError } = await supabase
+                .from('pir_requests')
+                .select('status')
+                .eq('id', pirId)
+                .single();
+
+            if (pirFetchError) throw new Error(`Failed to fetch current PIR status: ${pirFetchError.message}`);
+            
+            const currentStatus = currentPir.status as PIRStatus;
+            if (currentStatus !== 'submitted' && currentStatus !== 'flagged') {
+                throw new Error(`Invalid PIR status for review: ${currentStatus}`);
+            }
+
+            // Update PIR to 'in_review' first
+            if (currentStatus === 'submitted') {
+                const { error: statusError } = await supabase
+                    .from('pir_requests')
+                    .update({ status: 'in_review' as PIRStatus })
+                    .eq('id', pirId);
+                if (statusError) throw new Error(`Failed to update PIR to in_review: ${statusError.message}`);
+            }
+
+            // Process each response
             for (const [responseId, status] of Object.entries(reviewStatuses)) {
                 if (status === 'flagged') {
                     const note = reviewNotes[responseId];
@@ -80,43 +106,58 @@ const useSubmitReviewMutation = (
                         hasFlags = true;
                         flagInserts.push({
                             response_id: responseId,
-                            description: note, // Use description column for comment
+                            description: note,
                             created_by: userId,
                             status: 'open'
                         });
-                    } else { }
-                } else if (status === 'approved') {
-                    // TODO: Clear/resolve flags for this response
-                    // Example: await supabase.from('response_flags').update({ status: 'resolved', resolved_by: userId, resolved_at: new Date().toISOString() }).eq('response_id', responseId).eq('status', 'open');
+                    }
                 }
+
+                // Update response status
+                const { error: responseError } = await supabase
+                    .from('pir_responses')
+                    .update({ status: status as ResponseStatus })
+                    .eq('id', responseId);
+                if (responseError) throw new Error(`Failed to update response status: ${responseError.message}`);
             }
 
             if (flagInserts.length > 0) {
-                const { error: flagError } = await supabase.from('response_flags').insert(flagInserts);
+                const { error: flagError } = await supabase
+                    .from('response_flags')
+                    .insert(flagInserts);
                 if (flagError) throw new Error(`Failed to save flags: ${flagError.message}`);
             }
 
-            const finalStatus: PIRStatus = hasFlags ? 'flagged' : 'approved'; // Use 'flagged' status
+            // Determine final PIR status
+            const finalStatus: PIRStatus = hasFlags ? 'flagged' : 'approved';
+
+            // Update PIR status and product if approved
+            const updatePayload: Database['public']['Tables']['pir_requests']['Update'] = {
+                status: finalStatus,
+                updated_at: new Date().toISOString(),
+            };
+            if (finalStatus === 'approved' && productId) {
+                updatePayload.product_id = productId;
+            }
 
             const { error: pirUpdateError } = await supabase
                 .from('pir_requests')
-                .update({ status: finalStatus, updated_at: new Date().toISOString() })
+                .update(updatePayload)
                 .eq('id', pirId);
             if (pirUpdateError) throw new Error(`Failed to update PIR status: ${pirUpdateError.message}`);
 
             return { finalStatus };
         },
-        onSuccess: async (data, variables) => { // Make async
+        onSuccess: async (data, variables) => {
             queryClient.invalidateQueries({ queryKey: ['pirDetailsForReview', variables.pirId] });
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
             toast.success(`Review submitted. Final status: ${data.finalStatus}`);
 
-            // --- Send Email Notification to Supplier via Edge Function ---
             try {
-                // Fetch the updated PIR record to pass to the function
+                // Fetch the updated PIR record for notification
                 const { data: updatedPirRecord, error: fetchError } = await supabase
                     .from('pir_requests')
-                    .select('*, products(name)') // Select needed fields
+                    .select('*, products(name)')
                     .eq('id', variables.pirId)
                     .single();
 
@@ -124,30 +165,25 @@ const useSubmitReviewMutation = (
                     throw new Error(`Failed to fetch updated PIR record for notification: ${fetchError?.message || 'Not found'}`);
                 }
 
-                // Construct the payload expected by the 'send-email' function
-                // Pass the *updated* record which now has status 'approved' or 'flagged'
-                const payload = {
-                    type: 'PIR_STATUS_UPDATE',
-                    record: updatedPirRecord,
-                    // old_record might be useful here if the function handles transitions
-                };
-
-                // Invoke the Edge Function
                 const { error: functionError } = await supabase.functions.invoke(
                     'send-email',
-                    { body: payload }
+                    {
+                        body: {
+                            type: 'PIR_STATUS_UPDATE',
+                            record: updatedPirRecord,
+                        }
+                    }
                 );
 
                 if (functionError) {
                     throw functionError;
                 }
-                toast.info(`Notification process initiated for PIR ${variables.pirId}.`);
+                toast.info(`Notification sent to supplier about review completion.`);
 
             } catch (notificationError: any) {
                 console.error("Failed to send PIR review notification:", notificationError);
                 toast.error(`Review submitted, but failed to send notification: ${notificationError.message}`);
             }
-            // --- End Send Email Notification ---
         },
         onError: (error) => {
             toast.error(`Failed to submit review: ${error.message}`);
@@ -163,10 +199,43 @@ const CustomerReview = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // --- Fetch All Sections/Subsections Query ---
+  const { data: allSectionsData, isLoading: isLoadingSections, error: errorSections } = useQuery<Section[], Error>({
+    queryKey: ['allQuestionSections'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('question_sections')
+        .select('*');
+      if (error) throw new Error(`Failed to fetch all sections/subsections: ${error.message}`);
+      // Map DB structure to frontend Section type
+      return (data || []).map(sec => ({
+        id: sec.id,
+        name: sec.name,
+        description: sec.description,
+        order: sec.order_index,
+        parent_id: sec.parent_id,
+        created_at: sec.created_at ? new Date(sec.created_at) : new Date(),
+        updated_at: sec.updated_at ? new Date(sec.updated_at) : new Date(),
+      } as Section));
+    },
+  });
+
+  // Create sectionMap once allSectionsData is loaded
+  const sectionMap = React.useMemo(() => {
+    const map = new Map<string, Section>();
+    (allSectionsData || []).forEach(sec => {
+      map.set(sec.id, sec);
+    });
+    return map;
+  }, [allSectionsData]);
+  // --- End Fetch All Sections --- 
+
+
   const [activeTab, setActiveTab] = useState("flagged");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [reviewStatus, setReviewStatus] = useState<Record<string, "approved" | "flagged" | "pending">>({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [isLocked, setIsLocked] = useState(false); // State for view-only mode
 
   // --- Fetch PIR Details Query ---
   const fetchPirDetailsForReview = async (id: string): Promise<PirDetailsForReview> => {
@@ -191,55 +260,89 @@ const CustomerReview = () => {
       if (tagLinksError) throw new Error(`Failed to fetch PIR tags: ${tagLinksError.message}`);
       const tags = (tagLinks?.map(link => link.tag).filter(Boolean).flat() || []) as Tag[];
 
-      // 3. Fetch Questions based on Tags
+      // 3. Fetch Questions based on Tags (Two-step process)
       const tagIds = tags.map(t => t.id);
       let questions: DBQuestionForReview[] = [];
       if (tagIds.length > 0) {
-          const { data: questionLinks, error: qLinkError } = await supabase
-              .from('question_tags') // Query the join table
-              .select(`
-                  question:questions (
+          // Step 3a: Get question IDs linked to the tags
+          const { data: questionTagLinks, error: qtError } = await supabase
+              .from('question_tags')
+              .select('question_id')
+              .in('tag_id', tagIds);
+
+          if (qtError) throw new Error(`Failed to fetch question IDs for tags: ${qtError.message}`);
+
+          const questionIds = [...new Set(questionTagLinks?.map(link => link.question_id).filter(Boolean) || [])];
+
+          // Step 3b: Fetch questions using the IDs, including nested data
+          if (questionIds.length > 0) {
+              const { data: questionsData, error: qError } = await supabase
+                  .from('questions')
+                  .select(`
                       *,
-                      subsection:subsections(*, section:sections(*))
-                  )
-              `) // Select the related question with its structure
-              .in('tag_id', tagIds); // Filter by the PIR's tags
+                      subsection:question_sections!section_id (*)
+                  `)
+                  .in('id', questionIds);
 
-          if (qLinkError) throw new Error(`Failed to fetch questions for tags: ${qLinkError.message}`);
+              if (qError) throw new Error(`Failed to fetch questions data: ${qError.message}`);
 
-          // Deduplicate questions and structure them
-          const questionMap = new Map<string, DBQuestionForReview>();
-          (questionLinks || []).forEach(link => {
-              const questionData = link.question as any; // Access the aliased 'question'
-              if (questionData && !questionMap.has(questionData.id)) {
-                  const subsection = questionData.subsection as any;
-                  const section = subsection?.section as any;
-                  const structuredQuestion: DBQuestionForReview = {
-                      id: questionData.id,
-                      subsection_id: questionData.subsection_id,
-                      text: questionData.text,
-                      description: questionData.description,
-                      type: questionData.type as DBQuestionType,
-                      required: questionData.required,
-                      options: questionData.options,
-                      created_at: questionData.created_at,
-                      updated_at: questionData.updated_at,
-                      tags: [], // Placeholder
-                      // Map section/subsection data, including order property
-                      subsection: subsection ? { ...subsection, order: subsection.order_index, section: section ? { ...section, order: section.order_index } : undefined } : undefined
+
+
+              // Structure the fetched questions data
+              const questionMap = new Map<string, DBQuestionForReview>();
+              (questionsData || []).forEach(questionData => {
+                  // Type assertion for joined data
+                  const typedQuestionData = questionData as unknown as {
+                      id: string; text: string; description: string | null; type: string; required: boolean | null; options: any; created_at: string | null; updated_at: string | null;
+                      subsection: { id: string; name: string; description: string | null; order_index: number; parent_id: string | null; created_at: string | null; updated_at: string | null; } | null;
                   };
-                  questionMap.set(questionData.id, structuredQuestion);
-              }
-          });
-          questions = Array.from(questionMap.values());
-          questions.sort((a, b) => {
-              const sectionOrderA = a.subsection?.section?.order || 0;
-              const sectionOrderB = b.subsection?.section?.order || 0;
-              if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB;
-              const subsectionOrderA = a.subsection?.order || 0;
-              const subsectionOrderB = b.subsection?.order || 0;
-              return subsectionOrderA - subsectionOrderB;
-          });
+
+                  if (typedQuestionData && !questionMap.has(typedQuestionData.id)) {
+                      // 1. Map the joined subsection data (question_sections record) to the Section type
+                      const joinedSubsectionData = typedQuestionData.subsection;
+                      const subsection: Section | undefined = joinedSubsectionData ? {
+                          id: joinedSubsectionData.id,
+                          name: joinedSubsectionData.name,
+                          description: joinedSubsectionData.description,
+                          order: joinedSubsectionData.order_index,
+                          parent_id: joinedSubsectionData.parent_id,
+                          created_at: joinedSubsectionData.created_at ? new Date(joinedSubsectionData.created_at) : new Date(),
+                          updated_at: joinedSubsectionData.updated_at ? new Date(joinedSubsectionData.updated_at) : new Date(),
+                      } : undefined;
+
+                      // Parent section will be looked up later using component-level sectionMap
+
+                      // 3. Construct the structured question
+                      const structuredQuestion: DBQuestionForReview = {
+                          id: typedQuestionData.id,
+                          text: typedQuestionData.text,
+                          description: typedQuestionData.description,
+                          type: typedQuestionData.type as DBQuestionType,
+                          required: typedQuestionData.required,
+                          options: typedQuestionData.options,
+                          created_at: typedQuestionData.created_at,
+                          updated_at: typedQuestionData.updated_at,
+                          tags: [], // Placeholder
+                          subsection: subsection, // Assign the mapped subsection
+                          section: undefined, // Placeholder: Will be populated later
+                      };
+                      questionMap.set(typedQuestionData.id, structuredQuestion);
+                  }
+              });
+              questions = Array.from(questionMap.values());
+              // Sort questions based on section/subsection order
+              questions.sort((a, b) => {
+                  // Use the top-level section property for section order
+                  const sectionOrderA = a.section?.order || 0;
+                  const sectionOrderB = b.section?.order || 0;
+                  if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB;
+
+                  // Use the subsection property for subsection order
+                  const subsectionOrderA = a.subsection?.order || 0;
+                  const subsectionOrderB = b.subsection?.order || 0;
+                  return subsectionOrderA - subsectionOrderB;
+              });
+          }
       }
 
       // 4. Fetch Responses with Flags
@@ -270,7 +373,18 @@ const CustomerReview = () => {
       queryKey: ['pirDetailsForReview', pirId],
       queryFn: () => fetchPirDetailsForReview(pirId!),
       enabled: !!pirId,
+      // onSuccess is not a direct option here, handle in useEffect
   });
+
+  // Effect to set locked state based on fetched data
+  useEffect(() => {
+    if (pirDetails?.pir?.status === 'approved') {
+      setIsLocked(true);
+    } else {
+      setIsLocked(false); // Ensure it's reset if status changes
+    }
+  }, [pirDetails?.pir?.status]);
+
   // --- End Fetch PIR Details Query ---
 
   // Submit Review Mutation
@@ -300,7 +414,7 @@ const CustomerReview = () => {
       if (pirDetails?.questions && pirDetails.questions.length > 0) {
           const initialExpanded: Record<string, boolean> = {};
           pirDetails.questions.forEach(q => {
-              const sectionId = q.subsection?.section?.id || "unsectioned";
+              const sectionId = q.section?.id || "unsectioned"; // Use direct section property
               initialExpanded[sectionId] = true;
           });
           setExpandedSections(initialExpanded);
@@ -319,7 +433,7 @@ const CustomerReview = () => {
   // Grouping logic
   const questionsBySections = sheetQuestions.reduce(
     (acc, question) => {
-      const sectionId = question.subsection?.section?.id || "unsectioned";
+      const sectionId = question.section?.id || "unsectioned"; // Use direct section property
       if (!acc[sectionId]) acc[sectionId] = [];
       acc[sectionId].push(question);
       return acc;
@@ -329,7 +443,7 @@ const CustomerReview = () => {
     (acc, [sectionId, sectionQuestions]) => {
       acc[sectionId] = sectionQuestions.reduce(
         (subAcc, question) => {
-          const subsectionId = question.subsection_id || "unsubsectioned";
+          const subsectionId = question.subsection?.id || "unsubsectioned"; // Use subsection property id
           if (!subAcc[subsectionId]) subAcc[subsectionId] = [];
           subAcc[subsectionId].push(question);
           return subAcc;
@@ -389,6 +503,7 @@ const CustomerReview = () => {
   const approvedCount = sheetResponses.filter(r => reviewStatus[r.id] === 'approved').length;
   const pendingCount = sheetResponses.filter(r => reviewStatus[r.id] === 'pending' && !(isPreviouslyReviewed && r.response_flags && r.response_flags.length > 0)).length;
   const totalAnsweredQuestions = sheetResponses.length;
+  const allApproved = totalAnsweredQuestions > 0 && approvedCount === totalAnsweredQuestions;
 
   // Set default tab
   useEffect(() => {
@@ -411,6 +526,10 @@ const CustomerReview = () => {
    };
   const handleUpdateNote = (responseId: string, note: string) => { setReviewNotes(prev => ({ ...prev, [responseId]: note })); };
   const handleSubmitReview = () => {
+    if (isLocked) {
+        toast.info("This review is already approved and locked.");
+        return; // Prevent submission if locked
+    }
     if (!user) { toast.error("You must be logged in"); return; }
     if (!pirId) { toast.error("PIR ID missing"); return; }
 
@@ -430,9 +549,10 @@ const CustomerReview = () => {
     submitReviewMutation.mutate({
         pirId: pirId!,
         userId: user.id,
-        userName: user.email || 'Reviewer',
+        productId: pirDetails.product?.id, // Pass the product ID
+        userName: user.email || "Unknown Reviewer", // Use email or a default
         reviewStatuses: reviewStatus,
-        reviewNotes,
+        reviewNotes: reviewNotes,
         // Pass context for notification
         supplierEmail: pirDetails.supplier?.contact_email,
         customerName: pirDetails.customer?.name,
@@ -444,17 +564,18 @@ const CustomerReview = () => {
   // Helper functions
   const getSectionName = (sectionId: string): string => {
       if (sectionId === "unsectioned") return "General Questions";
-      const questionInSection = sheetQuestions.find(q => q.subsection?.section?.id === sectionId);
-      const section = questionInSection?.subsection?.section;
+      const questionInSection = sheetQuestions.find(q => q.section?.id === sectionId); // Use direct section property
+      const section = questionInSection?.section; // Use direct section property
       return section ? `${section.order || '?'}. ${section.name}` : "Unknown Section";
   };
-  const getSubsectionName = (sectionId: string, subsectionId: string): string => {
+  const getSubsectionName = (subsectionId: string): string => { // Removed sectionId param as it's on the subsection
       if (subsectionId === "unsubsectioned") return "General";
-      const questionInSubsection = sheetQuestions.find(q => q.subsection_id === subsectionId);
-      const subsection = questionInSubsection?.subsection;
-      const section = subsection?.section;
-      if (!section || !subsection) return "Unknown Subsection";
-      return `${section.order || '?'}.${subsection.order || '?'} ${subsection.name}`;
+      // Find the subsection directly from the sectionMap or the first question that has it
+      const subsection = sectionMap.get(subsectionId); // More reliable lookup
+      if (!subsection) return "Unknown Subsection";
+      const section = subsection.parent_id ? sectionMap.get(subsection.parent_id) : undefined; // Look up parent section
+      // Use order property which should now be correctly populated
+      return `${section?.order ?? '?'}.${subsection.order ?? '?'} ${subsection.name}`;
   };
   const getDisplayStatus = () => { /* ... */ };
   const getStatusColorClass = () => { /* ... */ };
@@ -524,7 +645,7 @@ const CustomerReview = () => {
                           tags: question.tags || [],
                           created_at: question.created_at || '',
                           updated_at: question.updated_at || '',
-                          subsection_id: question.subsection_id || '', // Use correct snake_case property name
+                          subsection_id: question.subsection?.id || '', // Use subsection property id
                           // subsectionId: question.subsection_id || '', // Removed incorrect camelCase
                           // category_id: question.subsection_id || '', // Removed category_id if not in LocalQuestionType
                           // validation_rules: null, // Removed validation_rules
@@ -533,6 +654,10 @@ const CustomerReview = () => {
                       };
                       // DEBUG: Log props being passed to ReviewQuestionItem
                       console.log(`CustomerReview: Rendering ReviewQuestionItem for Q:${question.id}`, { answerExists: !!answer, status, note: reviewNotes[answer?.id] || "" });
+                      
+                      // Determine if this specific question is locked - either the whole PIR is locked or the response is already approved
+                      const isResponseLocked = isLocked || status === "approved";
+                      
                       return (
                         <div key={question.id}>
                           <ReviewQuestionItem
@@ -543,6 +668,7 @@ const CustomerReview = () => {
                             onApprove={() => { if (answer) handleApprove(answer.id); }}
                             onFlag={(note) => { if (answer) handleFlag(answer.id, note); }}
                             onUpdateNote={(note) => { if (answer) handleUpdateNote(answer.id, note); }}
+                            isLocked={isResponseLocked} // Pass response-specific locked state
                             // isPreviouslyFlagged is now handled internally by ReviewQuestionItem
                           />
                           {index < filteredSectionQuestions.length - 1 && <Separator />}
