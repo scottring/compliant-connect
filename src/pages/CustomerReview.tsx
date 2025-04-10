@@ -435,29 +435,48 @@ const CustomerReview = () => {
     }
   }, [pirDetails?.pir?.status]);
 
+  // Initialize review status from existing data whenever PIR details are loaded
+  useEffect(() => {
+    if (pirDetails && pirDetails.responses) {
+      // Create initial reviewStatus object
+      const initialReviewStatus: Record<string, "approved" | "flagged" | "pending"> = {};
+      const initialReviewNotes: Record<string, string> = {};
+      
+      // Set status based on response status and flags
+      pirDetails.responses.forEach(response => {
+        // Initialize with existing status or fallback to "pending"
+        const hasFlags = response.response_flags && response.response_flags.length > 0;
+        let status: "approved" | "flagged" | "pending" = "pending";
+        
+        if (response.status === "approved") {
+          status = "approved";
+        } else if (response.status === "flagged" || hasFlags) {
+          status = "flagged";
+          
+          // If there are flags, get the latest flag's description as the note
+          if (hasFlags) {
+            const latestFlag = response.response_flags
+              .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+            initialReviewNotes[response.id] = latestFlag.description || "";
+          }
+        }
+        
+        initialReviewStatus[response.id] = status;
+      });
+      
+      // Update state
+      setReviewStatus(initialReviewStatus);
+      setReviewNotes(initialReviewNotes);
+      
+      // Set isLocked based on PIR status
+      setIsLocked(pirDetails.pir.status === "approved");
+    }
+  }, [pirDetails]);
+
   // --- End Fetch PIR Details Query ---
 
   // Submit Review Mutation
   const submitReviewMutation = useSubmitReviewMutation(queryClient);
-
-  // Initialize review state
-  useEffect(() => {
-    if (pirDetails?.responses) {
-      const initialStatus: Record<string, "approved" | "flagged" | "pending"> = {};
-      const initialNotes: Record<string, string> = {};
-      pirDetails.responses.forEach(response => {
-        if (response.response_flags && response.response_flags.length > 0) {
-          initialStatus[response.id] = "flagged";
-          initialNotes[response.id] = response.response_flags[response.response_flags.length - 1]?.description || "";
-        } else {
-          initialStatus[response.id] = "pending";
-          initialNotes[response.id] = "";
-        }
-      });
-      setReviewStatus(initialStatus);
-      setReviewNotes(initialNotes);
-    }
-  }, [pirDetails?.responses]);
 
   // Initialize expanded sections
   useEffect(() => {
@@ -525,14 +544,20 @@ const CustomerReview = () => {
     return acc;
   }, {} as Record<string, SupplierResponse & { flags?: LocalFlagType[] }>);
 
-  // Filter questions - Updated to handle missing answers
+  // Filter questions - Updated to handle missing answers and exclude approved answers in subsequent rounds
   const getFilteredQuestions = (sectionQuestions: DBQuestionForReview[]): DBQuestionForReview[] => {
     return sectionQuestions.filter(q => {
         const answer = answersMap[q.id];
         const status = reviewStatus[answer?.id] || "pending"; // Default to pending if no answer/status yet
         const hasFlags = answer?.flags && answer.flags.length > 0;
 
-        if (activeTab === "all") return true; // Always show in 'all' tab
+        if (activeTab === "all") {
+            // In subsequent review rounds, don't show previously approved answers
+            if (isPreviouslyReviewed && status === "approved") {
+                return false;
+            }
+            return true;
+        }
 
         // If no answer exists yet, it's considered pending
         if (!answer) {
@@ -557,9 +582,18 @@ const CustomerReview = () => {
 
   // Set default tab
   useEffect(() => {
-    if (isPreviouslyReviewed && flaggedCount > 0) setActiveTab("flagged");
-    else setActiveTab("all");
-  }, [isPreviouslyReviewed, flaggedCount]);
+    if (isPreviouslyReviewed) {
+      if (flaggedCount > 0) {
+        setActiveTab("flagged"); // Show flagged items first in subsequent reviews
+      } else if (pendingCount > 0) {
+        setActiveTab("pending"); // If no flagged items but pending items exist, show those
+      } else {
+        setActiveTab("all"); // Default fallback
+      }
+    } else {
+      setActiveTab("all"); // For initial reviews, show all items
+    }
+  }, [isPreviouslyReviewed, flaggedCount, pendingCount]);
 
   // --- Event Handlers ---
   const toggleSection = (sectionId: string) => { setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] })); };
@@ -706,7 +740,10 @@ const CustomerReview = () => {
                       console.log(`CustomerReview: Rendering ReviewQuestionItem for Q:${question.id}`, { answerExists: !!answer, status, note: reviewNotes[answer?.id] || "" });
                       
                       // Determine if this specific question is locked - either the whole PIR is locked or the response is already approved
-                      const isResponseLocked = isLocked || status === "approved";
+                      const isResponseLocked = isLocked || status === "approved" || (
+                        // Also lock if the answer has been previously approved in the database
+                        answer?.status === "approved"
+                      );
                       
                       return (
                         <div key={question.id}>
