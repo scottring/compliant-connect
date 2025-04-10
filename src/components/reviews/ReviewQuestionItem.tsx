@@ -177,7 +177,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       )}
       
       <div className="flex flex-col space-y-2">
-        {/* Determine isPreviouslyFlagged locally */}
+        {/* Display current status indicators */}
         {status === "flagged" && !(answer?.flags && answer.flags.length > 0) && (
           <div className="bg-red-50 border border-red-200 rounded p-3">
             <div className="flex items-start">
@@ -195,6 +195,18 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             <div className="flex items-center">
               <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
               <p className="font-medium text-green-800">Approved</p>
+            </div>
+          </div>
+        ) : isLocked ? (
+          // Show read-only status when locked but not approved
+          <div className="bg-blue-50 border border-blue-200 rounded p-3">
+            <div className="flex items-center">
+              <Clock className="h-5 w-5 text-blue-500 mr-2" />
+              <p className="font-medium text-blue-800">
+                {answer?.flags && answer.flags.length > 0 
+                  ? "Pending supplier revision" 
+                  : "Review in progress"}
+              </p>
             </div>
           </div>
         ) : (

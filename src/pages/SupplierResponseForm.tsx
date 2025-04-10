@@ -448,32 +448,67 @@ const SupplierResponseForm = () => {
   // Helper functions
   // Helper to get the name of a top-level section (group key)
   const getParentSectionName = (parentSectionId: string): string => {
-      if (parentSectionId === "root" || parentSectionId === "unsectioned") return "General Questions";
+      // Special case for root or unsectioned - should show as "General"
+      if (parentSectionId === "root" || parentSectionId === "unsectioned") return "General";
+      
       // Find a question belonging to this parent group to get the parent section's details
       // This assumes parentSectionId is the ID of the actual parent section OR the ID of the top-level section itself
       const questionInGroup = sheetQuestions.find(q => (q.question_sections?.parent_section?.id ?? q.question_sections?.id) === parentSectionId);
       const sectionInfo = questionInGroup?.question_sections?.parent_section ?? questionInGroup?.question_sections; // Get parent if exists, else the section itself
-      return sectionInfo ? `${sectionInfo.order_index ?? '?'}. ${sectionInfo.name}` : "Unknown Section";
+      
+      // Handle potentially undefined/null order_index and name more safely
+      if (!sectionInfo) return "Unknown Section";
+      
+      // Special case for "General" sections - show just "General" without numbering
+      if (!sectionInfo.name || sectionInfo.name.toLowerCase() === "general") {
+          return "General";
+      }
+      
+      const orderIndex = sectionInfo.order_index !== null && sectionInfo.order_index !== undefined 
+        ? sectionInfo.order_index 
+        : '';
+      const indexPrefix = orderIndex !== '' ? `${orderIndex}. ` : '';
+      return `${indexPrefix}${sectionInfo.name}`;
   };
 
   // Helper to get the name of a subsection (the question's direct section)
   const getCurrentSectionName = (parentSectionId: string, currentSectionId: string): string => {
+      // If this is "unsectioned", it should always display as "General"
       if (currentSectionId === "unsectioned") return "General";
+      
       // Find a question with this section_id to get its details
       const questionInSection = sheetQuestions.find(q => q.section_id === currentSectionId);
       const currentSection = questionInSection?.question_sections;
       const parentSection = currentSection?.parent_section; // Check if it actually has a parent in the data
 
       if (!currentSection) return "Unknown Subsection";
+      
+      // Special case for General section - should have no numbering
+      if (!currentSection.name || 
+          currentSection.name.toLowerCase() === "general" ||
+          (parentSection && parentSection.name?.toLowerCase() === "general")) {
+          return "General";
+      }
+
+      // Safely handle undefined order_index values
+      const parentOrderIndex = parentSection?.order_index !== null && parentSection?.order_index !== undefined 
+        ? parentSection.order_index 
+        : '';
+      const currentOrderIndex = currentSection.order_index !== null && currentSection.order_index !== undefined 
+        ? currentSection.order_index 
+        : '';
 
       // Format with hierarchical numbering if a parent exists
       if (parentSection && parentSection.id === parentSectionId) {
-          // This is a true subsection
-          return `${parentSection.order_index ?? '?'}.${currentSection.order_index ?? '?'} ${currentSection.name}`;
+          // This is a true subsection - check if we have valid order indexes before formatting
+          const prefix = parentOrderIndex !== '' && currentOrderIndex !== '' 
+            ? `${parentOrderIndex}.${currentOrderIndex} ` 
+            : '';
+          return `${prefix}${currentSection.name}`;
       } else {
-          // This is likely a top-level section being rendered (parentSectionId matches currentSectionId or is 'root')
-          // Only show its own index and name
-          return `${currentSection.order_index ?? '?'}. ${currentSection.name}`;
+          // This is likely a top-level section being rendered
+          const prefix = currentOrderIndex !== '' ? `${currentOrderIndex}. ` : '';
+          return `${prefix}${currentSection.name}`;
       }
   };
 
@@ -603,45 +638,73 @@ const SupplierResponseForm = () => {
               <CollapsibleContent>
                 <CardContent className="space-y-8 pt-0">
                   {/* Iterate through the actual sections (subsections) within the parent group */}
-                  {Object.entries(sections).map(([currentSectionId, questions]) => (
-                    <div key={currentSectionId} className="space-y-6">
-                      {/* Display the name of the current section (subsection) */}
-                      <h3 className="font-medium text-lg border-b pb-2">{getCurrentSectionName(parentSectionId, currentSectionId)}</h3>
-                      {questions.map((question, index) => {
-                        const answer: SupplierResponse | undefined = answersMap[question.id];
+                  {Object.entries(sections).map(([currentSectionId, questions]) => {
+                    // Skip showing subsection title if both parent and subsection are General
+                    const isGeneralSection = 
+                      (parentSectionId === "root" || parentSectionId === "unsectioned") && 
+                      (currentSectionId === "unsectioned" || 
+                       (questionInSection => questionInSection?.question_sections?.name?.toLowerCase() === "general")(
+                         sheetQuestions.find(q => q.section_id === currentSectionId)
+                       ));
+                    
+                    return (
+                      <div key={currentSectionId} className="space-y-6">
+                        {/* Display the name of the current section (subsection) only if not in General/General case */}
+                        {!isGeneralSection && (
+                          <h3 className="font-medium text-lg border-b pb-2">
+                            {getCurrentSectionName(parentSectionId, currentSectionId)}
+                          </h3>
+                        )}
+                        {questions.map((question, index) => {
+                          const answer: SupplierResponse | undefined = answersMap[question.id];
 
-                        // Calculate hierarchical number
-                        const parentOrder = question.question_sections?.parent_section?.order_index;
-                        const currentOrder = question.question_sections?.order_index;
-                        const questionOrder = index + 1; // 1-based index within the subsection
+                          // Calculate hierarchical number
+                          const parentOrder = question.question_sections?.parent_section?.order_index;
+                          const currentOrder = question.question_sections?.order_index;
+                          const questionOrder = index + 1; // 1-based index within the subsection
 
-                        let hierarchicalNumber = '';
-                        if (parentOrder !== null && parentOrder !== undefined) {
-                          // Use parentOrder + 1 and currentOrder + 1 if they are 0-based, otherwise use as is. Assuming they are 1-based from DB.
-                          hierarchicalNumber = `${parentOrder}.${currentOrder ?? '?'}.${questionOrder}`;
-                        } else if (currentOrder !== null && currentOrder !== undefined) {
-                           // Use currentOrder + 1 if 0-based. Assuming 1-based.
-                          hierarchicalNumber = `${currentOrder}.${questionOrder}`;
-                        } else {
-                          hierarchicalNumber = `${questionOrder}`; // Fallback if no section info
-                        }
+                          let hierarchicalNumber = '';
+                          
+                          // Special case for General section
+                          const isGeneralQuestion = 
+                            currentSectionId === "unsectioned" || 
+                            parentSectionId === "root" ||
+                            (question.question_sections?.name?.toLowerCase() === "general") ||
+                            (question.question_sections?.parent_section?.name?.toLowerCase() === "general");
+                          
+                          if (isGeneralQuestion) {
+                            // For General section questions, just show the question number
+                            hierarchicalNumber = `${questionOrder}`;
+                          } 
+                          // Handle cases where section hierarchies exist
+                          else if (parentOrder !== null && parentOrder !== undefined && currentOrder !== null && currentOrder !== undefined) {
+                            // Both parent and section have order indexes
+                            hierarchicalNumber = `${parentOrder}.${currentOrder}.${questionOrder}`;
+                          } else if (currentOrder !== null && currentOrder !== undefined) {
+                            // Only section has order index
+                            hierarchicalNumber = `${currentOrder}.${questionOrder}`;
+                          } else {
+                            // No order indexes available, just use question number
+                            hierarchicalNumber = `${questionOrder}`;
+                          }
 
-                        return (
-                          <div key={question.id} className="border-t pt-6 first:border-t-0 first:pt-0">
-                            <QuestionItem
-                              // Pass the calculated number along with the question data
-                              question={{ ...question, hierarchical_number: hierarchicalNumber }}
-                              answer={answer} // Pass the correctly typed answer
-                              productSheetId={productSheet.id} // Pass PIR ID
-                              onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
-                              onAddComment={(text) => { if (answer) handleAddComment(answer.id, text); }}
-                              isReadOnly={isReadOnly()} // Pass read-only state based on PIR status
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                          return (
+                            <div key={question.id} className="border-t pt-6 first:border-t-0 first:pt-0">
+                              <QuestionItem
+                                // Pass the calculated number along with the question data
+                                question={{ ...question, hierarchical_number: hierarchicalNumber }}
+                                answer={answer} // Pass the correctly typed answer
+                                productSheetId={productSheet.id} // Pass PIR ID
+                                onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
+                                onAddComment={(text) => { if (answer) handleAddComment(answer.id, text); }}
+                                isReadOnly={isReadOnly()} // Pass read-only state based on PIR status
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>
