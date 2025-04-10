@@ -37,6 +37,7 @@ interface QuestionItemProps {
   productSheetId: string;
   onAnswerUpdate: (value: string | boolean | number | string[]) => void;
   onAddComment: (text: string) => void;
+  isReadOnly?: boolean;
 }
 
 const QuestionItem: React.FC<QuestionItemProps> = ({ 
@@ -44,7 +45,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   answer, 
   productSheetId,
   onAnswerUpdate,
-  onAddComment
+  onAddComment,
+  isReadOnly = false
 }) => {
   const [commentsOpen, setCommentsOpen] = React.useState(false);
   const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined); // Add type assertion
@@ -88,12 +90,14 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   }, [answer, form]);
   
   const onSubmit = (data: z.infer<typeof schema>) => {
-    if (data.answer !== undefined) {
+    if (data.answer !== undefined && !isReadOnly) {
       onAnswerUpdate(data.answer);
     }
   };
 
   const handleValueChange = (value: string | number | boolean | string[]) => {
+    if (isReadOnly) return; // Don't update if in read-only mode
+    
     form.setValue("answer", value);
 
     // Clear any existing timeout
@@ -140,6 +144,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             value={form.watch("answer") as string || ""} 
             onChange={(e) => handleValueChange(e.target.value)}
             placeholder="Type here..."
+            disabled={isReadOnly}
+            readOnly={isReadOnly}
           />
         );
       
@@ -150,6 +156,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             value={form.watch("answer") as number || ""} 
             onChange={(e) => handleValueChange(Number(e.target.value))}
             placeholder="Enter a number..."
+            disabled={isReadOnly}
+            readOnly={isReadOnly}
           />
         );
       
@@ -160,6 +168,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
               id={`question-${question.id}`} 
               checked={form.watch("answer") as boolean || false} 
               onCheckedChange={handleValueChange}
+              disabled={isReadOnly}
             />
             <label 
               htmlFor={`question-${question.id}`}
@@ -175,6 +184,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           <Select
             value={form.watch("answer") as string || ""}
             onValueChange={handleValueChange}
+            disabled={isReadOnly}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select an option" />
@@ -205,6 +215,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
                       handleValueChange(currentValues.filter(val => val !== option));
                     }
                   }}
+                  disabled={isReadOnly}
                 />
                 <label 
                   htmlFor={`question-${question.id}-${option}`}
@@ -224,6 +235,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             variant="outline" 
             className="w-full" 
             onClick={() => alert("File upload not implemented yet")}
+            disabled={isReadOnly}
           >
             Start upload
           </Button>
@@ -235,6 +247,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             value={form.watch("answer") as string || ""} 
             onChange={(e) => handleValueChange(e.target.value)}
             placeholder="Type here..."
+            disabled={isReadOnly}
+            readOnly={isReadOnly}
           />
         );
     }
@@ -249,11 +263,16 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             {question.text}
             {question.required && <span className="text-red-500 ml-1">*</span>}
           </h3>
-          <div className="flex gap-1 mt-1">
-            {question.tags.map((tag) => (
-              <TagBadge key={tag.id} tag={tag} size="sm" />
-            ))}
-          </div>
+          {question.description && (
+            <p className="text-sm text-muted-foreground mt-1">{question.description}</p>
+          )}
+          {question.tags && question.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {question.tags.map((tag) => (
+                <TagBadge key={tag.id} tag={tag} />
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-2">
           <span className="text-xs bg-secondary px-2 py-1 rounded capitalize">
@@ -271,15 +290,17 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             </Button>
           )}
           
-          <Button 
-            variant="ghost" 
-            size="sm"
-            className="text-muted-foreground" 
-            onClick={() => setCommentsOpen(!commentsOpen)}
-          >
-            <MessageCircle className="h-4 w-4 mr-1" />
-            {answer?.comments?.length || 0}
-          </Button>
+          {!isReadOnly && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              className="text-muted-foreground" 
+              onClick={() => setCommentsOpen(!commentsOpen)}
+            >
+              <MessageCircle className="h-4 w-4 mr-1" />
+              {answer?.comments?.length || 0}
+            </Button>
+          )}
         </div>
       </div>
       
@@ -288,7 +309,9 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>This answer has been flagged for revision</AlertTitle>
           <AlertDescription>
-            {latestFlag.comment}
+            <p className="mb-2">Feedback from reviewer:</p>
+            <p className="italic">"{latestFlag.comment}"</p>
+            <p className="mt-2 text-sm">Please update your answer based on this feedback and resubmit.</p>
           </AlertDescription>
         </Alert>
       )}
@@ -308,29 +331,34 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             )}
           />
           
-          <div className="flex justify-end">
-            <Button 
-              type="submit" 
-              variant="secondary" 
-              size="sm"
-            >
-              Save
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex justify-end">
+              <Button 
+                type="submit" 
+                variant="secondary" 
+                size="sm"
+              >
+                Save
+              </Button>
+            </div>
+          )}
         </form>
       </Form>
       
-      <Collapsible open={commentsOpen} onOpenChange={setCommentsOpen}>
-        <CollapsibleContent className="border-t pt-4 mt-4">
-          {answer && (
-            <CommentsThread 
-              comments={answer.comments || []} 
-              answerId={answer.id}
-              onAddComment={onAddComment}
-            />
-          )}
-        </CollapsibleContent>
-      </Collapsible>
+      {/* Comments section */}
+      {commentsOpen && answer && (
+        <div className="border-t pt-4 mt-4">
+          <CommentsThread 
+            comments={answer.comments || []} 
+            answerId={answer.id}
+            onAddComment={(id, text) => {
+              if (!isReadOnly) {
+                onAddComment(text);
+              }
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

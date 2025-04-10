@@ -11,7 +11,7 @@ import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/in
 import { PIRRequest } from "@/types/pir";
 import { Database } from "@/types/supabase"; // Import generated types
 import { Json } from '@/types/supabase'; // Import Json type
-type PIRStatus = Database['public']['Enums']['pir_status']; // Use generated enum
+import { PIRStatus, ResponseStatus, isValidPIRStatusTransition, isValidResponseStatusTransition } from '@/types/pir';
 type DBPIRResponse = Database['public']['Tables']['pir_responses']['Row']; // Use generated row type
 type DBFlag = Database['public']['Tables']['response_flags']['Row']; // Use generated row type for flags
 import QuestionItem from "@/components/supplierResponse/QuestionItem";
@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanstack/react-query';
 import { toast } from "sonner";
 import { useCompanyData } from '@/hooks/use-company-data'; // Import useCompanyData
+import { useUser } from '@/hooks/use-user';
 
 // Type for the combined PIR data fetched by the query
 interface PirDetails {
@@ -35,7 +36,7 @@ interface PirDetails {
             parent_section?: Database['public']['Tables']['question_sections']['Row']; // Parent section via parent_id
         };
     })[];
-    responses: DBPIRResponse[]; // Use generated response type
+    responses: (DBPIRResponse & { response_flags?: DBFlag[] })[]; // Include response_flags
 }
 
 // Type definition for DBQuestion
@@ -55,11 +56,130 @@ export type DBQuestion = {
 };
 // End DBQuestion definition
 
+// Define input type for the submit mutation
+type SubmitResponsesInput = {
+  pirId: string;
+  responses: { id: string; questionId: string; value: any; comments: string[] }[];
+};
+
+const useSubmitResponsesMutation = (
+    queryClient: ReturnType<typeof useQueryClient>,
+    navigate: ReturnType<typeof useNavigate>  // Add navigate function as a parameter
+): UseMutationResult<void, Error, SubmitResponsesInput> => {
+    return useMutation<void, Error, SubmitResponsesInput>({
+        mutationFn: async ({ pirId, responses }) => {
+            // 1. Validate current PIR status
+            const { data: currentPir, error: pirFetchError } = await supabase
+                .from('pir_requests')
+                .select('status')
+                .eq('id', pirId)
+                .single();
+
+            if (pirFetchError) {
+                throw new Error(`Could not verify PIR status: ${pirFetchError.message}`);
+            }
+            
+            const currentStatus = currentPir.status as PIRStatus;
+            if (currentStatus !== 'draft' && currentStatus !== 'flagged') {
+                throw new Error(`Cannot submit responses when PIR is in ${currentStatus} status. PIR must be in draft or flagged status.`);
+            }
+
+            // 2. Update all responses first
+            const responseUpdates = responses.map(response => ({
+                ...response,
+                status: 'submitted' as ResponseStatus,
+                submitted_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }));
+
+            const { error: responsesError } = await supabase
+                .from('pir_responses')
+                .upsert(responseUpdates);
+
+            if (responsesError) {
+                throw new Error(`Failed to update responses: ${responsesError.message}`);
+            }
+
+            // 3. If status was 'flagged', resolve all open flags
+            if (currentStatus === 'flagged') {
+                // Get all response IDs for this PIR
+                const responseIds = responses.map(r => r.id);
+                
+                // Update flags to be resolved
+                const { error: flagsError } = await supabase
+                    .from('response_flags')
+                    .update({
+                        status: 'resolved' as Database['public']['Enums']['flag_status'],
+                        resolved_at: new Date().toISOString()
+                    })
+                    .in('response_id', responseIds)
+                    .eq('status', 'open');
+                
+                if (flagsError) {
+                    console.warn(`Some flags could not be resolved: ${flagsError.message}`);
+                    // Continue despite error - we still want to update the PIR status
+                }
+            }
+
+            // 4. Update PIR status last - if this fails, responses are still valid
+            const { error: pirUpdateError } = await supabase
+                .from('pir_requests')
+                .update({
+                    status: 'submitted' as PIRStatus,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', pirId);
+
+            if (pirUpdateError) {
+                throw new Error(`Responses saved but failed to update PIR status: ${pirUpdateError.message}. Please try submitting again.`);
+            }
+        },
+        onSuccess: async (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['pirDetails', variables.pirId] });
+            queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
+            toast.success('Responses submitted successfully');
+
+            try {
+                const { data: updatedPirRecord, error: fetchError } = await supabase
+                    .from('pir_requests')
+                    .select('*, products(name), customer:companies!pir_requests_customer_id_fkey(name, contact_email)')
+                    .eq('id', variables.pirId)
+                    .single();
+
+                if (fetchError || !updatedPirRecord) {
+                    throw new Error('Failed to fetch updated PIR record for notification');
+                }
+
+                await supabase.functions.invoke('send-email', {
+                    body: {
+                        type: 'PIR_RESPONSE_SUBMITTED',
+                        record: updatedPirRecord,
+                    }
+                });
+
+                toast.info('Notification sent to customer about response submission.');
+            } catch (notificationError: any) {
+                console.error("Failed to send notification:", notificationError);
+                toast.warning('Responses submitted successfully, but notification failed to send.');
+            }
+            
+            // Navigate to "Our Products" page after successful submission
+            navigate('/our-products');
+        },
+        onError: (error) => {
+            toast.error(`Submission failed: ${error.message}`);
+        }
+    });
+};
+
 const SupplierResponseForm = () => {
   const { id: pirId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentCompany } = useCompanyData(); // Get current company context
+  const { user } = useUser();
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [comments, setComments] = useState<Record<string, string[]>>({});
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
@@ -149,10 +269,10 @@ const SupplierResponseForm = () => {
       } else {
           }
 
-      // Step 4: Fetch existing Responses for this PIR (to populate answers)
+      // Step 4: Fetch existing Responses for this PIR (to populate answers) with their flags
       const { data: responsesData, error: responsesError } = await supabase
           .from('pir_responses')
-          .select('*')
+          .select('*, response_flags(*)')
           .eq('pir_id', id);
 
       if (responsesError) throw new Error(`Failed to fetch existing PIR responses: ${responsesError.message}`);
@@ -167,7 +287,7 @@ const SupplierResponseForm = () => {
           customer: pirData.customer as Company | null,
           tags: pirTags, // PIR-specific tags
           questions: questions, // Questions fetched via PIR tags
-          responses: (responsesData || []) as DBPIRResponse[], // Existing responses
+          responses: (responsesData || []) as (DBPIRResponse & { response_flags?: DBFlag[] })[], // Existing responses with flags
       };
   };
 
@@ -236,7 +356,7 @@ const SupplierResponseForm = () => {
         questionId: response.question_id!,
         value: response.answer as any, // Map 'answer' (Json) to 'value'
         comments: [], // Map to empty array - Fetch actual comments if needed
-        // flags: [], // Flags are not part of SupplierResponse type
+        flags: response.response_flags || [], // Include flags
     } as SupplierResponse; // Use SupplierResponse type from @/types
     return acc;
   }, {} as Record<string, SupplierResponse>);
@@ -276,106 +396,32 @@ const SupplierResponseForm = () => {
     },
   });
 
-  // Define input type for the submit mutation
-  type SubmitPirInput = {
-    pirId: string;
-    customerEmail?: string | null;
-    supplierName?: string | null;
-    productName?: string | null;
-    // Add any other data needed for notification
-  };
+  const submitResponsesMutation = useSubmitResponsesMutation(queryClient, navigate);
 
-  const submitPirMutation = useMutation({
-    mutationFn: async (input: SubmitPirInput) => { // Use the input type
-      if (!input.pirId) throw new Error("PIR ID is missing");
-
-      const updates = {
-        status: 'submitted' as PIRStatus, // Cast to the enum type
-        // removed submitted_at as the column doesn't exist
-      };
-
-      console.log('[Submit PIR Mutation] Attempting update with:', updates);
-      const { error } = await supabase
-        .from('pir_requests')
-        .update(updates)
-        .eq('id', input.pirId); // Use pirId from input
-      console.log('[Submit PIR Mutation] Update result error:', error);
-
-      if (error) throw error;
-      return { ...input }; // Return input data for onSuccess
-    },
-    onSuccess: async (data) => { // Make async
-      toast.success(`PIR Response submitted successfully!`);
-
-      // --- Add Logging ---
-      console.log(`[Submit PIR Success] PIR ID: ${data.pirId}, Invalidating query key: ['incomingPirs', ${currentCompany?.id}]`);
-      // --- End Logging ---
-
-      queryClient.invalidateQueries({ queryKey: ['pirDetails', data.pirId] }); // Invalidate details for this form
-      queryClient.invalidateQueries({ queryKey: ['incomingPirs', currentCompany?.id] }); // Invalidate the specific list query for the current company
-
-      // --- Send Email Notification to Customer via Edge Function ---
-      try {
-        // Fetch the updated PIR record to pass to the function
-        // Ensure all fields needed by the edge function's getCompanyDetails/getProductName are selected
-        const { data: updatedPirRecord, error: fetchError } = await supabase
-            .from('pir_requests')
-            .select('*, products(name)') // Select needed fields + product name
-            .eq('id', data.pirId)
-            .single();
-
-        if (fetchError || !updatedPirRecord) {
-            throw new Error(`Failed to fetch updated PIR record: ${fetchError?.message || 'Not found'}`);
-        }
-
-        // Construct the payload expected by the 'send-email' function
-        const payload = {
-            type: 'PIR_STATUS_UPDATE',
-            record: updatedPirRecord, // Pass the full updated record
-            // old_record might be useful here if the function handles transitions
-        };
-
-        // Invoke the Edge Function
-        const { error: functionError } = await supabase.functions.invoke(
-            'send-email', // Use the correct function name
-            { body: payload }
-        );
-
-        if (functionError) {
-            throw functionError;
-        }
-        // Success toast can be generic or removed if function handles it
-        toast.info(`Notification process initiated for PIR ${data.pirId}.`);
-
-      } catch (notificationError: any) {
-        console.error("Failed to send PIR submission notification:", notificationError);
-        toast.error(`Response submitted, but failed to send notification: ${notificationError.message}`);
-      }
-      // --- End Send Email Notification ---
-
-      navigate('/our-products'); // Navigate back to the supplier's product/request list page
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to submit PIR: ${error.message}`);
-    },
-  });
-
-
-  // --- Event Handlers ---
-  // Updated handler to use the submit mutation
-  const handleSubmit = () => {
-    // Optional: Add validation here
-    if (!pirDetails) {
-      toast.error("PIR details not loaded yet.");
-      return;
+  const handleSubmit = async () => {
+    if (!user) {
+        toast.error("You must be logged in to submit responses");
+        return;
     }
-    submitPirMutation.mutate({
-      pirId: pirId!,
-      customerEmail: pirDetails.customer?.contact_email,
-      supplierName: pirDetails.supplier?.name,
-      productName: pirDetails.product?.name,
+
+    if (!pirId) {
+        toast.error("Missing PIR ID");
+        return;
+    }
+
+    const responsesToSubmit = Object.entries(answers).map(([questionId, value]) => ({
+        id: `${pirId}_${questionId}`, // Composite key
+        questionId,
+        value,
+        comments: comments[questionId] || []
+    }));
+
+    submitResponsesMutation.mutate({
+        pirId,
+        responses: responsesToSubmit
     });
   };
+
   const handleSaveAsDraft = () => { toast.info("Save as Draft functionality not fully implemented."); };
   // Updated handler to use the mutation
   const handleAnswerUpdate = (questionId: string, value: any) => {
@@ -430,6 +476,7 @@ const SupplierResponseForm = () => {
     // Example logic - adjust based on actual workflow
     if (productSheet.status === "draft" && completionRate > 0) return "Draft (In Progress)";
     if (productSheet.status === "submitted") return "Submitted (Pending Review)";
+    if (productSheet.status === "flagged") return "Revisions Required";
     return productSheet.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
   const getStatusColorClass = (): string => {
@@ -446,6 +493,13 @@ const SupplierResponseForm = () => {
   };
   // --- End Status Logic ---
 
+  // Get status from productSheet and add a helper to check if form should be read-only
+  const isReadOnly = (): boolean => {
+    if (!productSheet) return false;
+    // Form is read-only when status is 'submitted', 'in_review', 'approved', or 'rejected'
+    // 'flagged' status should keep the form editable
+    return ['submitted', 'in_review', 'approved', 'rejected'].includes(productSheet.status);
+  };
 
   // --- Render Logic ---
   if (isLoadingPir) { return <div className="p-12 text-center">Loading PIR details...</div>; }
@@ -460,13 +514,23 @@ const SupplierResponseForm = () => {
       <PageHeader
         title={pageTitle}
         description={`Requested by: ${requester?.name || 'Unknown'}`}
-        actions={(
+        actions={!isReadOnly() ? (
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
             <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit}> Submit Response </Button>
           </div>
-        )}
+        ) : undefined}
       />
+
+      {productSheet?.status === 'flagged' && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-md">
+          <h3 className="font-medium mb-1">Revisions Required</h3>
+          <p>
+            Some of your answers need revision. Please look for the flagged answers below,
+            make the necessary changes, and resubmit your response.
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -559,6 +623,7 @@ const SupplierResponseForm = () => {
                               productSheetId={productSheet.id} // Pass PIR ID
                               onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
                               onAddComment={(text) => { if (answer) handleAddComment(answer.id, text); }}
+                              isReadOnly={isReadOnly()} // Pass read-only state based on PIR status
                             />
                           </div>
                         );
@@ -574,10 +639,12 @@ const SupplierResponseForm = () => {
 
       <div className="flex justify-between pt-4">
          <Button variant="outline" onClick={() => navigate(-1)}> Cancel </Button>
-        <div className="space-x-2">
-          <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
-          <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit}> Submit Response </Button>
-        </div>
+        {!isReadOnly() && (
+          <div className="space-x-2">
+            <Button variant="outline" onClick={handleSaveAsDraft}> Save as Draft </Button>
+            <Button className="bg-brand hover:bg-brand-700" onClick={handleSubmit}> Submit Response </Button>
+          </div>
+        )}
       </div>
     </div>
   );

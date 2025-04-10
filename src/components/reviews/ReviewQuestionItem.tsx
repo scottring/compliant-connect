@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Question, SupplierResponse } from "../../types/index"; // Use relative path
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,7 @@ interface ReviewQuestionItemProps {
   onApprove: () => void;
   onFlag: (note: string) => void;
   onUpdateNote: (note: string) => void;
+  isLocked: boolean; // Add prop to disable controls when PIR is approved
   // isPreviouslyFlagged?: boolean; // This will be derived internally now
 }
 
@@ -44,6 +44,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onApprove,
   onFlag,
   onUpdateNote,
+  isLocked, // Receive the isLocked prop
   // isPreviouslyFlagged = false, // Removed from props
 }) => {
   console.log(`ReviewQuestionItem Props for Q:${question.id}`, { question, answer, status, note }); // Re-add log
@@ -208,39 +209,43 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 value={note}
                 onChange={(e) => onUpdateNote(e.target.value)}
                 className="min-h-[80px]"
+                disabled={isLocked} // Disable textarea if locked
               />
             </div>
-            <div className="flex flex-col space-y-2">
-              <Button 
-                variant="outline" 
-                className="border-green-500 text-green-700 hover:bg-green-50"
-                onClick={onApprove}
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                {(answer?.flags && answer.flags.length > 0) ? "Resolve" : "Approve"}
-              </Button>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button 
-                        variant="outline" 
-                        className="border-red-500 text-red-700 hover:bg-red-50"
-                        onClick={handleSubmitFlag}
-                        disabled={!note.trim()}
-                      >
-                        <Flag className="mr-2 h-4 w-4" />
-                        {(answer?.flags && answer.flags.length > 0) ? "Flag Again" : "Flag"}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Please add a note before flagging</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+            {/* Only show approve/reject buttons if not locked */}
+            {!isLocked && (
+              <div className="flex flex-col space-y-2">
+                <Button 
+                  variant="outline" 
+                  className="border-green-500 text-green-700 hover:bg-green-50"
+                  onClick={onApprove}
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  {(answer?.flags && answer.flags.length > 0) ? "Resolve" : "Approve"}
+                </Button>
+                
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button 
+                          variant="outline" 
+                          className="border-red-500 text-red-700 hover:bg-red-50"
+                          onClick={handleSubmitFlag}
+                          disabled={!note.trim()} // Disable flag button if no note
+                        >
+                          <Flag className="mr-2 h-4 w-4" />
+                          {(answer?.flags && answer.flags.length > 0) ? "Flag Again" : "Flag"}
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Please add a note before flagging</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )}
           </div>
         )}
       </div>

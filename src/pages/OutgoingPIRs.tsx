@@ -26,7 +26,7 @@ interface PirRequestRecord {
   products: { name: string; } | null;
   companies: { name: string; } | null; // Assuming direct relation for supplier name if product join fails
   pir_tags: { tags: { id: string; name: string; } | null }[]; // Fetch tags via join
-  supplier_responses: { id: string, question_id: string }[]; // Fetch response IDs to count answers
+  pir_responses: { id: string, question_id: string }[]; // Fetch response IDs to count answers
 }
 
 
@@ -45,9 +45,9 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
       .select(`
         id, customer_id, supplier_company_id, product_id, updated_at, status,
         products ( name ),
-        companies ( name ),
+        companies!pir_requests_supplier_company_id_fkey ( name ),
         pir_tags ( tags ( id, name ) ),
-        supplier_responses ( id, question_id )
+        pir_responses ( id, question_id )
       `)
       .eq('customer_id', customerId);
 
@@ -63,7 +63,7 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
       // Use direct company join for supplier name as fallback
       const supplierName = pir.companies?.name ?? 'Unknown Supplier';
       const tags = (pir.pir_tags?.map((pt: any) => pt.tags).filter(Boolean) || []) as { id: string; name: string }[];
-      const responses = (pir.supplier_responses || []) as { id: string, question_id: string }[];
+      const responses = (pir.pir_responses || []) as { id: string, question_id: string }[];
 
       return {
         id: pir.id,

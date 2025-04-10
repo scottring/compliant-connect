@@ -30,7 +30,7 @@ interface PirDisplayData {
   status: PIRStatus;
 }
 
-// Define the database record type for the query result - Adjusted for potential arrays
+// Define the database record type for the query result
 interface PirRequestRecord {
   id: string;
   customer_id: string;
@@ -38,7 +38,8 @@ interface PirRequestRecord {
   updated_at: string;
   status: PIRStatus;
   suggested_product_name: string | null; // Fetch suggested name
-  products: { // products might be an object or null
+  product: { // Renamed from 'products' to match the join alias
+    id: string; // Include id if needed
     name: string;
   } | null;
   // Removed supplier join, so remove supplier property from record type
@@ -75,10 +76,11 @@ const SupplierProducts = () => {
         updated_at,
         status,
         suggested_product_name,
-        products (
+        product:products!pir_requests_product_id_fkey (
+          id,
           name
         )
-      `) // Removed supplier join to fetch separately
+      `) // Join products table using the foreign key
       .eq('customer_id', customerId)
       .returns<PirRequestRecord[]>(); // Add .returns<Type>()
 
@@ -108,8 +110,9 @@ const SupplierProducts = () => {
     }
 
     // Transform data, mapping supplier names
-    const transformedPirs: PirDisplayData[] = pirData.map((pir: any) => {
-      const productName = pir.suggested_product_name ?? pir.products?.name ?? 'Unknown Product';
+    const transformedPirs: PirDisplayData[] = pirData.map((pir: PirRequestRecord) => { // Use correct type
+      // Prioritize linked product name, then suggested name
+      const productName = pir.product?.name ?? pir.suggested_product_name ?? 'Unknown Product';
       const supplierName = supplierMap.get(pir.supplier_company_id) ?? 'Unknown Supplier'; // Get name from map
 
       return {
@@ -119,7 +122,7 @@ const SupplierProducts = () => {
         supplierName: supplierName, // Use fetched name
         customerId: pir.customer_id,
         updatedAt: pir.updated_at,
-        status: pir.status || 'draft'
+        status: pir.status || 'draft' // Ensure status has a default
       };
     });
 
@@ -252,17 +255,18 @@ const SupplierProducts = () => {
                     </span>
                   </TableCell>
                   <TableCell>
-                    {/* Action Button Logic for Supplier View */}
+                    {/* Action Button Logic for Customer View */}
                     <Button
                       onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
                       size="sm"
-                      variant={ (pir.status === 'draft' || pir.status === 'in_review') ? 'default' : 'outline' }
-                      disabled={ pir.status === 'submitted' || pir.status === 'approved' || pir.status === 'flagged' } // Disable if submitted, approved, or flagged
-                      className={ (pir.status === 'draft' || pir.status === 'in_review') ? "bg-brand hover:bg-brand/90 text-white" : "" }
+                      variant={ (pir.status === 'submitted' || pir.status === 'flagged') ? 'default' : 'outline' } // Default variant for review actions
+                      // No need to disable, customer should always be able to view or review
+                      // className adjusted for review state
+                      className={ (pir.status === 'submitted' || pir.status === 'flagged') ? "bg-brand hover:bg-brand/90 text-white" : "" }
                     >
-                      { (pir.status === 'draft' || pir.status === 'in_review') ? (
+                      { (pir.status === 'submitted' || pir.status === 'flagged') ? (
                         <>
-                          <ClipboardCheck className="h-4 w-4 mr-2" /> Respond
+                          <ClipboardCheck className="h-4 w-4 mr-2" /> Review
                         </>
                       ) : (
                         <>
