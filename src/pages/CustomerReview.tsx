@@ -96,6 +96,46 @@ const useSubmitReviewMutation = (
                     .update({ status: 'in_review' as PIRStatus })
                     .eq('id', pirId);
                 if (statusError) throw new Error(`Failed to update PIR to in_review: ${statusError.message}`);
+                
+                // Send notification for in_review status
+                try {
+                    console.log("Fetching PIR record for in_review notification...");
+                    const { data: updatedPirRecord, error: fetchError } = await supabase
+                        .from('pir_requests')
+                        .select(`
+                            *,
+                            products(name),
+                            supplier:companies!pir_requests_supplier_company_id_fkey(name, contact_email),
+                            customer:companies!pir_requests_customer_id_fkey(name, contact_email)
+                        `)
+                        .eq('id', pirId)
+                        .single();
+
+                    if (fetchError || !updatedPirRecord) {
+                        console.error(`Failed to fetch PIR record for in_review notification: ${fetchError?.message || 'Not found'}`);
+                    } else {
+                        console.log("Sending notification for in_review status:", updatedPirRecord);
+                        const { data, error: functionError } = await supabase.functions.invoke(
+                            'send-email',
+                            {
+                                body: {
+                                    type: 'PIR_STATUS_UPDATE',
+                                    record: updatedPirRecord,
+                                }
+                            }
+                        );
+
+                        if (functionError) {
+                            console.error("Error sending in_review notification:", functionError);
+                        } else {
+                            console.log("In-review notification sent successfully:", data);
+                        }
+                    }
+                } catch (notificationError: any) {
+                    console.error("Failed to send in_review notification:", notificationError);
+                    console.error("Notification error details:", notificationError.stack || JSON.stringify(notificationError));
+                    // Don't throw here, continue with the review process
+                }
             }
 
             // Process each response
@@ -155,9 +195,15 @@ const useSubmitReviewMutation = (
 
             try {
                 // Fetch the updated PIR record for notification
+                console.log("Fetching PIR record for completion notification...");
                 const { data: updatedPirRecord, error: fetchError } = await supabase
                     .from('pir_requests')
-                    .select('*, products(name)')
+                    .select(`
+                        *,
+                        products(name),
+                        supplier:companies!pir_requests_supplier_company_id_fkey(name, contact_email),
+                        customer:companies!pir_requests_customer_id_fkey(name, contact_email)
+                    `)
                     .eq('id', variables.pirId)
                     .single();
 
@@ -165,11 +211,12 @@ const useSubmitReviewMutation = (
                     throw new Error(`Failed to fetch updated PIR record for notification: ${fetchError?.message || 'Not found'}`);
                 }
 
-                const { error: functionError } = await supabase.functions.invoke(
+                console.log("Sending completion notification with status:", updatedPirRecord.status);
+                const { data: funcData, error: functionError } = await supabase.functions.invoke(
                     'send-email',
                     {
                         body: {
-                            type: 'PIR_STATUS_UPDATE',
+                            type: 'REVIEW_COMPLETED',
                             record: updatedPirRecord,
                         }
                     }
@@ -178,10 +225,13 @@ const useSubmitReviewMutation = (
                 if (functionError) {
                     throw functionError;
                 }
+
+                console.log("Completion notification sent successfully:", funcData);
                 toast.info(`Notification sent to supplier about review completion.`);
 
             } catch (notificationError: any) {
                 console.error("Failed to send PIR review notification:", notificationError);
+                console.error("Notification error details:", notificationError.stack || JSON.stringify(notificationError));
                 toast.error(`Review submitted, but failed to send notification: ${notificationError.message}`);
             }
         },

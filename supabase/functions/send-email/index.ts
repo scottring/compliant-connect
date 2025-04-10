@@ -73,6 +73,9 @@ serve(async (req)=>{
   try {
     let msg = null;
     const appUrl = Deno.env.get("SITE_URL") || "http://localhost:8080"; // Get base URL
+    console.log("Processing payload type:", payload.type);
+    console.log("SITE_URL from environment:", appUrl);
+    
     // --- Handle PIR Status Updates (Triggered by Webhook or Frontend) ---
     if (payload.type === 'PIR_STATUS_UPDATE') {
       // Ensure record exists in payload
@@ -80,11 +83,9 @@ serve(async (req)=>{
       const { record, old_record } = payload; // old_record might be null if triggered from frontend
       const newStatus = record.status;
       const oldStatus = old_record?.status;
-      // Avoid sending email if status hasn't changed relevantly (optional, depends on trigger source)
-      // if (newStatus === oldStatus && old_record) { // Only skip if old_record exists and status is same
-      //   console.log("Status unchanged, skipping email.");
-      //   return new Response("OK: Status unchanged", { status: 200, headers: corsHeaders });
-      // }
+      
+      console.log(`Processing PIR status update from ${oldStatus || 'unknown'} to ${newStatus}`);
+      
       const productName = await getProductName(record.product_id, record.suggested_product_name);
       const customerDetails = await getCompanyDetails(record.customer_id);
       const supplierDetails = await getCompanyDetails(record.supplier_company_id);
@@ -121,6 +122,18 @@ serve(async (req)=>{
             console.warn(`No customer email found for PIR ${pirId}`);
           }
           break;
+        case 'in_review':
+          if (supplierEmail) {
+            msg = {
+              to: supplierEmail,
+              from: senderEmail,
+              subject: `Your PIR Response for ${productName} is Being Reviewed`,
+              html: `<p>Hello ${supplierName},</p><p>Your response for the Product Information Request regarding <strong>${productName}</strong> is currently being reviewed by <strong>${customerName}</strong>.</p><p>You will receive another notification when the review is complete.</p><p>Thank you,<br/>CompliantConnect</p>`
+            };
+          } else {
+            console.warn(`No supplier email found for PIR ${pirId}`);
+          }
+          break;
         case 'flagged':
           if (supplierEmail) {
             msg = {
@@ -149,6 +162,66 @@ serve(async (req)=>{
         default:
           console.log(`No email notification configured for status update to: ${newStatus}`);
       }
+    } else if (payload.type === 'PIR_RESPONSE_SUBMITTED') {
+      console.log("Handling PIR_RESPONSE_SUBMITTED type");
+      // Handle direct response submission notifications (when supplier submits a response)
+      if (!payload.record) throw new Error("Missing 'record' field for PIR_RESPONSE_SUBMITTED");
+      const record = payload.record;
+      
+      console.log("PIR record:", JSON.stringify(record));
+      
+      // If we have direct access to nested customer data (from a join), use it
+      // Otherwise, fetch it separately
+      let customerDetails;
+      if (record.customer?.name && record.customer?.contact_email) {
+        console.log("Using customer data from nested join");
+        customerDetails = record.customer;
+      } else {
+        console.log("Fetching customer details from customer_id");
+        customerDetails = await getCompanyDetails(record.customer_id);
+      }
+      
+      // Similar for supplier data
+      let supplierDetails;
+      if (record.supplier?.name) {
+        console.log("Using supplier data from nested join");
+        supplierDetails = record.supplier;
+      } else {
+        console.log("Fetching supplier details from supplier_company_id");
+        supplierDetails = await getCompanyDetails(record.supplier_company_id);
+      }
+      
+      // Similar for product name
+      let productName;
+      if (record.products?.name) {
+        console.log("Using product name from nested join");
+        productName = record.products.name;
+      } else {
+        console.log("Fetching product name or using suggested name");
+        productName = await getProductName(record.product_id, record.suggested_product_name);
+      }
+      
+      console.log("Product name:", productName);
+      console.log("Customer details:", JSON.stringify(customerDetails));
+      console.log("Supplier details:", JSON.stringify(supplierDetails));
+      
+      const customerName = customerDetails?.name ?? 'Your Customer';
+      const supplierName = supplierDetails?.name ?? 'Your Supplier';
+      const customerEmail = customerDetails?.contact_email;
+      const pirId = record.id;
+      const reviewLink = `${appUrl}/customer-review/${pirId}`;
+      
+      if (customerEmail) {
+        console.log(`Sending response submission notification to customer: ${customerEmail}`);
+        msg = {
+          to: customerEmail,
+          from: senderEmail,
+          subject: `PIR Response Submitted by ${supplierName} for ${productName}`,
+          html: `<p>Hello ${customerName},</p><p><strong>${supplierName}</strong> has submitted their response for the Product Information Request regarding <strong>${productName}</strong>.</p><p>Please click the link below to review their submission:</p><p><a href="${reviewLink}">${reviewLink}</a></p><p>Thank you,<br/>CompliantConnect</p>`
+        };
+      } else {
+        console.warn(`No customer email found for PIR ${pirId}`);
+      }
     } else if (payload.type === 'SUPPLIER_INVITATION') {
       // Ensure data field exists
       if (!payload.data) throw new Error("Missing 'data' field for SUPPLIER_INVITATION");
@@ -160,6 +233,83 @@ serve(async (req)=>{
         subject: `Invitation to join ${inviter_company_name} on CompliantConnect`,
         html: `<p>Hello,</p><p><strong>${inviter_name}</strong> from <strong>${inviter_company_name}</strong> has invited you to collaborate on product compliance information using CompliantConnect.</p><p>Please click the link below to sign up or log in:</p><p><a href="${signupLink}">${signupLink}</a></p><p>Thank you,<br/>The CompliantConnect Team</p>`
       };
+    } else if (payload.type === 'REVIEW_COMPLETED') {
+      // Handle customer review completion notification (when a customer completes their review)
+      console.log("Handling REVIEW_COMPLETED type");
+      if (!payload.record) throw new Error("Missing 'record' field for REVIEW_COMPLETED");
+      const record = payload.record;
+      
+      console.log("PIR record:", JSON.stringify(record));
+      
+      // If we have direct access to nested data, use it
+      // Otherwise, fetch it separately
+      let customerDetails;
+      if (record.customer?.name) {
+        console.log("Using customer data from nested join");
+        customerDetails = record.customer;
+      } else {
+        console.log("Fetching customer details from customer_id");
+        customerDetails = await getCompanyDetails(record.customer_id);
+      }
+      
+      let supplierDetails;
+      if (record.supplier?.name) {
+        console.log("Using supplier data from nested join");
+        supplierDetails = record.supplier;
+      } else {
+        console.log("Fetching supplier details from supplier_company_id");
+        supplierDetails = await getCompanyDetails(record.supplier_company_id);
+      }
+      
+      let productName;
+      if (record.products?.name) {
+        console.log("Using product name from nested join");
+        productName = record.products.name;
+      } else {
+        console.log("Fetching product name or using suggested name");
+        productName = await getProductName(record.product_id, record.suggested_product_name);
+      }
+      
+      console.log("Product name:", productName);
+      console.log("Customer details:", JSON.stringify(customerDetails));
+      console.log("Supplier details:", JSON.stringify(supplierDetails));
+      
+      const customerName = customerDetails?.name ?? 'Your Customer';
+      const supplierName = supplierDetails?.name ?? 'Your Supplier';
+      const supplierEmail = supplierDetails?.contact_email;
+      const pirId = record.id;
+      const pirStatus = record.status;
+      const responseLink = `${appUrl}/supplier-response-form/${pirId}`;
+      
+      if (supplierEmail) {
+        console.log(`Sending review completion notification to supplier: ${supplierEmail}`);
+        
+        let emailSubject = '';
+        let emailContent = '';
+        
+        if (pirStatus === 'approved') {
+          emailSubject = `Your PIR Response for ${productName} has been Approved`;
+          emailContent = `<p>Hello ${supplierName},</p><p>Your response for the Product Information Request regarding <strong>${productName}</strong> has been reviewed and approved by <strong>${customerName}</strong>.</p><p>No further action is required at this time.</p><p>Thank you,<br/>CompliantConnect</p>`;
+        } else if (pirStatus === 'flagged') {
+          emailSubject = `Your PIR Response for ${productName} Needs Revision`;
+          emailContent = `<p>Hello ${supplierName},</p><p>Your response for the Product Information Request regarding <strong>${productName}</strong> has been reviewed by <strong>${customerName}</strong>, and some items require revision.</p><p>Please click the link below to view the feedback and update your response:</p><p><a href="${responseLink}">${responseLink}</a></p><p>Thank you,<br/>CompliantConnect</p>`;
+        } else if (pirStatus === 'submitted') {
+          emailSubject = `Your PIR Response for ${productName} is Being Reviewed`;
+          emailContent = `<p>Hello ${supplierName},</p><p>Your response for the Product Information Request regarding <strong>${productName}</strong> is currently being reviewed by <strong>${customerName}</strong>.</p><p>You will receive another notification when the review is complete.</p><p>Thank you,<br/>CompliantConnect</p>`;
+        } else {
+          emailSubject = `Your PIR Response for ${productName} has been Reviewed`;
+          emailContent = `<p>Hello ${supplierName},</p><p>Your response for the Product Information Request regarding <strong>${productName}</strong> has been reviewed by <strong>${customerName}</strong>.</p><p>Please click the link below to view the review status:</p><p><a href="${responseLink}">${responseLink}</a></p><p>Thank you,<br/>CompliantConnect</p>`;
+        }
+        
+        msg = {
+          to: supplierEmail,
+          from: senderEmail,
+          subject: emailSubject,
+          html: emailContent
+        };
+      } else {
+        console.warn(`No supplier email found for PIR ${pirId}`);
+      }
     } else {
       console.warn("Unknown payload type received:", payload.type);
     }
