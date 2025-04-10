@@ -49,7 +49,7 @@ const QuestionBank = () => {
     }
   };
 
-  const filteredQuestions = questions.filter((question) => {
+  const filteredQuestions = (questions || []).filter((question) => {
     const matchesSearch =
       searchTerm === "" ||
       question.text.toLowerCase().includes(searchTerm.toLowerCase());

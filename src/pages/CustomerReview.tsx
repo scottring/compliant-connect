@@ -557,7 +557,7 @@ const CustomerReview = () => {
         supplierEmail: pirDetails.supplier?.contact_email,
         customerName: pirDetails.customer?.name,
         productName: pirDetails.product?.name,
-    }, { onSuccess: () => { navigate("/product-sheets"); } }); // Keep existing navigation on success
+    }, { onSuccess: () => { navigate("/supplier-products"); } }); // Updated navigation destination
   };
   // --- End Event Handlers ---
 
