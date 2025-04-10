@@ -294,18 +294,25 @@ const SupplierResponseForm = () => {
         // removed submitted_at as the column doesn't exist
       };
 
+      console.log('[Submit PIR Mutation] Attempting update with:', updates);
       const { error } = await supabase
         .from('pir_requests')
         .update(updates)
         .eq('id', input.pirId); // Use pirId from input
+      console.log('[Submit PIR Mutation] Update result error:', error);
 
       if (error) throw error;
       return { ...input }; // Return input data for onSuccess
     },
     onSuccess: async (data) => { // Make async
       toast.success(`PIR Response submitted successfully!`);
-      queryClient.invalidateQueries({ queryKey: ['pirDetails', data.pirId] });
-      // queryClient.invalidateQueries({ queryKey: ['pirList'] }); // Consider invalidating list if needed
+
+      // --- Add Logging ---
+      console.log(`[Submit PIR Success] PIR ID: ${data.pirId}, Invalidating query key: ['incomingPirs', ${currentCompany?.id}]`);
+      // --- End Logging ---
+
+      queryClient.invalidateQueries({ queryKey: ['pirDetails', data.pirId] }); // Invalidate details for this form
+      queryClient.invalidateQueries({ queryKey: ['incomingPirs', currentCompany?.id] }); // Invalidate the specific list query for the current company
 
       // --- Send Email Notification to Customer via Edge Function ---
       try {
@@ -346,7 +353,7 @@ const SupplierResponseForm = () => {
       }
       // --- End Send Email Notification ---
 
-      navigate('/our-products'); // Navigate after success/notification attempt
+      navigate('/our-products'); // Navigate back to the supplier's product/request list page
     },
     onError: (error: Error) => {
       toast.error(`Failed to submit PIR: ${error.message}`);
