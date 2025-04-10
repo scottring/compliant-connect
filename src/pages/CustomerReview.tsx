@@ -85,57 +85,71 @@ const useSubmitReviewMutation = (
             if (pirFetchError) throw new Error(`Failed to fetch current PIR status: ${pirFetchError.message}`);
             
             const currentStatus = currentPir.status as PIRStatus;
-            if (currentStatus !== 'submitted' && currentStatus !== 'flagged') {
-                throw new Error(`Invalid PIR status for review: ${currentStatus}`);
+            console.log("Current PIR status before update:", currentStatus);
+            
+            if (currentStatus !== 'submitted' && currentStatus !== 'flagged' && currentStatus !== 'in_review') {
+                throw new Error(`Cannot review PIR with status: ${currentStatus}`);
             }
 
-            // Update PIR to 'in_review' first
-            if (currentStatus === 'submitted') {
-                const { error: statusError } = await supabase
-                    .from('pir_requests')
-                    .update({ status: 'in_review' as PIRStatus })
-                    .eq('id', pirId);
-                if (statusError) throw new Error(`Failed to update PIR to in_review: ${statusError.message}`);
+            // Always update PIR to 'in_review' during processing
+            console.log(`[DEBUG] CustomerReview: Attempting to update PIR ${pirId} status from ${currentStatus} to 'in_review'`);
+            const { error: statusError } = await supabase
+                .from('pir_requests')
+                .update({ 
+                    status: 'in_review' as PIRStatus,
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', pirId);
                 
-                // Send notification for in_review status
-                try {
-                    console.log("Fetching PIR record for in_review notification...");
-                    const { data: updatedPirRecord, error: fetchError } = await supabase
-                        .from('pir_requests')
-                        .select(`
-                            *,
-                            products(name),
-                            supplier:companies!pir_requests_supplier_company_id_fkey(name, contact_email),
-                            customer:companies!pir_requests_customer_id_fkey(name, contact_email)
-                        `)
-                        .eq('id', pirId)
-                        .single();
+            if (statusError) throw new Error(`Failed to update PIR to in_review: ${statusError.message}`);
+            
+            // Verify the status was updated
+            const { data: verifyUpdate, error: verifyError } = await supabase
+                .from('pir_requests')
+                .select('status')
+                .eq('id', pirId)
+                .single();
+                
+            console.log(`[DEBUG] CustomerReview: Verified PIR ${pirId} status after initial update: ${verifyUpdate?.status} (Error: ${verifyError?.message})`);
+            
+            // Send notification for in_review status
+            try {
+                console.log("Fetching PIR record for in_review notification...");
+                const { data: updatedPirRecord, error: fetchError } = await supabase
+                    .from('pir_requests')
+                    .select(`
+                        *,
+                        products(name),
+                        supplier:companies!pir_requests_supplier_company_id_fkey(name, contact_email),
+                        customer:companies!pir_requests_customer_id_fkey(name, contact_email)
+                    `)
+                    .eq('id', pirId)
+                    .single();
 
-                    if (fetchError || !updatedPirRecord) {
-                        console.error(`Failed to fetch PIR record for in_review notification: ${fetchError?.message || 'Not found'}`);
-                    } else {
-                        console.log("Sending notification for in_review status:", updatedPirRecord);
-                        const { data, error: functionError } = await supabase.functions.invoke(
-                            'send-email',
-                            {
-                                body: {
-                                    type: 'PIR_STATUS_UPDATE',
-                                    record: updatedPirRecord,
-                                }
+                if (fetchError || !updatedPirRecord) {
+                    console.error(`Failed to fetch PIR record for in_review notification: ${fetchError?.message || 'Not found'}`);
+                } else {
+                    console.log("Sending notification for in_review status:", updatedPirRecord);
+                    const { data, error: functionError } = await supabase.functions.invoke(
+                        'send-email',
+                        {
+                            body: {
+                                type: 'PIR_STATUS_UPDATE',
+                                record: updatedPirRecord,
                             }
-                        );
-
-                        if (functionError) {
-                            console.error("Error sending in_review notification:", functionError);
-                        } else {
-                            console.log("In-review notification sent successfully:", data);
                         }
+                    );
+
+                    if (functionError) {
+                        console.error("Error sending in_review notification:", functionError);
+                    } else {
+                        console.log("In-review notification sent successfully:", data);
                     }
-                } catch (notificationError: any) {
-                    console.error("Failed to send in_review notification:", notificationError);
-                    console.error("Notification error details:", notificationError.stack || JSON.stringify(notificationError));
-                    // Don't throw here, continue with the review process
                 }
+            } catch (notificationError: any) {
+                console.error("Failed to send in_review notification:", notificationError);
+                console.error("Notification error details:", notificationError.stack || JSON.stringify(notificationError));
+                // Don't throw here, continue with the review process
             }
 
             // Process each response
@@ -180,22 +194,38 @@ const useSubmitReviewMutation = (
                 updatePayload.product_id = productId;
             }
 
+            console.log(`[DEBUG] CustomerReview: Attempting to update PIR ${pirId} to final status: ${finalStatus}`, "with payload:", updatePayload);
+            
             const { error: pirUpdateError } = await supabase
                 .from('pir_requests')
                 .update(updatePayload)
                 .eq('id', pirId);
             if (pirUpdateError) throw new Error(`Failed to update PIR status: ${pirUpdateError.message}`);
 
+            // Verify the final status update
+            const { data: finalStatusCheck, error: finalCheckError } = await supabase
+                .from('pir_requests')
+                .select('status, updated_at')
+                .eq('id', pirId)
+                .single();
+                
+            console.log(`[DEBUG] CustomerReview: Verified final PIR ${pirId} status: ${finalStatusCheck?.status} (Updated at: ${finalStatusCheck?.updated_at}, Error: ${finalCheckError?.message})`);
+            
             return { finalStatus };
         },
         onSuccess: async (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['pirDetailsForReview', variables.pirId] });
-            queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
-            toast.success(`Review submitted. Final status: ${data.finalStatus}`);
+            console.log(`[DEBUG] CustomerReview: Mutation onSuccess for PIR ${variables.pirId}. Final status determined by mutationFn: ${data.finalStatus}`);
+            
+            // Force complete invalidation of all queries
+            await queryClient.invalidateQueries();
+            queryClient.removeQueries(); // Remove all queries from cache
+            
+            toast.success(`Review submitted successfully! Status: ${data.finalStatus}`);
 
+            // Attempt to send notification, but don't let it block the UI flow
             try {
                 // Fetch the updated PIR record for notification
-                console.log("Fetching PIR record for completion notification...");
+                console.log("Attempting to send email notification...");
                 const { data: updatedPirRecord, error: fetchError } = await supabase
                     .from('pir_requests')
                     .select(`
@@ -208,32 +238,37 @@ const useSubmitReviewMutation = (
                     .single();
 
                 if (fetchError || !updatedPirRecord) {
-                    throw new Error(`Failed to fetch updated PIR record for notification: ${fetchError?.message || 'Not found'}`);
-                }
+                    console.warn(`Could not fetch PIR record for notification: ${fetchError?.message || 'Not found'}`);
+                } else {
+                    console.log("Sending completion notification with status:", updatedPirRecord.status);
+                    try {
+                        const { data: funcData, error: functionError } = await supabase.functions.invoke(
+                            'send-email',
+                            {
+                                body: {
+                                    type: 'REVIEW_COMPLETED',
+                                    record: updatedPirRecord,
+                                }
+                            }
+                        );
 
-                console.log("Sending completion notification with status:", updatedPirRecord.status);
-                const { data: funcData, error: functionError } = await supabase.functions.invoke(
-                    'send-email',
-                    {
-                        body: {
-                            type: 'REVIEW_COMPLETED',
-                            record: updatedPirRecord,
+                        if (functionError) {
+                            console.warn("Email notification failed, but review was submitted successfully:", functionError);
+                        } else {
+                            console.log("Email notification sent successfully:", funcData);
+                            toast.info(`Notification sent to supplier about review completion.`);
                         }
+                    } catch (emailError) {
+                        console.warn("Failed to send email, but review was submitted successfully:", emailError);
                     }
-                );
-
-                if (functionError) {
-                    throw functionError;
                 }
-
-                console.log("Completion notification sent successfully:", funcData);
-                toast.info(`Notification sent to supplier about review completion.`);
-
             } catch (notificationError: any) {
-                console.error("Failed to send PIR review notification:", notificationError);
-                console.error("Notification error details:", notificationError.stack || JSON.stringify(notificationError));
-                toast.error(`Review submitted, but failed to send notification: ${notificationError.message}`);
+                console.warn("Failed to send notification, but review was submitted successfully:", notificationError);
             }
+            
+            // Redirect regardless of notification status
+            console.log(`[DEBUG] CustomerReview: Redirecting to /supplier-products after review submission for PIR ${variables.pirId}`);
+            window.location.href = "/supplier-products";
         },
         onError: (error) => {
             toast.error(`Failed to submit review: ${error.message}`);
@@ -423,17 +458,28 @@ const CustomerReview = () => {
       queryKey: ['pirDetailsForReview', pirId],
       queryFn: () => fetchPirDetailsForReview(pirId!),
       enabled: !!pirId,
-      // onSuccess is not a direct option here, handle in useEffect
   });
 
-  // Effect to set locked state based on fetched data
+  // Determine if the review is in a read-only state
+  // PIR should be read-only AFTER the customer submits their review, until supplier responds again
+  const isReadOnly = React.useMemo(() => {
+    if (!pirDetails?.pir) return false;
+    
+    // These statuses mean the review has been completed and should be read-only
+    // until the supplier responds and changes status back to 'submitted'
+    return ['approved', 'in_review', 'flagged'].includes(pirDetails.pir.status);
+  }, [pirDetails]);
+
+  // Initialize state with read-only setting
   useEffect(() => {
-    if (pirDetails?.pir?.status === 'approved') {
-      setIsLocked(true);
-    } else {
-      setIsLocked(false); // Ensure it's reset if status changes
+    if (pirDetails?.pir) {
+      setIsLocked(
+        pirDetails.pir.status === 'approved' || 
+        pirDetails.pir.status === 'in_review' || 
+        pirDetails.pir.status === 'flagged'
+      );
     }
-  }, [pirDetails?.pir?.status]);
+  }, [pirDetails]);
 
   // Initialize review status from existing data whenever PIR details are loaded
   useEffect(() => {
@@ -442,38 +488,36 @@ const CustomerReview = () => {
       const initialReviewStatus: Record<string, "approved" | "flagged" | "pending"> = {};
       const initialReviewNotes: Record<string, string> = {};
       
-      // Set status based on response status and flags
+      // For each response:
+      // - If already 'approved' in database, mark as approved in UI
+      // - If already 'flagged' in database, mark as flagged in UI
+      // - Otherwise mark as pending
       pirDetails.responses.forEach(response => {
-        // Initialize with existing status or fallback to "pending"
-        const hasFlags = response.response_flags && response.response_flags.length > 0;
-        let status: "approved" | "flagged" | "pending" = "pending";
+        const currentStatus = response.status as ResponseStatus | undefined;
+        initialReviewStatus[response.id] = currentStatus === 'approved' 
+          ? 'approved' 
+          : currentStatus === 'flagged' 
+            ? 'flagged' 
+            : 'pending';
         
-        if (response.status === "approved") {
-          status = "approved";
-        } else if (response.status === "flagged" || hasFlags) {
-          status = "flagged";
-          
-          // If there are flags, get the latest flag's description as the note
-          if (hasFlags) {
-            const latestFlag = response.response_flags
-              .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
-            initialReviewNotes[response.id] = latestFlag.description || "";
+        // If flagged and has flags, pre-populate the note from the most recent flag
+        if (currentStatus === 'flagged' && response.response_flags && response.response_flags.length > 0) {
+          // Sort flags by creation date (newest first)
+          const sortedFlags = [...response.response_flags].sort((a, b) => 
+            new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime()
+          );
+          if (sortedFlags[0] && sortedFlags[0].description) {
+            initialReviewNotes[response.id] = sortedFlags[0].description;
           }
+        } else {
+          initialReviewNotes[response.id] = '';
         }
-        
-        initialReviewStatus[response.id] = status;
       });
       
-      // Update state
       setReviewStatus(initialReviewStatus);
       setReviewNotes(initialReviewNotes);
-      
-      // Set isLocked based on PIR status
-      setIsLocked(pirDetails.pir.status === "approved");
     }
   }, [pirDetails]);
-
-  // --- End Fetch PIR Details Query ---
 
   // Submit Review Mutation
   const submitReviewMutation = useSubmitReviewMutation(queryClient);
@@ -610,8 +654,9 @@ const CustomerReview = () => {
    };
   const handleUpdateNote = (responseId: string, note: string) => { setReviewNotes(prev => ({ ...prev, [responseId]: note })); };
   const handleSubmitReview = () => {
+    console.log(`[DEBUG] CustomerReview: handleSubmitReview entered for PIR ${pirId}`);
     if (isLocked) {
-        toast.info("This review is already approved and locked.");
+        toast.info("This review is already completed and locked.");
         return; // Prevent submission if locked
     }
     if (!user) { toast.error("You must be logged in"); return; }
@@ -630,6 +675,12 @@ const CustomerReview = () => {
       toast.error("PIR details not loaded yet.");
       return;
     }
+    
+    console.log("Submitting review for PIR:", pirId);
+    
+    // Show a loading indicator
+    toast.loading("Submitting review...");
+    
     submitReviewMutation.mutate({
         pirId: pirId!,
         userId: user.id,
@@ -641,7 +692,7 @@ const CustomerReview = () => {
         supplierEmail: pirDetails.supplier?.contact_email,
         customerName: pirDetails.customer?.name,
         productName: pirDetails.product?.name,
-    }, { onSuccess: () => { navigate("/supplier-products"); } }); // Updated navigation destination
+    });
   };
   // --- End Event Handlers ---
 
@@ -665,31 +716,183 @@ const CustomerReview = () => {
   const getStatusColorClass = () => { /* ... */ };
   // --- End Helper Functions ---
 
+  // Debug component for CustomerReview 
+  const DebugPanel = ({ pirId }: { pirId: string }) => {
+    const [dbStatus, setDbStatus] = useState<string>('unknown');
+    
+    const checkStatus = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pir_requests')
+          .select('status, updated_at')
+          .eq('id', pirId)
+          .single();
+          
+        if (error) {
+          console.error("Debug: Error fetching status:", error);
+          setDbStatus(`Error: ${error.message}`);
+        } else {
+          console.log("Debug: Current status:", data);
+          setDbStatus(`${data.status} (updated: ${new Date(data.updated_at).toLocaleTimeString()})`);
+        }
+      } catch (err) {
+        console.error("Debug: Exception:", err);
+        setDbStatus(`Exception: ${err}`);
+      }
+    };
+    
+    const updateStatus = async (status: PIRStatus) => {
+      try {
+        console.log(`Debug: Setting status to ${status}...`);
+        const { error } = await supabase
+          .from('pir_requests')
+          .update({ 
+            status, 
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', pirId);
+          
+        if (error) {
+          console.error("Debug: Error updating:", error);
+          toast.error(`Debug update failed: ${error.message}`);
+        } else {
+          console.log("Debug: Update success");
+          toast.success(`Debug: Updated to ${status}`);
+          checkStatus();
+        }
+      } catch (err) {
+        console.error("Debug: Exception updating:", err);
+        toast.error(`Debug exception: ${err}`);
+      }
+    };
+    
+    // Check status on mount
+    useEffect(() => {
+      checkStatus();
+      // Set up interval to check status every 5 seconds
+      const interval = setInterval(checkStatus, 5000);
+      return () => clearInterval(interval);
+    }, []);
+    
+    return (
+      <div className="mt-8 border-t-2 border-gray-200 pt-4">
+        <h3 className="text-lg font-bold mb-2">Debug Panel</h3>
+        <div className="bg-gray-100 p-4 rounded-md">
+          <div className="flex items-center gap-2 mb-3">
+            <div>Current DB Status: <span className="font-mono">{dbStatus}</span></div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={checkStatus}
+              className="h-7 text-xs"
+            >
+              Refresh
+            </Button>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => updateStatus('draft')}
+              className="bg-gray-200"
+            >
+              Set draft
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => updateStatus('submitted')}
+              className="bg-orange-100"
+            >
+              Set submitted
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => updateStatus('in_review')}
+              className="bg-blue-100"
+            >
+              Set in_review
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => updateStatus('flagged')}
+              className="bg-yellow-100"
+            >
+              Set flagged
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => updateStatus('approved')}
+              className="bg-green-100"
+            >
+              Set approved
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // --- Render Logic ---
   if (isLoadingPir) { return <div className="p-12 text-center">Loading PIR details...</div>; }
   if (errorPir) { return <div className="p-12 text-center text-red-500">Error loading PIR: {errorPir.message}</div>; }
-  if (!pirDetails || !productSheet) { return ( <div className="py-12 text-center"> <h2 className="text-2xl font-bold mb-4">PIR not found</h2> <Button onClick={() => navigate(-1)}>Go Back</Button> </div> ); }
+  if (!pirDetails) { return ( <div className="py-12 text-center"> <h2 className="text-2xl font-bold mb-4">PIR not found</h2> <Button onClick={() => navigate(-1)}>Go Back</Button> </div> ); }
 
-  const productName = pirDetails.product?.name ?? 'Unknown Product';
-  const pageTitle = productSheet.title || `Review - ${productName}`;
+  const productName = pirDetails.product?.name ?? pirDetails.pir.suggested_product_name ?? 'Unknown Product';
+  const pageTitle = pirDetails.pir.title || `Review - ${productName}`;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={pageTitle}
-        subtitle={isPreviouslyReviewed ? "Reviewing flagged issues" : "Initial review"}
-        actions={( // Fixed JSX expression
-          <Button className="bg-brand hover:bg-brand/90" onClick={handleSubmitReview} disabled={submitReviewMutation.isPending}>
-            <Send className="mr-2 h-4 w-4" />
-            {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
-          </Button>
-        )}
+        subtitle={isPreviouslyReviewed 
+          ? "Reviewing flagged issues" 
+          : pirDetails?.pir.status === 'in_review' 
+            ? "Submitted review" 
+            : "Initial review"}
+        actions={
+          <>
+            {isLocked && (
+              <Button 
+                variant="outline" 
+                onClick={() => navigate("/supplier-products")}
+                className="mr-2"
+              >
+                Back to Products
+              </Button>
+            )}
+            {!isLocked && (
+              <Button 
+                className="bg-brand hover:bg-brand/90" 
+                onClick={handleSubmitReview} 
+                disabled={submitReviewMutation.isPending || Object.keys(reviewStatus).length === 0}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+              </Button>
+            )}
+          </>
+        }
       />
 
       <Card>
         {/* ... Card Header & Content ... */}
       </Card>
+
+      {isLocked && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-md">
+          <h3 className="font-medium mb-1">View-Only Mode</h3>
+          <p>
+            {pirDetails?.pir.status === 'in_review' 
+              ? "Your review has been submitted. The supplier will now be notified to address any flagged issues. You'll be able to review again when the supplier submits updated information."
+              : "This review is complete. You'll be able to approve or flag responses again when the supplier submits updated information."}
+          </p>
+        </div>
+      )}
 
       <Tabs defaultValue={isPreviouslyReviewed ? "flagged" : "all"} value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -742,7 +945,7 @@ const CustomerReview = () => {
                       // Determine if this specific question is locked - either the whole PIR is locked or the response is already approved
                       const isResponseLocked = isLocked || status === "approved" || (
                         // Also lock if the answer has been previously approved in the database
-                        answer?.status === "approved"
+                        answer?.status === "approved" as any  // Cast as any to resolve type error
                       );
                       
                       return (
@@ -770,6 +973,23 @@ const CustomerReview = () => {
           {/* ... No questions message ... */}
         </TabsContent>
       </Tabs>
+
+      {/* Only show the bottom submit button if not locked */}
+      {!isLocked && (
+        <div className="mt-6 flex justify-end">
+          <Button 
+            className="bg-brand hover:bg-brand/90" 
+            onClick={handleSubmitReview} 
+            disabled={submitReviewMutation.isPending || Object.keys(reviewStatus).length === 0}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+          </Button>
+        </div>
+      )}
+      
+      {/* Debug panel */}
+      {pirId && <DebugPanel pirId={pirId} />}
     </div>
   );
 };

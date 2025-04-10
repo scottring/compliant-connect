@@ -8,7 +8,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
-import { Search, Filter, Eye, ClipboardCheck, FileSpreadsheet, Plus } from "lucide-react";
+import { Search, Filter, Eye, ClipboardCheck, FileSpreadsheet, Plus, Flag, Clock } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -65,6 +65,7 @@ const SupplierProducts = () => {
 
   // Load PIR Requests using React Query
   const fetchPirRequests = useCallback(async (customerId: string): Promise<PirDisplayData[]> => {
+    console.log(`[DEBUG] SupplierProducts: fetchPirRequests called for customerId: ${customerId}`);
     // Fetch data with potentially nested arrays/objects
     // Explicitly type the expected data structure
     const { data: pirData, error: pirError } = await supabase
@@ -126,6 +127,7 @@ const SupplierProducts = () => {
       };
     });
 
+    console.log(`[DEBUG] SupplierProducts: fetchPirRequests returning ${transformedPirs.length} items for customerId: ${customerId}`, transformedPirs.map(p => ({ id: p.id, status: p.status })));
     return transformedPirs;
   }, []); // No dependencies needed for the fetch function itself
 
@@ -138,13 +140,61 @@ const SupplierProducts = () => {
     queryKey: ['pirRequests', currentCompany?.id], // Query key depends on current company
     queryFn: () => fetchPirRequests(currentCompany!.id),
     enabled: !!currentCompany, // Only run if a company is selected
-    staleTime: 1 * 60 * 1000, // Example: 1 minute stale time
+    staleTime: 0, // Always refetch when mounted
     gcTime: 5 * 60 * 1000, // Example: 5 minutes cache time
+    refetchOnMount: true, // Always refetch when the component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
+
+  // Add direct function to force refresh from database
+  const forceRefreshData = useCallback(async () => {
+    if (!currentCompany?.id) return;
+    
+    console.log("SupplierProducts: Force refreshing data from database...");
+    try {
+      // Clear cache first
+      queryClient.removeQueries({ queryKey: ['pirRequests'] });
+      
+      // Direct database fetch
+      const freshData = await fetchPirRequests(currentCompany.id);
+      console.log(`[DEBUG] SupplierProducts: forceRefreshData fetched ${freshData.length} items:`,
+        freshData.map(item => ({ id: item.id, status: item.status, product: item.productName })));
+      
+      // Update state directly for immediate UI update
+      setFilteredPirs(freshData);
+      
+      // Trigger React Query refetch for cache update
+      await refetchPirs();
+      console.log("SupplierProducts: React Query refetch complete");
+    } catch (error) {
+      console.error("SupplierProducts: Error during forced refresh:", error);
+    }
+  }, [currentCompany?.id, fetchPirRequests, queryClient, refetchPirs]);
+
+  // Run on initial mount
+  useEffect(() => {
+    if (currentCompany?.id) {
+      forceRefreshData();
+    }
+  }, [currentCompany?.id, forceRefreshData]);
+  
+  // Run on window focus to ensure data is always fresh
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log("Window focused, refreshing data...");
+      forceRefreshData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [forceRefreshData]);
 
   // Filter PIRs based on search term (runs when pirRequests data or searchTerm changes)
   useEffect(() => {
-    const currentPirs = pirRequests ?? []; // Use empty array if data is undefined
+    const currentPirs = pirRequests ?? [];
+    console.log(`[DEBUG] SupplierProducts: useEffect[pirRequests] triggered. Received ${currentPirs.length} items from useQuery.`, currentPirs.map(p => ({ id: p.id, status: p.status })));
     if (!searchTerm.trim()) {
       setFilteredPirs(currentPirs);
       return;
@@ -159,12 +209,27 @@ const SupplierProducts = () => {
 
   // Updated handler to check status before navigating
   const handleAction = (pir: PirDisplayData) => {
-    if (pir.status === 'submitted' || pir.status === 'flagged') {
-      // Customer's turn to review
+    console.log(`Handling action for PIR ${pir.id} with status: ${pir.status}`);
+    
+    if (pir.status === 'submitted') {
+      // Customer's turn to review initially submitted responses
+      console.log(`Navigating to review for submitted PIR: ${pir.id}`);
+      navigate(`/customer-review/${pir.id}`);
+    } else if (pir.status === 'flagged') {
+      // Customer's turn to review flagged responses
+      console.log(`Navigating to review for flagged PIR: ${pir.id}`);
+      navigate(`/customer-review/${pir.id}`);
+    } else if (pir.status === 'in_review') {
+      // Review has been submitted, pending supplier response - view only
+      console.log(`Navigating to read-only view for in_review PIR: ${pir.id}`);
+      navigate(`/customer-review/${pir.id}`);
+    } else if (pir.status === 'approved') {
+      // Approved responses - view only
+      console.log(`Navigating to read-only view for approved PIR: ${pir.id}`);
       navigate(`/customer-review/${pir.id}`);
     } else {
       // View details (likely supplier form, relies on auth check there)
-      // TODO: Consider a dedicated read-only view for customer
+      console.log(`Navigating to supplier response form for PIR: ${pir.id}`);
       navigate(`/supplier-response-form/${pir.id}`);
     }
   };
@@ -175,6 +240,58 @@ const SupplierProducts = () => {
 
   // Combine loading states
   const isLoading = isLoadingCompanies || loadingPirs;
+
+  // Debug function to force update status
+  const forceUpdateStatus = async (pirId: string, newStatus: PIRStatus) => {
+    try {
+      console.log(`Force updating PIR ${pirId} status to ${newStatus}...`);
+      
+      const { data, error } = await supabase
+        .from('pir_requests')
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', pirId);
+        
+      if (error) {
+        console.error("Error updating PIR status:", error);
+        toast.error(`Failed to update status: ${error.message}`);
+      } else {
+        console.log(`Successfully updated PIR ${pirId} to ${newStatus}`);
+        toast.success(`Updated status to ${newStatus}`);
+        // Force refresh after update
+        forceRefreshData();
+      }
+    } catch (err) {
+      console.error("Exception updating PIR status:", err);
+      toast.error(`Exception updating status: ${err}`);
+    }
+  };
+
+  // Debug function to check database status
+  const checkDatabaseStatus = async (pirId: string) => {
+    try {
+      console.log(`Checking database status for PIR ${pirId}...`);
+      
+      const { data, error } = await supabase
+        .from('pir_requests')
+        .select('id, status, updated_at')
+        .eq('id', pirId)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching PIR status:", error);
+        toast.error(`Failed to fetch status: ${error.message}`);
+      } else {
+        console.log(`Database status for PIR ${pirId}:`, data);
+        toast.info(`Database status: ${data.status}, updated at ${new Date(data.updated_at).toLocaleString()}`);
+      }
+    } catch (err) {
+      console.error("Exception checking PIR status:", err);
+      toast.error(`Exception checking status: ${err}`);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -209,10 +326,50 @@ const SupplierProducts = () => {
             disabled={isLoading} // Disable search while loading
           />
         </div>
-        <Button variant="outline" size="sm" className="gap-2" disabled={isLoading}>
-          <Filter className="h-4 w-4" />
-          Filter
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            size="sm" 
+            onClick={forceRefreshData}
+            className="gap-2 bg-blue-500 hover:bg-blue-600 text-white"
+          >
+            Refresh Data
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              console.log("React Query Cache:", pirRequests);
+              toast.info("Checking cache vs DB - see console for details");
+              
+              // Compare cache with database for all items
+              if (pirRequests && pirRequests.length > 0) {
+                pirRequests.forEach(async (item) => {
+                  const { data, error } = await supabase
+                    .from('pir_requests')
+                    .select('id, status')
+                    .eq('id', item.id)
+                    .single();
+                    
+                  if (!error && data) {
+                    if (data.status !== item.status) {
+                      console.warn(`Mismatch for ${item.id}: Cache=${item.status}, DB=${data.status}`);
+                      toast.warning(`Status mismatch for ${item.productName}: Cache=${item.status}, DB=${data.status}`);
+                    } else {
+                      console.log(`Match for ${item.id}: Status=${item.status}`);
+                    }
+                  }
+                });
+              }
+            }}
+            className="gap-2"
+          >
+            Debug Cache
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" disabled={isLoading}>
+            <Filter className="h-4 w-4" />
+            Filter
+          </Button>
+        </div>
       </div>
 
       {isLoading ? ( // Combined loading state
@@ -238,7 +395,10 @@ const SupplierProducts = () => {
             <TableBody>
               {filteredPirs.map((pir) => (
                 <TableRow key={pir.id}>
-                  <TableCell className="font-medium">{pir.productName}</TableCell>
+                  <TableCell className="font-medium">
+                    {pir.productName}
+                    <div className="text-xs text-muted-foreground mt-1">ID: {pir.id.substring(0, 8)}...</div>
+                  </TableCell>
                   <TableCell>{pir.supplierName}</TableCell>
                   <TableCell>
                     {pir.updatedAt ? format(new Date(pir.updatedAt), "yyyy-MM-dd") : "N/A"}
@@ -251,22 +411,38 @@ const SupplierProducts = () => {
                       pir.status === 'draft' ? 'bg-gray-100 text-gray-800' :
                       'bg-yellow-100 text-yellow-800' // Default/flagged
                     }`}>
-                      {pir.status.charAt(0).toUpperCase() + pir.status.slice(1)}
+                      {pir.status === 'in_review' 
+                        ? "Reviewed, Awaiting Response" 
+                        : pir.status.charAt(0).toUpperCase() + pir.status.slice(1)}
                     </span>
+                    <div className="text-xs text-gray-500 mt-1">Raw status: {pir.status}</div>
                   </TableCell>
                   <TableCell>
                     {/* Action Button Logic for Customer View */}
                     <Button
                       onClick={(e) => { e.stopPropagation(); handleAction(pir); }}
                       size="sm"
-                      variant={ (pir.status === 'submitted' || pir.status === 'flagged') ? 'default' : 'outline' } // Default variant for review actions
+                      variant={ (pir.status === 'submitted' || pir.status === 'flagged' || pir.status === 'in_review') ? 'default' : 'outline' } // Default variant for review actions
                       // No need to disable, customer should always be able to view or review
                       // className adjusted for review state
-                      className={ (pir.status === 'submitted' || pir.status === 'flagged') ? "bg-brand hover:bg-brand/90 text-white" : "" }
+                      className={ 
+                        pir.status === 'submitted' ? "bg-brand hover:bg-brand/90 text-white" : 
+                        pir.status === 'flagged' ? "bg-yellow-500 hover:bg-yellow-600 text-white" : 
+                        pir.status === 'in_review' ? "bg-blue-500 hover:bg-blue-600 text-white" :
+                        ""
+                      }
                     >
-                      { (pir.status === 'submitted' || pir.status === 'flagged') ? (
+                      { pir.status === 'submitted' ? (
                         <>
                           <ClipboardCheck className="h-4 w-4 mr-2" /> Review
+                        </>
+                      ) : pir.status === 'flagged' ? (
+                        <>
+                          <Flag className="h-4 w-4 mr-2" /> Flagged
+                        </>
+                      ) : pir.status === 'in_review' ? (
+                        <>
+                          <Eye className="h-4 w-4 mr-2" /> View
                         </>
                       ) : (
                         <>
@@ -274,7 +450,34 @@ const SupplierProducts = () => {
                         </>
                       )}
                     </Button>
-                    {/* Removed DropdownMenu for simplicity, can be added back if more actions needed */}
+                    
+                    {/* Debug buttons for testing status changes */}
+                    <div className="flex gap-1 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs py-0 h-6"
+                        onClick={() => forceUpdateStatus(pir.id, 'in_review')}
+                      >
+                        → in_review
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs py-0 h-6"
+                        onClick={() => forceUpdateStatus(pir.id, 'flagged')}
+                      >
+                        → flagged
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs py-0 h-6"
+                        onClick={() => checkDatabaseStatus(pir.id)}
+                      >
+                        Check DB
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
