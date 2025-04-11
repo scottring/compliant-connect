@@ -4,7 +4,8 @@ import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query"; // Import useQueryClient
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuestionBankContext } from "@/context/QuestionBankContext";
-import { Tag } from "../../types/index"; // Use explicit relative path
+import { useSections } from "@/hooks/use-sections"; // Import useSections
+import { Tag, Section } from "../../types/index"; // Use explicit relative path, Import Section type
 import { X, Plus, Trash, Tag as TagIcon, FileDown, Upload, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -19,9 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TagBadge from "@/components/tags/TagBadge";
 import { toast } from "sonner";
-// Import only necessary types from hook
-import { QuestionType, DBQuestion } from "@/hooks/use-question-bank"; // Removed Section, Subsection
-
+import { QuestionType, DBQuestion } from "@/hooks/use-question-bank"; // Removed Section import here
 // Define Zod schemas for table structures based on TypeScript types
 const columnTypeEnum = z.enum(["text", "number", "boolean", "select", "multi-select"]);
 
@@ -116,7 +115,7 @@ export function QuestionBuilderDialog({
     addSection, // Use addSection for both sections and subsections
     // addSubsection removed
   } = useQuestionBankContext();
-
+  const { data: dbSections, isLoading: sectionsLoading, error: sectionsError } = useSections(); // Fetch sections, correct destructuring
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [newOption, setNewOption] = useState("");
   const [newTagName, setNewTagName] = useState("");
@@ -128,10 +127,9 @@ export function QuestionBuilderDialog({
   const [showNewSubsectionForm, setShowNewSubsectionForm] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [newSubsectionName, setNewSubsectionName] = useState("");
-  // Local state for dropdown options
-  const [localParentSections, setLocalParentSections] = useState<Array<{ id: string; name: string; level: number; number: string }>>([]);
-  console.log('[render] localParentSections:', localParentSections);
-  const [localSubsections, setLocalSubsections] = useState<Array<{ id: string; name: string; level: number; number: string }>>([]);
+  // Local state for dropdown options - derived from dbSections now
+  const [localParentSections, setLocalParentSections] = useState<Section[]>([]);
+  const [localSubsections, setLocalSubsections] = useState<Section[]>([]);
   const editingQuestion = useMemo(() => {
       return questionId ? questions.find(q => q.id === questionId) : null;
   }, [questionId, questions]);
@@ -149,37 +147,10 @@ export function QuestionBuilderDialog({
     },
   });
 
-  // Derive sections and subsections from the questions array (fetched from view)
-  const allSectionsFromView = useMemo(() => {
-    if (!questions) return [];
-    const sectionsMap = new Map<string, { id: string; name: string; level: number; number: string }>();
-    questions.forEach(q => {
-      // Ensure all necessary fields exist and the section hasn't been added yet
-      if (q.section_id && q.section_name && q.section_level !== undefined && q.hierarchical_number && !sectionsMap.has(q.section_id)) {
-        sectionsMap.set(q.section_id, {
-          id: q.section_id,
-          name: q.section_name,
-          level: q.section_level,
-          number: q.hierarchical_number // Store hierarchical number for parent matching
-        });
-      }
-    });
-    // Sort by hierarchical number for consistent order
-    return Array.from(sectionsMap.values()).sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
-  }, [questions]);
+  // Sections are now fetched via useSections hook above.
+  // We will filter dbSections directly in useEffect hooks and dropdown rendering.
 
   const selectedParentSectionId = form.watch("sectionId"); // Watch the parent section dropdown
-
-  const subsections = useMemo(() => {
-    if (!selectedParentSectionId) return [];
-    // Find the selected parent section to get its hierarchical number
-    const parentSection = allSectionsFromView.find(s => s.id === selectedParentSectionId && s.level === 1);
-    if (!parentSection) return []; // Should not happen if selection is valid
-
-    const parentNumberPrefix = parentSection.number + '.';
-    // Filter all derived sections to find those that are level 2 AND start with the parent's number prefix
-    return allSectionsFromView.filter(s => s.level === 2 && s.number.startsWith(parentNumberPrefix));
-  }, [selectedParentSectionId, allSectionsFromView]);
 
   const questionType = form.watch("type");
   const showOptionsInput = questionType === "single_select" || questionType === "multi_select";
@@ -191,26 +162,66 @@ export function QuestionBuilderDialog({
   // const showNumberOptions = questionType === "number";
   // const showTextOptions = questionType === "text";
  
-  // Sync local dropdown state with context-derived state
+  // Sync local dropdown state with fetched dbSections
   useEffect(() => {
-    if (open) {
-      setLocalParentSections(allSectionsFromView);
-      // Subsections depend on the selected parent, which might be set by the reset effect later
-      // Re-evaluate subsections based on the *current* form value for sectionId
+    if (open && dbSections) {
+      // Filter for top-level sections (assuming level 1 or null parent_id)
+      // Filter for top-level sections (parent_id is null)
+      const parents = dbSections.filter(s => s.parent_id === null);
+      // Map db data to Section type and sort by 'order'
+      const mappedParents: Section[] = parents.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        order: p.order,
+        parent_id: p.parent_id,
+        // Omit created_at, updated_at to avoid type conflict
+      }));
+      setLocalParentSections(mappedParents.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+      // Filter for subsections based on the currently selected parent section
       const currentParentId = form.getValues("sectionId");
-      const derivedSubsections = allSectionsFromView.filter(s => {
-          if (!currentParentId || s.level !== 2) return false;
-          const parentSection = allSectionsFromView.find(p => p.id === currentParentId && p.level === 1);
-          return parentSection && s.number.startsWith(parentSection.number + '.');
-      });
-      setLocalSubsections(derivedSubsections);
+      if (currentParentId) {
+        const subs = dbSections.filter(s => s.parent_id === currentParentId); // Adjust filter as needed
+        // Map db data to Section type and sort by 'order'
+        const mappedSubs: Section[] = subs.map(s => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          order: s.order,
+          parent_id: s.parent_id,
+           // Omit created_at, updated_at to avoid type conflict
+        }));
+        setLocalSubsections(mappedSubs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+      } else {
+        setLocalSubsections([]); // Clear subsections if no parent is selected
+      }
     }
-    // Dependencies: Run when dialog opens OR when derived sections change while open
-  }, [open, subsections, form, allSectionsFromView]); // <<<< KEY CHANGE HERE
+  }, [open, dbSections, form]); // Depend on dbSections and open state
+
+  // Update subsections when parent selection changes
+  useEffect(() => {
+    if (open && dbSections && selectedParentSectionId) {
+      const subs = dbSections.filter(s => s.parent_id === selectedParentSectionId); // Adjust filter as needed
+      // Map db data to Section type and sort by 'order'
+       const mappedSubs: Section[] = subs.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        order: s.order,
+        parent_id: s.parent_id,
+         // Omit created_at, updated_at to avoid type conflict
+      }));
+      setLocalSubsections(mappedSubs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+      // Reset subsection selection if parent changes
+      // form.setValue("subsectionId", ""); // Optional: Reset subsection selection
+    } else if (open) {
+       setLocalSubsections([]); // Clear if no parent selected
+    }
+  }, [selectedParentSectionId, open, dbSections]); // Depend on selected parent
 
 
 
-  // Reset form when dialog opens/closes or data changes
+  // Reset form when dialog opens/closes or data changes (including dbSections)
   useEffect(() => {
     if (open) {
       let defaultParentSectionId = "";
@@ -224,20 +235,16 @@ export function QuestionBuilderDialog({
 
       if (editingQuestion) {
         // Editing existing question
-        const currentSectionInfo = allSectionsFromView.find(s => s.id === editingQuestion.section_id);
+        const currentSectionInfo = dbSections?.find(s => s.id === editingQuestion.section_id);
         if (currentSectionInfo) {
-          if (currentSectionInfo.level === 1) {
+          if (currentSectionInfo.parent_id === null) { // Assuming top-level sections have null parent_id
             defaultParentSectionId = currentSectionInfo.id;
-            defaultSubsectionId = ""; // No subsection selected if question is in parent
+            defaultSubsectionId = "";
           } else {
-            // Find parent by matching hierarchical number prefix
-            const parts = currentSectionInfo.number.split('.');
-            if (parts.length > 1) {
-              const parentNumber = parts[0];
-              const parent = allSectionsFromView.find(s => s.level === 1 && s.number === parentNumber);
-              defaultParentSectionId = parent?.id || "";
-              defaultSubsectionId = currentSectionInfo.id; // This is the subsection
-            }
+            // It's a subsection, find its parent
+            const parent = dbSections?.find(s => s.id === currentSectionInfo.parent_id);
+            defaultParentSectionId = parent?.id || ""; // Set parent ID
+            defaultSubsectionId = currentSectionInfo.id; // Set subsection ID
           }
         }
         defaultText = editingQuestion.text;
@@ -257,20 +264,16 @@ export function QuestionBuilderDialog({
 
       } else if (preselectedSectionId) {
         // Creating new question with a preselected section/subsection
-        const sectionInfo = allSectionsFromView.find(s => s.id === preselectedSectionId);
+        const sectionInfo = dbSections?.find(s => s.id === preselectedSectionId);
         if (sectionInfo) {
-          if (sectionInfo.level === 1) {
-            defaultParentSectionId = sectionInfo.id; // Pre-select the parent section
+          if (sectionInfo.parent_id === null) { // Assuming top-level sections have null parent_id
+            defaultParentSectionId = sectionInfo.id;
             defaultSubsectionId = "";
           } else {
-            // Find parent and pre-select both
-            const parts = sectionInfo.number.split('.');
-            if (parts.length > 1) {
-              const parentNumber = parts[0];
-              const parent = allSectionsFromView.find(s => s.level === 1 && s.number === parentNumber);
-              defaultParentSectionId = parent?.id || "";
-              defaultSubsectionId = sectionInfo.id; // Pre-select the subsection
-            }
+            // It's a subsection, find its parent and pre-select both
+            const parent = dbSections?.find(s => s.id === sectionInfo.parent_id);
+            defaultParentSectionId = parent?.id || "";
+            defaultSubsectionId = sectionInfo.id;
           }
         }
       }
@@ -304,7 +307,7 @@ export function QuestionBuilderDialog({
       // setLocalParentSections([]); // Removed
       // setLocalSubsections([]); // Removed
     }
-  }, [open, editingQuestion, allSectionsFromView, form, preselectedSectionId]);
+  }, [open, editingQuestion, dbSections, form, preselectedSectionId]); // Depend on dbSections now
  
   const toggleTag = (tag: Tag) => {
     setSelectedTags(prev =>
@@ -378,35 +381,17 @@ export function QuestionBuilderDialog({
         const newSection = await addSection({
           name: newSectionName.trim(),
           description: "",
-          order_index: allSectionsFromView.length, // Simple ordering
+          order_index: localParentSections.length, // Provide order_index
           parent_id: null // Explicitly null for top-level
         });
         console.log("[handleCreateSection] addSection returned:", newSection);
-        // Manually create dropdown entry
-        let maxTopLevelNum = 0;
-        localParentSections.forEach(s => { // Use local state for calculation
-            if (s.level === 1 && s.number) {
-                const num = parseInt(s.number.split('.')[0], 10);
-                if (!isNaN(num) && num > maxTopLevelNum) {
-                    maxTopLevelNum = num;
-                }
-            }
-        });
-        const tempHierarchicalNumber = `${maxTopLevelNum + 1}`;
-        const newSectionForDropdown = {
-            id: newSection.id,
-            name: newSection.name,
-            level: 1,
-            number: tempHierarchicalNumber
-        };
-        console.log("[handleCreateSection] newSectionForDropdown:", newSectionForDropdown);
+        // No need to manually create dropdown entry if query invalidation works reliably.
+        // If immediate update is needed, construct based on returned `newSection`
+        // const newSectionForDropdown = { ...newSection, level: 1, number: 'temp' }; // Adjust based on actual Section type
+        // console.log("[handleCreateSection] newSectionForDropdown:", newSectionForDropdown); // Removed dangling log
 
         // Update local state for dropdown
-        setLocalParentSections(prev => {
-          const newState = [...prev, newSectionForDropdown];
-          console.log("[handleCreateSection] Updated localParentSections:", newState);
-          return newState;
-        }); // Correctly close setLocalParentSections
+        // setLocalParentSections(prev => [...prev, newSectionForDropdown]); // Rely on query invalidation
 
         // Set form value AFTER updating local state
         console.log("[handleCreateSection] Calling form.setValue...");
@@ -418,8 +403,8 @@ export function QuestionBuilderDialog({
         toast.success("Section created successfully?");
 
         // Invalidate for background sync AFTER local updates
-        console.log("[handleCreateSection] Invalidating queries...");
-        queryClient.invalidateQueries({ queryKey: ['questions'], exact: true });
+        console.log("[handleCreateSection] Invalidating sections query...");
+        queryClient.invalidateQueries({ queryKey: ['sections'] }); // Invalidate sections query
         console.log("[handleCreateSection] Finished.");
       } catch (error) {
         console.error("[handleCreateSection] Error:", error);
@@ -440,29 +425,16 @@ export function QuestionBuilderDialog({
         const newSubsection = await addSection({ // Use addSection
           name: newSubsectionName.trim(),
           description: "",
-          order_index: subsections.length, // Simple ordering within parent
+          order_index: localSubsections.length, // Provide order_index
           parent_id: selectedParentSectionId // Set parent_id
         });
         console.log("[handleCreateSubsection] addSection returned:", newSubsection);
-        // Manually create dropdown entry for subsection
-        const parentSection = localParentSections.find(s => s.id === selectedParentSectionId);
-        const parentNumber = parentSection?.number || '?';
-        const tempSubNumber = `${parentNumber}.${localSubsections.length + 1}`; // Simple temp numbering
-
-        const newSubSectionForDropdown = {
-            id: newSubsection.id,
-            name: newSubsection.name,
-            level: 2, // Assuming created via subsection button
-            number: tempSubNumber
-        };
-        console.log("[handleCreateSubsection] newSubSectionForDropdown:", newSubSectionForDropdown);
+        // No need to manually create dropdown entry if query invalidation works reliably.
+        // const newSubSectionForDropdown = { ...newSubsection, level: 2, number: 'temp' }; // Adjust based on actual Section type
+        // console.log("[handleCreateSubsection] newSubSectionForDropdown:", newSubSectionForDropdown); // Removed dangling log
 
         // Update local state
-        setLocalSubsections(prev => {
-          const newState = [...prev, newSubSectionForDropdown];
-          console.log("[handleCreateSubsection] Updated localSubsections:", newState);
-          return newState;
-        }); // Correctly close setLocalSubsections
+        // setLocalSubsections(prev => [...prev, newSubSectionForDropdown]); // Rely on query invalidation
 
         // Set form value AFTER local state update
         console.log("[handleCreateSubsection] Calling form.setValue...");
@@ -474,8 +446,8 @@ export function QuestionBuilderDialog({
         toast.success("Subsection created successfully");
 
         // Invalidate for background sync AFTER local updates
-        console.log("[handleCreateSubsection] Invalidating queries...");
-        queryClient.invalidateQueries({ queryKey: ['questions'], exact: true });
+        console.log("[handleCreateSubsection] Invalidating sections query...");
+        queryClient.invalidateQueries({ queryKey: ['sections'] }); // Invalidate sections query
         console.log("[handleCreateSubsection] Finished.");
       } catch (error) {
         console.error("[handleCreateSubsection] Error:", error);
@@ -544,7 +516,7 @@ export function QuestionBuilderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {contextLoading ? ( // Use renamed loading state
+        {sectionsLoading || contextLoading ? ( // Check both loading states
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin" />
             <span className="ml-2">Loading Question Bank Data...</span>
@@ -578,7 +550,7 @@ export function QuestionBuilderDialog({
                             <SelectContent>
                               {localParentSections.map((section) => (
                                 <SelectItem key={section.id} value={section.id}>
-                                  {section.number} {section.name}
+                                  {section.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -648,7 +620,7 @@ export function QuestionBuilderDialog({
                             <SelectContent>
                               {localSubsections.map((subsection) => (
                                 <SelectItem key={subsection.id} value={subsection.id}>
-                                  {subsection.number} {subsection.name}
+                                   {subsection.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
