@@ -261,19 +261,21 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
         );
 
       case "list_table": { // Use block scope for local variables
-        const columns = question.options || [];
+        // Assuming question.options is an array of objects like { name: string, ... }
+        const columnDefs = (question.options || []) as { name: string; [key: string]: any }[];
         // Ensure answer is treated as an array of records, default to empty array
         const tableData = (form.watch("answer") as Record<string, string>[] | undefined) || [];
 
         // Handler to update a specific cell in the table data
-        const handleCellChange = (rowIndex: number, column: string, value: string) => {
+        // Handler to update a specific cell in the table data, using column name as key
+        const handleCellChange = (rowIndex: number, columnName: string, value: string) => {
           if (isReadOnly) return;
           const newData = [...tableData]; // Create a mutable copy
           // Ensure the row object exists before assigning to its property
           if (!newData[rowIndex]) {
              newData[rowIndex] = {}; // Initialize if somehow missing (e.g., adding rows)
           }
-          newData[rowIndex] = { ...newData[rowIndex], [column]: value }; // Update specific cell
+          newData[rowIndex] = { ...newData[rowIndex], [columnName]: value }; // Update specific cell
           handleValueChange(newData); // Update the main form state
         };
 
@@ -281,7 +283,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
         const handleAddRow = () => {
           if (isReadOnly) return;
           // Create a new row object with empty strings for each column
-          const newRow = columns.reduce((acc, col) => ({ ...acc, [col]: "" }), {});
+          const newRow = columnDefs.reduce((acc, colDef) => ({ ...acc, [colDef.name]: "" }), {});
           handleValueChange([...tableData, newRow]); // Add the new row to the form state
         };
 
@@ -297,8 +299,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             <Table>
               <TableHeader>
                 <TableRow>
-                  {columns.map((col) => (
-                    <TableHead key={col}>{col}</TableHead>
+                  {columnDefs.map((colDef) => (
+                    <TableHead key={colDef.name}>{colDef.name}</TableHead>
                   ))}
                   {!isReadOnly && <TableHead className="w-[50px]"></TableHead>} {/* Header for delete button */}
                 </TableRow>
@@ -306,14 +308,14 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
               <TableBody>
                 {tableData.map((row, rowIndex) => (
                   <TableRow key={rowIndex}>
-                    {columns.map((col) => (
-                      <TableCell key={col}>
+                    {columnDefs.map((colDef) => (
+                      <TableCell key={colDef.name}>
                         <Input
-                          value={row[col] || ""}
-                          onChange={(e) => handleCellChange(rowIndex, col, e.target.value)}
+                          value={row[colDef.name] || ""}
+                          onChange={(e) => handleCellChange(rowIndex, colDef.name, e.target.value)}
                           disabled={isReadOnly}
                           readOnly={isReadOnly}
-                          placeholder={`Enter ${col}...`}
+                          placeholder={`Enter ${colDef.name}...`}
                           className="min-w-[100px]" // Prevent inputs from becoming too small
                         />
                       </TableCell>
