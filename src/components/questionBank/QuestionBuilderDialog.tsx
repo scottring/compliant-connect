@@ -167,9 +167,8 @@ export function QuestionBuilderDialog({
     if (open && dbSections) {
       // Filter for top-level sections (assuming level 1 or null parent_id)
       // Filter for top-level sections (parent_id is null)
-      const parents = dbSections.filter(s => s.parent_id === null);
       // Map db data to Section type and sort by 'order'
-      const mappedParents: Section[] = parents.map(p => ({
+      const mappedParents: Section[] = dbSections.map(p => ({
         id: p.id,
         name: p.name,
         description: p.description,
