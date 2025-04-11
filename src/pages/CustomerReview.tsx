@@ -716,126 +716,6 @@ const CustomerReview = () => {
   const getStatusColorClass = () => { /* ... */ };
   // --- End Helper Functions ---
 
-  // Debug component for CustomerReview 
-  const DebugPanel = ({ pirId }: { pirId: string }) => {
-    const [dbStatus, setDbStatus] = useState<string>('unknown');
-    
-    const checkStatus = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('pir_requests')
-          .select('status, updated_at')
-          .eq('id', pirId)
-          .single();
-          
-        if (error) {
-          console.error("Debug: Error fetching status:", error);
-          setDbStatus(`Error: ${error.message}`);
-        } else {
-          console.log("Debug: Current status:", data);
-          setDbStatus(`${data.status} (updated: ${new Date(data.updated_at).toLocaleTimeString()})`);
-        }
-      } catch (err) {
-        console.error("Debug: Exception:", err);
-        setDbStatus(`Exception: ${err}`);
-      }
-    };
-    
-    const updateStatus = async (status: PIRStatus) => {
-      try {
-        console.log(`Debug: Setting status to ${status}...`);
-        const { error } = await supabase
-          .from('pir_requests')
-          .update({ 
-            status, 
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', pirId);
-          
-        if (error) {
-          console.error("Debug: Error updating:", error);
-          toast.error(`Debug update failed: ${error.message}`);
-        } else {
-          console.log("Debug: Update success");
-          toast.success(`Debug: Updated to ${status}`);
-          checkStatus();
-        }
-      } catch (err) {
-        console.error("Debug: Exception updating:", err);
-        toast.error(`Debug exception: ${err}`);
-      }
-    };
-    
-    // Check status on mount
-    useEffect(() => {
-      checkStatus();
-      // Set up interval to check status every 5 seconds
-      const interval = setInterval(checkStatus, 5000);
-      return () => clearInterval(interval);
-    }, []);
-    
-    return (
-      <div className="mt-8 border-t-2 border-gray-200 pt-4">
-        <h3 className="text-lg font-bold mb-2">Debug Panel</h3>
-        <div className="bg-gray-100 p-4 rounded-md">
-          <div className="flex items-center gap-2 mb-3">
-            <div>Current DB Status: <span className="font-mono">{dbStatus}</span></div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={checkStatus}
-              className="h-7 text-xs"
-            >
-              Refresh
-            </Button>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => updateStatus('draft')}
-              className="bg-gray-200"
-            >
-              Set draft
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => updateStatus('submitted')}
-              className="bg-orange-100"
-            >
-              Set submitted
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => updateStatus('in_review')}
-              className="bg-blue-100"
-            >
-              Set in_review
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => updateStatus('flagged')}
-              className="bg-yellow-100"
-            >
-              Set flagged
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => updateStatus('approved')}
-              className="bg-green-100"
-            >
-              Set approved
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   // --- Render Logic ---
   if (isLoadingPir) { return <div className="p-12 text-center">Loading PIR details...</div>; }
@@ -988,8 +868,6 @@ const CustomerReview = () => {
         </div>
       )}
       
-      {/* Debug panel */}
-      {pirId && <DebugPanel pirId={pirId} />}
     </div>
   );
 };

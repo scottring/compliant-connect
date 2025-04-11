@@ -85,7 +85,7 @@ const SupplierProducts = () => {
       .returns<PirRequestRecord[]>(); // Add .returns<Type>()
 
     if (pirError) {
-      console.error('Error loading PIR requests:', pirError);
+      // console.error('Error loading PIR requests:', pirError); // Keep error logging for actual issues
       throw new Error(`Failed to load Product Information Requests: ${pirError.message}`);
     }
     if (!pirData || pirData.length === 0) return [];
@@ -102,7 +102,7 @@ const SupplierProducts = () => {
         .in('id', supplierIds);
 
       if (suppliersError) {
-        console.error('Error fetching supplier names:', suppliersError);
+        // console.error('Error fetching supplier names:', suppliersError); // Keep error logging
         // Continue without supplier names if fetch fails
       } else if (suppliersData) {
         supplierMap = new Map(suppliersData.map(s => [s.id, s.name]));
@@ -161,7 +161,7 @@ const SupplierProducts = () => {
       // Trigger React Query refetch for cache update
       await refetchPirs();
     } catch (error) {
-      console.error("Error during forced refresh:", error);
+      // console.error("Error during forced refresh:", error); // Keep error logging
     }
   }, [currentCompany?.id, fetchPirRequests, queryClient, refetchPirs]);
 

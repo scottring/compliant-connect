@@ -218,7 +218,6 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {/* Update Table Headers for PIRs */}
                     <TableHead>Requesting Customer</TableHead>
                     <TableHead>Product Name</TableHead> {/* Added Product Name Header */}
                     <TableHead>Request Details</TableHead>
