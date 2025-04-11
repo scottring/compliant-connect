@@ -190,6 +190,38 @@ export type Database = {
           },
         ]
       }
+      pir_response_comments: {
+        Row: {
+          comment_text: string
+          created_at: string
+          id: string
+          response_id: string
+          user_id: string
+        }
+        Insert: {
+          comment_text: string
+          created_at?: string
+          id?: string
+          response_id: string
+          user_id: string
+        }
+        Update: {
+          comment_text?: string
+          created_at?: string
+          id?: string
+          response_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pir_response_comments_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "pir_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pir_responses: {
         Row: {
           answer: Json
@@ -792,6 +824,21 @@ export type Database = {
           section_id: string | null
           section_level: number | null
           section_name: string | null
+        }
+        Relationships: []
+      }
+      v_sections_hierarchy: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          full_path_name: string | null
+          id: string | null
+          level: number | null
+          name: string | null
+          order_index: number | null
+          parent_id: string | null
+          path_string: string | null
+          updated_at: string | null
         }
         Relationships: []
       }

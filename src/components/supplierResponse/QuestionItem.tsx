@@ -12,6 +12,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -48,9 +49,15 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   onAddComment,
   isReadOnly = false
 }) => {
-  const [commentsOpen, setCommentsOpen] = React.useState(false);
-  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined); // Add type assertion
+  // Log the received answer prop and its comments
+  useEffect(() => {
+    console.log(`QuestionItem (${question.id}): Received answer prop:`, answer);
+    console.log(`QuestionItem (${question.id}): Comments in prop:`, answer?.comments);
+  }, [answer, question.id]);
+  const [commentsOpen, setCommentsOpen] = React.useState(false); // Reset to initially closed
+  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [feedbackText, setFeedbackText] = useState(""); // State for the new feedback input
 
   const getSchema = () => {
     switch (question.type) {
@@ -298,6 +305,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
               onClick={() => setCommentsOpen(!commentsOpen)}
             >
               <MessageCircle className="h-4 w-4 mr-1" />
+              {/* Log the length being displayed */}
+              {/* {console.log(`QuestionItem (${question.id}): Rendering comment count:`, answer?.comments?.length || 0)} */}
               {answer?.comments?.length || 0}
             </Button>
           )}
@@ -344,21 +353,40 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           )}
         </form>
       </Form>
-      
-      {/* Comments section */}
-      {commentsOpen && answer && (
-        <div className="border-t pt-4 mt-4">
-          <CommentsThread 
-            comments={answer.comments || []} 
-            answerId={answer.id}
-            onAddComment={(id, text) => {
-              if (!isReadOnly) {
-                onAddComment(text);
-              }
-            }}
-          />
-        </div>
-      )}
+      {/* Direct Feedback Input Section */}
+      <Collapsible open={commentsOpen} onOpenChange={setCommentsOpen}>
+        <CollapsibleContent className="mt-4 pt-4 border-t">
+          <div className="space-y-2">
+            <label htmlFor={`feedback-${question.id}`} className="text-sm font-medium">Your Feedback/Comment</label>
+            <Textarea
+              id={`feedback-${question.id}`}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="Add your comment or feedback here..."
+              rows={3}
+              disabled={isReadOnly}
+            />
+            {!isReadOnly && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (feedbackText.trim()) {
+                      onAddComment(feedbackText);
+                      setFeedbackText(""); // Clear input after saving
+                      setCommentsOpen(false); // Close after saving
+                    }
+                  }}
+                  disabled={!feedbackText.trim()}
+                >
+                  Save Feedback
+                </Button>
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 };
