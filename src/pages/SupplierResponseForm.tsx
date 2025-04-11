@@ -24,19 +24,20 @@ import { useCompanyData } from '@/hooks/use-company-data'; // Import useCompanyD
 import { useUser } from '@/hooks/use-user';
 
 // Type for the combined PIR data fetched by the query
-interface PirDetails {
-    pir: Database['public']['Tables']['pir_requests']['Row']; // Use generated Row type
+// Updated interface to include comments data fetched separately
+interface PirDetailsWithComments {
+    pir: Database['public']['Tables']['pir_requests']['Row'];
     product: { id: string; name: string; } | null;
     supplier: Company | null;
     customer: Company | null;
     tags: Tag[];
     questions: (DBQuestion & {
-        // Use generated types for the actual structure based on question_sections
         question_sections?: Database['public']['Tables']['question_sections']['Row'] & {
-            parent_section?: Database['public']['Tables']['question_sections']['Row']; // Parent section via parent_id
+            parent_section?: Database['public']['Tables']['question_sections']['Row'];
         };
     })[];
-    responses: (DBPIRResponse & { response_flags?: DBFlag[] })[]; // Include response_flags
+    responses: (DBPIRResponse & { response_flags?: DBFlag[] })[];
+    comments: Database['public']['Tables']['pir_response_comments']['Row'][]; // Add comments array
 }
 
 // Type definition for DBQuestion
@@ -196,7 +197,8 @@ const SupplierResponseForm = () => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   // --- Fetch PIR Details Query ---
-  const fetchPirDetails = async (id: string): Promise<PirDetails> => {
+  // Update return type to include comments
+  const fetchPirDetails = async (id: string): Promise<PirDetailsWithComments> => {
       // Step 1: Fetch PIR Request and basic related data
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
@@ -262,7 +264,7 @@ const SupplierResponseForm = () => {
 
           // Sort Questions
           // Explicitly type a and b based on the updated PirDetails['questions'] element type
-          questions.sort((a: PirDetails['questions'][number], b: PirDetails['questions'][number]) => {
+          questions.sort((a: PirDetailsWithComments['questions'][number], b: PirDetailsWithComments['questions'][number]) => { // Corrected type name
               // Sort by parent section order_index first, then current section order_index, then question order_index
               // Use 0 for null order_index to ensure consistent sorting
               const parentOrderA = a.question_sections?.parent_section?.order_index ?? 0;
@@ -282,12 +284,35 @@ const SupplierResponseForm = () => {
           }
 
       // Step 4: Fetch existing Responses for this PIR (to populate answers) with their flags
+      // Step 4a: Fetch existing Responses for this PIR with their flags
       const { data: responsesData, error: responsesError } = await supabase
           .from('pir_responses')
-          .select('*, response_flags(*)')
+          .select('*, response_flags(*)') // Fetch responses and flags
           .eq('pir_id', id);
 
       if (responsesError) throw new Error(`Failed to fetch existing PIR responses: ${responsesError.message}`);
+      
+      // Step 4b: Fetch comments separately for all responses associated with this PIR
+      const responseIds = (responsesData || []).map(r => r.id);
+      let commentsData: Database['public']['Tables']['pir_response_comments']['Row'][] = [];
+      if (responseIds.length > 0) {
+          const { data: fetchedComments, error: commentsError } = await supabase
+              .from('pir_response_comments')
+              .select('*')
+              .in('response_id', responseIds);
+
+          if (commentsError) throw new Error(`Failed to fetch PIR response comments: ${commentsError.message}`);
+          commentsData = fetchedComments || [];
+      }
+      
+      // Group comments by response_id for easier lookup
+      const commentsByResponseId = commentsData.reduce((acc, comment) => {
+          if (!acc[comment.response_id]) {
+              acc[comment.response_id] = [];
+          }
+          acc[comment.response_id].push(comment);
+          return acc;
+      }, {} as Record<string, Database['public']['Tables']['pir_response_comments']['Row'][]>);
 
 
       // Step 5: Combine data
@@ -297,17 +322,18 @@ const SupplierResponseForm = () => {
           product: pirData.product as any,
           supplier: pirData.supplier as Company | null,
           customer: pirData.customer as Company | null,
-          tags: pirTags, // PIR-specific tags
-          questions: questions, // Questions fetched via PIR tags
-          responses: (responsesData || []) as (DBPIRResponse & { response_flags?: DBFlag[] })[], // Existing responses with flags
+          tags: pirTags,
+          questions: questions,
+          responses: (responsesData || []) as (DBPIRResponse & { response_flags?: DBFlag[] })[],
+          comments: commentsData, // Include fetched comments
       };
   };
 
   const {
-      data: pirDetails,
+      data: pirDetails, // Keep name pirDetails, but it holds PirDetailsWithComments
       isLoading: isLoadingPir,
       error: errorPir,
-  } = useQuery<PirDetails, Error>({
+  } = useQuery<PirDetailsWithComments, Error>({ // Use updated interface here
       queryKey: ['pirDetails', pirId],
       queryFn: () => fetchPirDetails(pirId!),
       enabled: !!pirId,
@@ -336,19 +362,17 @@ const SupplierResponseForm = () => {
   const requester = pirDetails?.customer;
   const sheetQuestions = pirDetails?.questions ?? [];
   const sheetTags = pirDetails?.tags ?? [];
-  const sheetResponses = pirDetails?.responses ?? []; // This is DBPIRResponse[]
+  const sheetResponses = pirDetails?.responses ?? [];
+  const sheetComments = pirDetails?.comments ?? []; // Extract comments
 
   // Initialize expanded sections
   useEffect(() => { /* ... */ }, [sheetQuestions]);
 
-
-  // Grouping logic
-  // Group questions first by their parent section ID (top-level sections), then by their own section ID (subsections)
+  // Grouping logic for questions
   const questionsGrouped = sheetQuestions.reduce(
     (acc, question) => {
-      // Determine the parent section ID. If no parent, use the section's own ID as the key for top-level grouping.
       const parentSectionId = question.question_sections?.parent_section?.id ?? question.question_sections?.id ?? "root";
-      const currentSectionId = question.section_id ?? "unsectioned"; // Use the direct section_id from the question
+      const currentSectionId = question.section_id ?? "unsectioned";
 
       if (!acc[parentSectionId]) {
         acc[parentSectionId] = {};
@@ -358,18 +382,38 @@ const SupplierResponseForm = () => {
       }
       acc[parentSectionId][currentSectionId].push(question);
       return acc;
-    // Adjust the type based on the updated PirDetails['questions'] type
-    }, {} as Record<string, Record<string, PirDetails['questions']>>);
+    }, {} as Record<string, Record<string, PirDetailsWithComments['questions']>>); // Use updated type
 
-  // Map DBPIRResponse to SupplierResponse for QuestionItem component
+  // Group comments by response_id for easier lookup
+  const commentsByResponseId = sheetComments.reduce((acc, comment) => {
+      if (!acc[comment.response_id]) {
+          acc[comment.response_id] = [];
+      }
+      acc[comment.response_id].push(comment);
+      return acc;
+  }, {} as Record<string, Database['public']['Tables']['pir_response_comments']['Row'][]>);
+
+  // Map DBPIRResponse to SupplierResponse, manually adding comments
   const answersMap = sheetResponses.reduce((acc, response) => {
+    const responseComments = commentsByResponseId[response.id] || [];
+    
+    // Map DB comments to the frontend Comment type from src/types/index.ts
+    const mappedComments = responseComments.map(comment => ({
+      id: comment.id,
+      answerId: comment.response_id, // Map response_id to answerId
+      text: comment.comment_text,     // Map comment_text to text
+      createdBy: comment.user_id,     // Map user_id to createdBy
+      createdByName: `User (${comment.user_id.substring(0, 6)}...)`, // Placeholder for name
+      createdAt: new Date(comment.created_at), // Convert timestamp string to Date object
+    }));
+
     acc[response.question_id!] = {
         id: response.id,
         questionId: response.question_id!,
-        value: response.answer as any, // Map 'answer' (Json) to 'value'
-        comments: [], // Map to empty array - Fetch actual comments if needed
-        flags: response.response_flags || [], // Include flags
-    } as SupplierResponse; // Use SupplierResponse type from @/types
+        value: response.answer as any,
+        comments: mappedComments,
+        flags: response.response_flags || [],
+    } as SupplierResponse;
     return acc;
   }, {} as Record<string, SupplierResponse>);
 
@@ -409,6 +453,55 @@ const SupplierResponseForm = () => {
   });
 
   const submitResponsesMutation = useSubmitResponsesMutation(queryClient, navigate);
+  
+  // --- Add Comment Mutation ---
+  // Define input type for the add comment mutation
+  type AddCommentInput = {
+    responseId: string;
+    userId: string;
+    commentText: string;
+  };
+  
+  const useAddCommentMutation = (queryClient: ReturnType<typeof useQueryClient>, pirId: string | undefined) => {
+    return useMutation<void, Error, AddCommentInput>({
+      mutationFn: async ({ responseId, userId, commentText }) => {
+        console.log("useAddCommentMutation: mutationFn started", { responseId, userId, commentText }); // Log start
+        if (!responseId || !userId || !commentText) {
+          console.error("useAddCommentMutation: Missing required data", { responseId, userId, commentText });
+          throw new Error("Missing required data for adding comment.");
+        }
+  
+        const { error } = await supabase
+          .from('pir_response_comments') // Correct table name
+          .insert({
+            response_id: responseId,
+            user_id: userId,
+            comment_text: commentText, // Correct column name
+          });
+  
+        if (error) {
+          // Improved error handling
+          const errorMessage = error.message || 'Unknown database error';
+          console.error("Supabase insert error (pir_response_comments):", error); // Log the full error object
+          throw new Error(`Failed to add comment: ${errorMessage}`);
+        }
+      },
+      onSuccess: () => {
+        console.log("useAddCommentMutation: onSuccess triggered"); // Log success
+        toast.success('Comment added successfully');
+        // Invalidate pirDetails to refetch comments
+        console.log("useAddCommentMutation: Invalidating pirDetails query", { pirId });
+        queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
+      },
+      onError: (error) => {
+        console.error("useAddCommentMutation: onError triggered", error); // Log error
+        toast.error(`Failed to add comment: ${error.message}`);
+      },
+    });
+  };
+  
+  const addCommentMutation = useAddCommentMutation(queryClient, pirId);
+  // --- End Add Comment Mutation ---
 
   const handleSubmit = async () => {
     if (!user) {
@@ -439,7 +532,41 @@ const SupplierResponseForm = () => {
   const handleAnswerUpdate = (questionId: string, value: any) => {
     updateAnswerMutation.mutate({ questionId, value });
   };
-  const handleAddComment = (answerId: string, text: string) => { toast.info(`Adding comment to A:${answerId} - Not implemented.`); };
+  // Updated handler to save comments with logging
+  const handleAddComment = (questionId: string, text: string) => {
+    console.log("handleAddComment called:", { questionId, text }); // Log call
+    if (!user) {
+      console.error("handleAddComment: No user found.");
+      toast.error("You must be logged in to add comments.");
+      return;
+    }
+    if (!pirDetails) {
+        console.error("handleAddComment: pirDetails not loaded.");
+        toast.error("PIR details not loaded yet.");
+        return;
+    }
+
+    // Find the response associated with this questionId
+    const response = sheetResponses.find(r => r.question_id === questionId);
+    console.log("handleAddComment: Found response:", response); // Log found response
+
+    if (!response) {
+      console.error("handleAddComment: No response found for questionId:", questionId);
+      // TODO: Decide how to handle comments if no answer exists yet.
+      // Option 2: Create a draft response automatically (might be complex).
+      // For now, show an error.
+      toast.error("Please save an answer before adding a comment.");
+      return;
+    }
+
+    const mutationArgs = {
+      responseId: response.id,
+      userId: user.id,
+      commentText: text,
+    };
+    console.log("handleAddComment: Calling addCommentMutation.mutate with:", mutationArgs); // Log mutation args
+    addCommentMutation.mutate(mutationArgs);
+  };
   // --- End Event Handlers ---
 
 
@@ -696,7 +823,7 @@ const SupplierResponseForm = () => {
                                 answer={answer} // Pass the correctly typed answer
                                 productSheetId={productSheet.id} // Pass PIR ID
                                 onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
-                                onAddComment={(text) => { if (answer) handleAddComment(answer.id, text); }}
+                                onAddComment={(text) => handleAddComment(question.id, text)} // Pass question.id
                                 isReadOnly={isReadOnly()} // Pass read-only state based on PIR status
                               />
                             </div>
