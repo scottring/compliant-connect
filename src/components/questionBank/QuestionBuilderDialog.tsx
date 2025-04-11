@@ -82,6 +82,10 @@ const formSchema = z.discriminatedUnion("type", [
     type: z.literal("list_table"),
     options: z.array(tableColumnSchema).min(1, "At least one column is required"),
   }),
+  // Type 'component_material_list' - no options field needed in the builder
+  baseSchema.extend({
+    type: z.literal("component_material_list"),
+  }),
 ]);
 
 type FormValues = z.infer<typeof formSchema>;
@@ -801,6 +805,7 @@ export function QuestionBuilderDialog({
                           <SelectItem value="date">Date</SelectItem>
                           <SelectItem value="file">File Upload</SelectItem>
                           <SelectItem value="list_table">List Table</SelectItem>
+                          <SelectItem value="component_material_list">Component/Material List</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
