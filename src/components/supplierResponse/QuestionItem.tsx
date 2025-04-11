@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Question, SupplierResponse, Comment, TableColumn } from "../../types/index"; // Explicit relative path
-import { Database } from "../../types/supabase"; // Import Database type
+import { Database, TablesInsert } from "../../types/supabase"; // Import Database type and TablesInsert
 import { DBQuestion } from "@/hooks/use-question-bank";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +45,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import ComponentManager from "./ComponentManager"; // Added import
+import MaterialManager from "./MaterialManager"; // Added import
 
 interface QuestionItemProps {
   question: Question | DBQuestion;
@@ -71,76 +73,52 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   const [commentsOpen, setCommentsOpen] = React.useState(false); // Reset to initially closed
   const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | Record<string, string>[] | undefined>(answer?.value as string | number | boolean | string[] | Record<string, string>[] | undefined);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [componentSaveTimeout, setComponentSaveTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout for component/material list saves
   const [feedbackText, setFeedbackText] = useState(""); // State for the new feedback input
-  // --- State for component_material_list type ---
-  type ComponentData = Database['public']['Tables']['pir_response_components']['Row'] & {
-    materials: Database['public']['Tables']['pir_response_component_materials']['Row'][];
-  };
-  const [componentMaterialData, setComponentMaterialData] = useState<ComponentData[]>([]);
-  const [isLoadingComponentData, setIsLoadingComponentData] = useState(false);
-  const [errorLoadingComponentData, setErrorLoadingComponentData] = useState<string | null>(null);
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null); // Added state for selected component
   const supabase = useSupabaseClient<Database>();
   const queryClient = useQueryClient(); // Get query client instance
 
-  // --- Effect to fetch data for component_material_list ---
+  // Automatically create the base response record for component/material lists if it doesn't exist
   useEffect(() => {
-    if (question.type === 'component_material_list' && answer?.id && supabase) {
-      const fetchData = async () => {
-        setIsLoadingComponentData(true);
-        setErrorLoadingComponentData(null);
-        console.log(`Fetching component data for response ID: ${answer.id}`);
+    const createBaseResponseIfNeeded = async () => {
+      // Only run for component_material_list type and if there's no existing answer ID
+      if (question.type === 'component_material_list' && !answer?.id && pirId && question.id) {
+        console.log(`QuestionItem (${question.id}): Component list type detected without existing answer ID. Upserting base record for PIR ${pirId}...`);
+        const baseResponseData: TablesInsert<'pir_responses'> = {
+          pir_id: pirId,
+          question_id: question.id,
+          answer: {}, // Changed from null to empty object for component/material list
+          status: 'draft' as ResponseStatus // Default status, assert type
+        };
 
-        // --- Placeholder Fetch Logic ---
-        // Replace with actual Supabase calls
         try {
-          // 1. Fetch components for this response
-          const { data: components, error: componentsError } = await supabase
-            .from('pir_response_components')
-            .select('*')
-            .eq('pir_response_id', answer.id)
-            .order('order_index');
-          if (componentsError) throw componentsError;
-          if (!components) {
-            console.warn(`No components found for response ID: ${answer.id}`);
-            setComponentMaterialData([]);
-            setIsLoadingComponentData(false);
-            return; // Exit early if no components
+          const { error } = await supabase
+            .from('pir_responses')
+            .upsert(baseResponseData, { onConflict: 'pir_id, question_id' })
+            .select('id') // Select ID to confirm upsert
+            .single(); // Expect a single record
+
+          if (error) {
+            console.error(`QuestionItem (${question.id}): Error upserting base pir_response:`, error);
+            toast.error("Error saving initial response data.", { description: error.message });
+          } else {
+            console.log(`QuestionItem (${question.id}): Base pir_response upserted successfully for PIR ${pirId}. Invalidating parent query.`);
+            // Invalidate the parent query to refetch and get the new answer ID
+            queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
           }
-
-          // 2. Fetch materials for each component
-          const dataWithMaterials: ComponentData[] = [];
-          for (const comp of components) {
-            const { data: materials, error: materialsError } = await supabase
-              .from('pir_response_component_materials')
-              .select('*')
-              .eq('component_id', comp.id)
-              .order('order_index');
-            if (materialsError) throw materialsError;
-
-            dataWithMaterials.push({ ...comp, materials: materials || [] });
-          }
-
-          console.log("Fetched data:", dataWithMaterials);
-          setComponentMaterialData(dataWithMaterials);
-
-        } catch (error: any) {
-          console.error("Error fetching component/material data:", error);
-          setErrorLoadingComponentData(error.message || "Failed to load data");
-          setComponentMaterialData([]); // Clear data on error
-        } finally {
-          setIsLoadingComponentData(false);
+        } catch (err) {
+          console.error(`QuestionItem (${question.id}): Unexpected error during base pir_response upsert:`, err);
+          toast.error("An unexpected error occurred while saving initial response data.");
         }
-        // --- End Placeholder Fetch Logic ---
-      };
+      }
+    };
 
-      fetchData();
-    } else {
-      // Clear data if not the correct type or no answer ID
-      setComponentMaterialData([]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question.type, answer?.id, supabase]); // Dependency: Supabase client instance
+    createBaseResponseIfNeeded();
+
+  // Dependencies: Re-run if question, PIR ID, or answer ID changes, or if clients change.
+  }, [question.id, question.type, pirId, answer?.id, supabase, queryClient]);
+
+
 
 
   const getSchema = () => {
@@ -220,14 +198,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
     };
   }, [saveTimeout]);
 
-  // Cleanup component/material save timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (componentSaveTimeout) {
-        clearTimeout(componentSaveTimeout);
-      }
-    };
-  }, [componentSaveTimeout]);
 
   // Check if this answer has been flagged
   const hasFlags = answer?.flags && answer.flags.length > 0;
@@ -605,458 +575,23 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           </div>
         );
       } // End list_table case
-case 'component_material_list': {
-  // --- Define Headers based on the relational schema ---
-  // These could potentially be made dynamic if needed later
-  const headers = ["#", "Component", "Position", "Material", "Pct.", "Recyclable"];
-
-  // --- Placeholder Handlers ---
-  const handleComponentMaterialUpdate = async (componentIndex: number, materialIndex: number | null, field: string, value: any) => {
-    if (!supabase || isReadOnly) return; // Ensure client exists and not read-only
-
-    // Convert and validate percentage values
-    if (field === 'percentage') {
-      const numValue = Number(value);
-      if (isNaN(numValue) || numValue < 0 || numValue > 100) {
-        toast.error('Percentage must be a number between 0-100');
-        return;
-      }
-      value = numValue.toString(); // Store as string to match DB schema
-    }
-
-    const component = componentMaterialData[componentIndex];
-    if (!component) {
-      console.error("Component not found at index:", componentIndex);
-      return;
-    }
-
-    let tableName: 'pir_response_components' | 'pir_response_component_materials';
-    let recordId: string;
-    let updatePayload: Record<string, any> = { [field]: value };
-
-    if (materialIndex === null) {
-      // Updating a component field
-      tableName = 'pir_response_components';
-      recordId = component.id;
-    } else {
-      // Updating a material field
-      const material = component.materials[materialIndex];
-      if (!material) {
-        console.error("Material not found at index:", materialIndex, "for component:", component.id);
-        return;
-      }
-      tableName = 'pir_response_component_materials';
-      recordId = material.id;
-    }
-
-    console.log(`Updating ${tableName} record ${recordId} with:`, updatePayload);
-
-    // 1. Optimistically update local state immediately for UI responsiveness
-    setComponentMaterialData(prevData => {
-      // Use deep copy to avoid mutation issues with nested objects/arrays
-      const newData = JSON.parse(JSON.stringify(prevData));
-      const targetComponent = newData[componentIndex];
-
-      if (!targetComponent) {
-        console.warn("Component not found during optimistic update:", componentIndex);
-        return prevData; // Return original data if component not found
-      }
-
-      if (materialIndex === null) {
-        // Update component field
-        targetComponent[field as keyof Database['public']['Tables']['pir_response_components']['Row']] = value;
-      } else {
-        // Update material field
-        const targetMaterial = targetComponent.materials[materialIndex];
-        if (!targetMaterial) {
-          console.warn("Material not found during optimistic update:", { componentIndex, materialIndex });
-          return prevData; // Return original data if material not found
+        case 'component_material_list': {
+          // Render ComponentManager and MaterialManager
+          return (
+            <div className="space-y-6">
+              <ComponentManager
+                pirResponseId={answer?.id ?? ''} // Pass the response ID
+                isReadOnly={isReadOnly}
+                onComponentSelect={setSelectedComponentId} // Pass the setter function
+                selectedComponentId={selectedComponentId} // Pass the current selection
+              />
+              <MaterialManager
+                selectedComponentId={selectedComponentId}
+                isReadOnly={isReadOnly}
+              />
+            </div>
+          );
         }
-        targetMaterial[field as keyof Database['public']['Tables']['pir_response_component_materials']['Row']] = value;
-      }
-      return newData;
-    });
-
-    // 2. Debounce the actual database update
-    if (componentSaveTimeout) {
-      clearTimeout(componentSaveTimeout);
-    }
-
-    const timeout = setTimeout(async () => {
-      console.log(`Debounced save: Updating ${tableName} record ${recordId} with payload:`, updatePayload);
-      try {
-        const { data, error } = await supabase
-          .from(tableName)
-          .update(updatePayload)
-          .eq('id', recordId)
-          .select();
-        
-        if (data) {
-          console.log(`Successfully updated ${tableName} record:`, data);
-        }
-
-        if (error) {
-          console.error(`Error during debounced update of ${tableName}:`, error);
-          toast.error(`Failed to save changes for ${field}. Please try again.`);
-          // TODO: Consider reverting optimistic update here if needed, though complex.
-        } else {
-          console.log(`Debounced save successful for ${tableName} record ${recordId}`);
-          // Optionally add a success toast, but might be too noisy
-          // toast.success("Changes saved.");
-        }
-      } catch (err) {
-        console.error("Unexpected error during debounced update:", err);
-        toast.error("An unexpected error occurred while saving changes.");
-      }
-    }, 3000); // 3-second delay
-
-    setComponentSaveTimeout(timeout);
-
-  };
-  const handleAddMaterial = async (componentIndex: number) => {
-    if (!supabase || isReadOnly || !answer?.id) return;
-
-    const component = componentMaterialData[componentIndex];
-    if (!component) {
-      console.error("Component not found at index:", componentIndex);
-      return;
-    }
-
-    // Determine the next order_index for the new material
-    const nextOrderIndex = component.materials.length; // Simple append
-
-    const newMaterialDefaults: Omit<Database['public']['Tables']['pir_response_component_materials']['Insert'], 'id' | 'created_at' | 'updated_at'> = {
-      component_id: component.id,
-      material_name: "New Material", // Default name
-      percentage: 0, // Default percentage
-      recyclable: null, // Default recyclable status
-      order_index: nextOrderIndex,
-    };
-
-    console.log("Adding new material:", newMaterialDefaults);
-
-    try {
-      const { data: insertedMaterial, error } = await supabase
-        .from('pir_response_component_materials')
-        .insert(newMaterialDefaults)
-        .select() // Select the newly inserted row to get its ID
-        .single(); // Expecting a single row back
-
-      if (error) {
-        console.error("Error adding material:", error);
-        // TODO: Add user feedback
-        return;
-      }
-
-      if (!insertedMaterial) {
-        console.error("Insert operation did not return the new material record.");
-        // TODO: Add user feedback
-        return;
-      }
-
-      console.log("Successfully added material:", insertedMaterial);
-
-      // Optimistically update local state
-      setComponentMaterialData(prevData => {
-        const newData = [...prevData];
-        const targetComponent = { ...newData[componentIndex] };
-        const targetMaterials = [...targetComponent.materials, insertedMaterial]; // Add the new material
-        targetComponent.materials = targetMaterials;
-        newData[componentIndex] = targetComponent;
-        return newData;
-      });
-
-    } catch (err) {
-      console.error("Unexpected error during material addition:", err);
-      // TODO: Add user feedback
-    }
-  };
-  const handleAddComponent = async () => {
-    if (!supabase || isReadOnly || !pirId || !question.id) {
-        console.error("Missing supabase client, PIR ID, or Question ID");
-        return; // Guard against missing essential IDs passed via props or context
-    }
-
-    let responseId = answer?.id;
-
-    // 1. Ensure a pir_responses record exists for this question
-    if (!responseId) {
-      console.log("No existing response record found, creating one...");
-      const { data: newResponse, error: responseError } = await supabase
-        .from('pir_responses')
-        .insert({
-          pir_id: pirId, // Assuming pirId is available in scope (needs to be passed down or fetched)
-          question_id: question.id,
-          answer: {}, // Use empty JSON object instead of null to satisfy NOT NULL constraint
-          status: 'draft' as ResponseStatus,
-        })
-        .select('id')
-        .single();
-
-      if (responseError || !newResponse) {
-        console.error("Error creating base response record:", responseError);
-        toast.error("Failed to initialize response before adding component.");
-        return;
-      }
-      responseId = newResponse.id;
-      console.log("Created base response record with ID:", responseId);
-      // Invalidate the parent query to refetch data including the new response ID
-      queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
-    }
-
-    // 2. Now add the component, linked to the responseId
-    const nextOrderIndex = componentMaterialData.length; // Simple append
-    const newComponentDefaults: Omit<Database['public']['Tables']['pir_response_components']['Insert'], 'id' | 'created_at' | 'updated_at'> = {
-      pir_response_id: responseId, // Use the obtained responseId
-      component_name: "New Component", // Default name
-      position: null, // Default position
-      order_index: nextOrderIndex,
-    };
-
-    console.log("Adding new component:", newComponentDefaults);
-
-    try {
-      const { data: insertedComponent, error } = await supabase
-        .from('pir_response_components')
-        .insert(newComponentDefaults)
-        .select() // Select the newly inserted row to get its ID
-        .single(); // Expecting a single row back
-
-      if (error) {
-        console.error("Error adding component:", error);
-        // TODO: Add user feedback
-        return;
-      }
-
-      if (!insertedComponent) {
-        console.error("Insert operation did not return the new component record.");
-        // TODO: Add user feedback
-        return;
-      }
-
-      console.log("Successfully added component:", insertedComponent);
-
-      // Optimistically update local state, adding the new component with an empty materials array
-      const newComponentWithMaterials: ComponentData = {
-        ...insertedComponent,
-        materials: [],
-      };
-
-      setComponentMaterialData(prevData => [...prevData, newComponentWithMaterials]);
-
-    } catch (err) {
-      console.error("Unexpected error during component addition:", err);
-      // TODO: Add user feedback
-    }
-      // TODO: Consider invalidating the parent query ('pirDetails') if the base response was created
-  };
-   const handleDeleteMaterial = async (componentIndex: number, materialId: string) => {
-    if (!supabase || isReadOnly) return;
-
-    console.log("Deleting Material:", { componentIndex, materialId });
-
-    try {
-      const { error } = await supabase
-        .from('pir_response_component_materials')
-        .delete()
-        .eq('id', materialId);
-
-      if (error) {
-        console.error("Error deleting material:", error);
-        // TODO: Add user feedback
-        return;
-      }
-
-      console.log("Successfully deleted material:", materialId);
-
-      // Optimistically update local state
-      setComponentMaterialData(prevData => {
-        const newData = [...prevData];
-        const targetComponent = { ...newData[componentIndex] };
-        // Filter out the deleted material
-        targetComponent.materials = targetComponent.materials.filter(mat => mat.id !== materialId);
-        newData[componentIndex] = targetComponent;
-        return newData;
-      });
-
-    } catch (err) {
-      console.error("Unexpected error during material deletion:", err);
-      // TODO: Add user feedback
-    }
-   };
-   const handleDeleteComponent = async (componentId: string) => {
-    if (!supabase || isReadOnly) return;
-
-    console.log("Deleting Component:", componentId);
-
-    // Optional: Add a confirmation dialog here before deleting
-
-    try {
-      const { error } = await supabase
-        .from('pir_response_components')
-        .delete()
-        .eq('id', componentId);
-
-      if (error) {
-        console.error("Error deleting component:", error);
-        // TODO: Add user feedback (e.g., toast notification)
-        // Consider if the error is due to foreign key constraints if cascade delete isn't set up
-        return;
-      }
-
-      console.log("Successfully deleted component:", componentId);
-
-      // Optimistically update local state
-      setComponentMaterialData(prevData => prevData.filter(comp => comp.id !== componentId));
-
-    } catch (err) {
-      console.error("Unexpected error during component deletion:", err);
-      // TODO: Add user feedback
-    }
-   };
-
-
-  // --- Render Logic ---
-  if (isLoadingComponentData) {
-    return <div>Loading component data...</div>;
-  }
-  if (errorLoadingComponentData) {
-    return <div className="text-red-600">Error: {errorLoadingComponentData}</div>;
-  }
-
-  let globalRowIndex = 0; // To keep track of the overall row number (#)
-
-  return (
-    <div className="space-y-3 overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {headers.map((header) => (
-              <TableHead key={header}>{header}</TableHead>
-            ))}
-            {!isReadOnly && <TableHead className="w-[100px]">Actions</TableHead>} {/* Actions */}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {componentMaterialData.length === 0 && (
-              <TableRow><TableCell colSpan={headers.length + (isReadOnly ? 0 : 1)} className="text-center text-muted-foreground">No components added yet.</TableCell></TableRow>
-          )}
-          {componentMaterialData.map((component, compIndex) => {
-            globalRowIndex++; // Increment global index for each component group start
-            const componentRowSpan = Math.max(1, component.materials.length);
-
-            if (component.materials.length === 0) {
-              // --- Render Row for Component with NO Materials ---
-              return (
-                <TableRow key={`comp-${component.id}-empty`}>
-                  {/* Row Number */}
-                  <TableCell className="align-top border-r">{globalRowIndex}</TableCell>
-                  {/* Component Name */}
-                  <TableCell className="align-top border-r">
-                    <Input value={component.component_name || ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, null, 'component_name', e.target.value)} disabled={isReadOnly} placeholder="Component Name" className="min-w-[150px]" />
-                  </TableCell>
-                  {/* Position */}
-                  <TableCell className="align-top border-r">
-                    <Input value={component.position || ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, null, 'position', e.target.value)} disabled={isReadOnly} placeholder="Position" className="min-w-[100px]" />
-                  </TableCell>
-                  {/* Empty Cells for Material Columns */}
-                  <TableCell className="align-top border-r"></TableCell> {/* Material Name */}
-                  <TableCell className="align-top border-r"></TableCell> {/* Percentage */}
-                  <TableCell className="align-top"></TableCell>          {/* Recyclable */}
-                  {/* Actions Cell */}
-                  {!isReadOnly && (
-                    <TableCell className="align-middle border-t">
-                      <div className="flex flex-col items-center space-y-1">
-                        {/* Add Material Button */}
-                        <Button variant="outline" size="sm" className="text-xs px-1 py-0.5 h-auto" onClick={() => handleAddMaterial(compIndex)}>+ Mat</Button>
-                        {/* Delete Component Button */}
-                        <Button variant="ghost" size="icon" className="h-6 w-6 mt-2" onClick={() => handleDeleteComponent(component.id)} aria-label="Delete Component">
-                          <Trash2 className="h-4 w-4 text-red-700" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              );
-            } else {
-              // --- Render Rows for Component WITH Materials (Existing Logic) ---
-              let currentGlobalRow = globalRowIndex; // Capture starting global index for this group
-              return component.materials.map((material, matIndex) => {
-                const isFirstMaterialRow = matIndex === 0;
-                if (!isFirstMaterialRow) globalRowIndex++; // Increment global index only for subsequent material rows
-
-                return (
-                  <TableRow key={material.id || `comp-${component.id}-mat-${matIndex}`}>
-                    {/* Row Number */}
-                    {isFirstMaterialRow && <TableCell rowSpan={componentRowSpan} className="align-top border-r">{currentGlobalRow}</TableCell>}
-                    {/* Hidden cell for layout consistency might not be needed if row number logic is correct */}
-                    {/* {!isFirstMaterialRow && <TableCell className="hidden border-r">{globalRowIndex}</TableCell>} */}
-
-                    {/* Component Name (spans rows) */}
-                    {isFirstMaterialRow && (
-                      <TableCell rowSpan={componentRowSpan} className="align-top border-r">
-                        <Input value={component.component_name || ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, null, 'component_name', e.target.value)} disabled={isReadOnly} placeholder="Component Name" className="min-w-[150px]" />
-                      </TableCell>
-                    )}
-
-                    {/* Position (spans rows) */}
-                    {isFirstMaterialRow && (
-                      <TableCell rowSpan={componentRowSpan} className="align-top border-r">
-                        <Input value={component.position || ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, null, 'position', e.target.value)} disabled={isReadOnly} placeholder="Position" className="min-w-[100px]" />
-                      </TableCell>
-                    )}
-
-                    {/* Material Name */}
-                    <TableCell className="align-top border-r">
-                       <Input value={material.material_name || ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, matIndex, 'material_name', e.target.value)} disabled={isReadOnly} placeholder="Material Name" className="min-w-[150px]" />
-                    </TableCell>
-
-                    {/* Percentage */}
-                    <TableCell className="align-top border-r">
-                       <Input type="number" value={material.percentage ?? ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, matIndex, 'percentage', e.target.value === '' ? null : Number(e.target.value))} disabled={isReadOnly} placeholder="%" className="min-w-[60px]" />
-                    </TableCell>
-
-                    {/* Recyclable */}
-                    <TableCell className="align-top">
-                       <Input value={material.recyclable || ''} onChange={(e) => handleComponentMaterialUpdate(compIndex, matIndex, 'recyclable', e.target.value)} disabled={isReadOnly} placeholder="Recyclable?" className="min-w-[100px]" />
-                    </TableCell>
-
-                    {/* Actions Cell */}
-                    {!isReadOnly && (
-                      <TableCell className={`align-middle ${isFirstMaterialRow ? 'border-t' : ''}`}>
-                        <div className="flex flex-col items-center space-y-1">
-                            {/* Delete Material Button */}
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteMaterial(compIndex, material.id)} aria-label="Delete Material">
-                                <Trash2 className="h-3 w-3 text-red-500" />
-                            </Button>
-                            {/* Add Material Button (only on last material row of component) */}
-                            {matIndex === component.materials.length - 1 && (
-                                <Button variant="outline" size="sm" className="text-xs px-1 py-0.5 h-auto" onClick={() => handleAddMaterial(compIndex)}>+ Mat</Button>
-                            )}
-                            {/* Delete Component Button (only on first material row) */}
-                            {isFirstMaterialRow && (
-                                 <Button variant="ghost" size="icon" className="h-6 w-6 mt-2" onClick={() => handleDeleteComponent(component.id)} aria-label="Delete Component">
-                                     <Trash2 className="h-4 w-4 text-red-700" />
-                                 </Button>
-                            )}
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              });
-            }
-          })}
-        </TableBody>
-      </Table>
-      {!isReadOnly && (
-        <Button type="button" variant="outline" size="sm" onClick={handleAddComponent}>
-          Add Component Group
-        </Button>
-      )}
-    </div>
-  );
-} // End component_material_list case
 
 default:
   // Ensure the default case handles the original 'answer' field if needed

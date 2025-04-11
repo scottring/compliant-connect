@@ -138,6 +138,7 @@ export interface SupplierResponse {
   id: string;
   questionId: string | null; // Match pir_responses
   value: Json | null; // Match pir_responses.answer
+  answer?: Database["public"]["Tables"]["pir_response_components"]["Row"][] | null; // Added to support component_material_list
   comments?: Comment[];
   flags?: Flag[];
   status?: Database['public']['Enums']['flag_status']; // Status for reviewed responses
@@ -202,3 +203,17 @@ export type CompanyUser = {
   created_at: string;
   updated_at: string;
 };
+
+export type QuestionType =
+  | "text"
+  | "number"
+  | "boolean"
+  | "select"
+  | "multi-select"
+  | "list_table"
+  | "single_select"
+  | "multi_select"
+  | "date"
+  | "file"
+  | "LIST_TABLE"
+  | "component_material_list";

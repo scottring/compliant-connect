@@ -10,7 +10,7 @@ import { Tag, Company, Subsection, Section, SupplierResponse } from "../types/in
 // Import PIRRequest from pir.ts, but use Database types for enums and responses
 import { PIRRequest } from "@/types/pir";
 import { Database } from "@/types/supabase"; // Import generated types
-import { Json } from '@/types/supabase'; // Import Json type
+import { Json, TablesInsert, TablesUpdate } from '@/types/supabase'; // Import Json type and Table types
 import { PIRStatus, ResponseStatus, isValidPIRStatusTransition, isValidResponseStatusTransition } from '@/types/pir';
 type DBPIRResponse = Database['public']['Tables']['pir_responses']['Row']; // Use generated row type
 type DBFlag = Database['public']['Tables']['response_flags']['Row']; // Use generated row type for flags
@@ -60,7 +60,7 @@ export type DBQuestion = {
 // Define input type for the submit mutation
 type SubmitResponsesInput = {
   pirId: string;
-  responses: { id: string; questionId: string; value: any; comments: string[] }[];
+  responses: { id: string; questionId: string; value: any; questionType: QuestionType; comments: string[] }[]; // Added questionType
 };
 
 const useSubmitResponsesMutation = (
@@ -86,12 +86,21 @@ const useSubmitResponsesMutation = (
             }
 
             // 2. Update all responses first
-            const responseUpdates = responses.map(response => ({
-                ...response,
-                status: 'submitted' as ResponseStatus,
-                submitted_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            }));
+            const responseUpdates = responses.map(response => {
+                const updateData: Partial<TablesUpdate<'pir_responses'>> & { pir_id: string; question_id: string } = {
+                    // id: response.id, // DO NOT include the placeholder ID here. Upsert uses onConflict.
+                    pir_id: pirId, // Need pir_id for upsert onConflict
+                    question_id: response.questionId, // Need question_id for upsert onConflict
+                    status: 'submitted' as ResponseStatus,
+                    submitted_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    // Conditionally include the answer based on question type
+                    ...(response.questionType !== 'component_material_list' && { answer: response.value }),
+                    // If it *is* component_material_list, answer should already be null from updateAnswerMutation
+                };
+                // We don't need to explicitly handle comments here as they are in a separate table.
+                return updateData;
+            });
 
             const { error: responsesError } = await supabase
                 .from('pir_responses')
@@ -197,31 +206,135 @@ const SupplierResponseForm = () => {
 
   // --- Mutations (Moved to top level) ---
   const updateAnswerMutation = useMutation({
-    mutationFn: async ({ questionId, value }: { questionId: string; value: any }) => {
+    mutationFn: async ({ questionId, value, questionType }: { questionId: string; value: any; questionType: QuestionType }) => {
       if (!pirId) throw new Error("PIR ID is missing");
+      if (!user?.id) throw new Error("User ID is missing"); // Ensure user ID is available
 
-      // Prepare data for upsert
-      const responseData = {
-        pir_id: pirId,
-        question_id: questionId,
-        answer: value,
-        status: 'draft', // Keep status as draft when saving individual answers
+      // --- Step 1: Upsert base pir_responses record ---
+      // Always upsert to ensure the record exists and get its ID.
+      // Set answer to null initially if it's component_material_list type.
+      const baseResponseData: TablesInsert<'pir_responses'> = {
+          pir_id: pirId,
+          question_id: questionId,
+          answer: questionType === 'component_material_list' ? null : value, // Conditional answer
+          status: 'draft', // Keep status as draft
+          // user_id: user.id, // Add user_id if your policy requires it for upsert/insert
       };
 
-      // Upsert the response based on pir_id and question_id
-      const { error } = await supabase
-        .from('pir_responses')
-        .upsert(responseData, { onConflict: 'pir_id, question_id' }); // Adjust onConflict if needed
+      const { data: upsertedResponse, error: upsertError } = await supabase
+          .from('pir_responses')
+          .upsert(baseResponseData, { onConflict: 'pir_id, question_id' }) // Ensure nulls overwrite (defaultToNull removed)
+          .select('id') // Select the ID after upsert
+          .single();
 
-      if (error) throw error;
-      return responseData; // Return data on success
+      if (upsertError || !upsertedResponse) {
+          console.error("Error upserting base response:", upsertError);
+          throw new Error(`Failed to save base response: ${upsertError?.message ?? 'Unknown error'}`);
+      }
+
+      const pirResponseId = upsertedResponse.id;
+
+      // --- Step 2: Handle component_material_list specific logic ---
+      if (questionType === 'component_material_list') {
+          // Ensure value is an array (or handle potential null/undefined)
+          const components = Array.isArray(value) ? value : [];
+
+          // --- Step 2a: Delete existing components and materials for this response ---
+          // Find component IDs associated with this response
+          const { data: existingComponents, error: fetchCompError } = await supabase
+              .from('pir_response_components')
+              .select('id')
+              .eq('pir_response_id', pirResponseId);
+
+          if (fetchCompError) {
+              console.error("Error fetching existing components:", fetchCompError);
+              // Decide if this is critical - maybe log and continue? For now, throw.
+              throw new Error(`Failed to fetch existing components: ${fetchCompError.message}`);
+          }
+
+          const existingComponentIds = existingComponents.map(c => c.id);
+
+          // Delete materials first (due to potential FK constraints)
+          if (existingComponentIds.length > 0) {
+              const { error: deleteMatError } = await supabase
+                  .from('pir_response_component_materials')
+                  .delete()
+                  .in('component_id', existingComponentIds);
+              if (deleteMatError) {
+                  console.error("Error deleting existing materials:", deleteMatError);
+                  throw new Error(`Failed to clear old materials: ${deleteMatError.message}`);
+              }
+          }
+
+          // Delete components
+          const { error: deleteCompError } = await supabase
+              .from('pir_response_components')
+              .delete()
+              .eq('pir_response_id', pirResponseId);
+
+          if (deleteCompError) {
+              console.error("Error deleting existing components:", deleteCompError);
+              throw new Error(`Failed to clear old components: ${deleteCompError.message}`);
+          }
+
+          // --- Step 2b: Insert new components and materials ---
+          for (const [compIndex, component] of components.entries()) { // Use for...of with entries() for index and await
+              const componentInsert: TablesInsert<'pir_response_components'> = {
+                  pir_response_id: pirResponseId,
+                  component_name: component.name,
+                  position: component.position, // Added position
+                  order_index: compIndex, // Added order_index
+              };
+              const { data: newComponent, error: insertCompError } = await supabase
+                  .from('pir_response_components')
+                  .insert(componentInsert)
+                  .select('id')
+                  .single();
+
+              if (insertCompError || !newComponent) {
+                  console.error("Error inserting component:", insertCompError);
+                  // Consider how to handle partial failures - rollback? For now, throw.
+                  throw new Error(`Failed to insert component '${component.name}': ${insertCompError?.message}`);
+              }
+
+              const newComponentId = newComponent.id;
+              const materials = Array.isArray(component.materials) ? component.materials : [];
+
+              for (const [matIndex, material] of materials.entries()) { // Use for...of with entries() for index and await
+                  const materialInsert: TablesInsert<'pir_response_component_materials'> = {
+                      component_id: newComponentId,
+                      material_name: material.name,
+                      percentage: isNaN(parseFloat(String(material.percentage))) ? null : parseFloat(String(material.percentage)), // Convert to number, handle NaN
+                      recyclable: material.recyclable, // Added recyclable
+                      order_index: matIndex, // Added order_index
+                  };
+                  const { error: insertMatError } = await supabase
+                      .from('pir_response_component_materials')
+                      .insert(materialInsert);
+
+                  if (insertMatError) {
+                      console.error("Error inserting material:", insertMatError);
+                      // Consider rollback? For now, throw.
+                      throw new Error(`Failed to insert material '${material.name}' for component '${component.name}': ${insertMatError.message}`);
+                  }
+              } // End inner for...of loop (materials)
+          } // End outer for...of loop (components)
+      } // End of component_material_list specific logic
+
+      // Return something meaningful, maybe the base response ID or void
+      return { pirResponseId };
     },
     onSuccess: (data, variables) => {
-      toast.success(`Answer saved for question ID: ${variables.questionId}`);
+      // Distinguish success message based on type?
+      if (variables.questionType === 'component_material_list') {
+          toast.success(`Component/Material list saved for question.`);
+      } else {
+          toast.success(`Answer saved for question.`);
+      }
       queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
     },
     onError: (error: Error, variables) => {
-      toast.error(`Failed to save answer for question ID ${variables.questionId}: ${error.message}`);
+      toast.error(`Failed to save answer: ${error.message}`);
     },
   });
 
@@ -576,12 +689,23 @@ const SupplierResponseForm = () => {
         return;
     }
 
-    const responsesToSubmit = Object.entries(answers).map(([questionId, value]) => ({
-        id: `${pirId}_${questionId}`, // Composite key
-        questionId,
-        value,
-        comments: comments[questionId] || []
-    }));
+    // Create a map for quick question lookup
+    const questionMap = new Map(pirDetails.questions.map(q => [q.id, q]));
+
+    const responsesToSubmit = Object.entries(answers).map(([questionId, value]) => {
+        const question = questionMap.get(questionId);
+        if (!question) {
+            console.warn(`Question with ID ${questionId} not found in pirDetails. Skipping.`);
+            return null; // Or handle error appropriately
+        }
+        return {
+            id: `${pirId}_${questionId}`, // Composite key - Note: This might not match the actual response ID if it was newly created. Consider fetching actual IDs if needed.
+            questionId,
+            value,
+            questionType: question.type, // Add question type
+            comments: comments[questionId] || []
+        };
+    }).filter(response => response !== null) as { id: string; questionId: string; value: any; questionType: QuestionType; comments: string[] }[]; // Filter out nulls and assert type
 
     submitResponsesMutation.mutate({
         pirId,
@@ -590,9 +714,9 @@ const SupplierResponseForm = () => {
   };
 
   const handleSaveAsDraft = () => { toast.info("Save as Draft functionality not fully implemented."); };
-  // Updated handler to use the mutation
-  const handleAnswerUpdate = (questionId: string, value: any) => {
-    updateAnswerMutation.mutate({ questionId, value });
+  // Updated handler to use the mutation and include question type
+  const handleAnswerUpdate = (questionId: string, value: any, questionType: QuestionType) => {
+    updateAnswerMutation.mutate({ questionId, value, questionType });
   };
   // Updated handler to save comments with logging
   const handleAddComment = (questionId: string, text: string) => {
@@ -885,7 +1009,7 @@ const SupplierResponseForm = () => {
                                 question={{ ...question, hierarchical_number: hierarchicalNumber }}
                                 answer={answer} // Pass the correctly typed answer
                                 pirId={productSheet.id} // Pass PIR ID using the new prop name
-                                onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
+                                onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value, question.type)}
                                 onAddComment={(text) => handleAddComment(question.id, text)} // Pass question.id
                                 isReadOnly={isReadOnly()} // Pass read-only state based on PIR status
                               />
