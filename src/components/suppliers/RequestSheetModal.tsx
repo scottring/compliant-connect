@@ -224,7 +224,6 @@ const RequestSheetModal = ({
   const navigate = useNavigate();
 
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(supplierId || "");
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(supplierName || "");
   const [productPopoverOpen, setProductPopoverOpen] = useState(false);
@@ -271,20 +270,6 @@ const RequestSheetModal = ({
     form.resetField("productName"); // Use resetField for better state handling
   }, [selectedSupplierId, form]);
 
-  const sendEmailNotification = async (supplierEmail: string | null | undefined, productName: string) => {
-    setIsSendingEmail(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    if (!supplierEmail) {
-      toast.error("Could not find supplier email address");
-      setIsSendingEmail(false);
-      return false;
-    }
-    console.log(`Sending email notification to ${supplierEmail} about product: ${productName}`);
-    toast.success(`Email notification sent to ${supplierEmail}`);
-    setIsSendingEmail(false);
-    return true;
-  };
-
   const handleCreateNewSupplier = () => {
     onOpenChange(false);
     navigate("/suppliers");
@@ -316,10 +301,7 @@ const RequestSheetModal = ({
         currentCompany: currentCompany,
       });
 
-      // Send email notification regardless of whether product was existing or suggested
-      if (supplier.contact_email) {
-        await sendEmailNotification(supplier.contact_email, values.productName);
-      }
+      // Notification is handled in the mutation's onSuccess callback
 
       form.reset({ supplierId: '', productName: '', note: '' });
       setSelectedTags([]);
@@ -347,7 +329,7 @@ const RequestSheetModal = ({
     form.resetField("productName"); // Reset product when supplier changes
   };
 
-  const isFormLoading = isLoadingCurrentCompany || isLoadingSuppliers || isLoadingTags || createPIRMutation.isPending || isSendingEmail || isLoadingProductSheets;
+  const isFormLoading = isLoadingCurrentCompany || isLoadingSuppliers || isLoadingTags || createPIRMutation.isPending || isLoadingProductSheets;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
