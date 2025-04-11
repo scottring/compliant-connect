@@ -143,7 +143,7 @@ const useSubmitResponsesMutation = (
                 console.log("Fetching updated PIR record for notification...");
                 const { data: updatedPirRecord, error: fetchError } = await supabase
                     .from('pir_requests')
-                    .select('*, products(name), customer:companies!pir_requests_customer_id_fkey(name, contact_email)')
+                    .select('*, products(name), customer:companies!pir_requests_customer_id_fkey(name, contact_email), supplier:companies!pir_requests_supplier_company_id_fkey(name)')
                     .eq('id', variables.pirId)
                     .single();
 
