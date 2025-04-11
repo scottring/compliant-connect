@@ -36,19 +36,36 @@ export interface Tag {
   updated_at?: string | null; // Ensure optional and nullable
 }
 
-export interface Question {
+export interface QuestionBase {
   id: string;
   text: string;
   description: string | null;
-  type: Database['public']['Enums']['question_type']; // Use generated enum
   required: boolean;
-  options: any | null;
   tags: Tag[];
   created_at: string;
-  updated_at: string | null; // Match generated type
-  subsection_id: string | null; // Match generated type
-  hierarchical_number?: string; // Add optional hierarchical number
+  updated_at: string | null;
+  subsection_id: string | null;
+  hierarchical_number?: string;
 }
+
+// Specific question types extending the base
+export interface QuestionWithOptions extends QuestionBase {
+  type: "select" | "multi-select";
+  options: string[]; // Options are strings for select/multi-select
+}
+
+export interface QuestionListTable extends QuestionBase {
+  type: "list_table";
+  options: TableColumn[]; // Options define the table structure
+}
+
+export interface QuestionSimple extends QuestionBase {
+  type: Exclude<Database['public']['Enums']['question_type'], "select" | "multi-select" | "list_table">;
+  options: null; // No options for other types
+}
+
+// Union type for all question variations
+export type Question = QuestionWithOptions | QuestionListTable | QuestionSimple;
 
 export interface Section {
   id: string;
@@ -144,7 +161,7 @@ export interface NestedTableColumns {
   options?: string[];
 }
 
-export interface TableColumn {
+export interface TableColumn { // Ensure this is exported
   name: string;
   type: ColumnType;
   options?: string[];

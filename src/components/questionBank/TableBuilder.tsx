@@ -36,20 +36,23 @@ export function TableBuilder({ form }: TableBuilderProps) {
   const [bulkOptionsText, setBulkOptionsText] = useState("");
   const [showBulkImport, setShowBulkImport] = useState<{column: number, nested?: number} | null>(null);
 
-  const tableColumns = form.watch("tableColumns") || [];
+  // Read from the 'options' field, assuming it holds the TableColumn array
+  const tableColumns = (form.watch("options") as TableColumn[] | undefined) || [];
 
   const addTableColumn = () => {
-    const currentColumns = form.getValues("tableColumns") || [];
-    form.setValue("tableColumns", [
+    // Get current options, ensuring it's an array
+    const currentColumns = (form.getValues("options") as TableColumn[] | undefined) || [];
+    // Set the 'options' field
+    form.setValue("options", [
       ...currentColumns,
-      { name: "", type: "text", nested: false },
+      { name: "", type: "text", nested: false, options: [], nestedColumns: [] }, // Initialize all fields
     ]);
   };
 
   const removeTableColumn = (index: number) => {
-    const currentColumns = form.getValues("tableColumns") || [];
+    const currentColumns = (form.getValues("options") as TableColumn[] | undefined) || [];
     form.setValue(
-      "tableColumns",
+      "options", // Set the 'options' field
       currentColumns.filter((_, i) => i !== index)
     );
   };
@@ -59,16 +62,16 @@ export function TableBuilder({ form }: TableBuilderProps) {
     field: keyof TableColumn,
     value: any
   ) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
     currentColumns[index] = {
       ...currentColumns[index],
       [field]: value,
     };
-    form.setValue("tableColumns", currentColumns);
+    form.setValue("options", currentColumns); // Set the 'options' field
   };
 
   const toggleNested = (index: number) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
     const isNested = currentColumns[index]?.nested || false;
     
     currentColumns[index] = {
@@ -77,13 +80,13 @@ export function TableBuilder({ form }: TableBuilderProps) {
       nestedColumns: !isNested ? [] : currentColumns[index].nestedColumns,
     };
     
-    form.setValue("tableColumns", currentColumns);
+    form.setValue("options", currentColumns); // Set the 'options' field
     
     setExpandedNested(expandedNested === index ? null : index);
   };
 
   const addNestedColumn = (columnIndex: number) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
     const currentNestedColumns = currentColumns[columnIndex].nestedColumns || [];
     
     currentColumns[columnIndex] = {
@@ -94,11 +97,11 @@ export function TableBuilder({ form }: TableBuilderProps) {
       ],
     };
     
-    form.setValue("tableColumns", currentColumns);
+    form.setValue("options", currentColumns); // Set the 'options' field
   };
 
   const removeNestedColumn = (columnIndex: number, nestedIndex: number) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
     const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
     
     currentColumns[columnIndex] = {
@@ -106,7 +109,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
       nestedColumns: currentNestedColumns.filter((_, i) => i !== nestedIndex),
     };
     
-    form.setValue("tableColumns", currentColumns);
+    form.setValue("options", currentColumns); // Set the 'options' field
   };
 
   const updateNestedColumnField = (
@@ -115,7 +118,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
     field: keyof NestedTableColumns,
     value: any
   ) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
     const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
     
     currentNestedColumns[nestedIndex] = {
@@ -128,7 +131,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
       nestedColumns: currentNestedColumns,
     };
     
-    form.setValue("tableColumns", currentColumns);
+    form.setValue("options", currentColumns); // Set the 'options' field
   };
 
   const handleBulkImportOptions = (columnIndex: number, isNested = false, nestedIndex?: number) => {
@@ -138,7 +141,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
         .map(option => option.trim())
         .filter(option => option !== "");
       
-      const currentColumns = [...(form.getValues("tableColumns") || [])];
+      const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
       
       if (isNested && nestedIndex !== undefined) {
         const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
@@ -162,7 +165,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
         };
       }
       
-      form.setValue("tableColumns", currentColumns);
+      form.setValue("options", currentColumns); // Set the 'options' field
       setBulkOptionsText("");
       setShowBulkImport(null);
     }
@@ -170,7 +173,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
 
   const addColumnOption = (columnIndex: number, isNested = false, nestedIndex?: number) => {
     if (newColumnOption.trim()) {
-      const currentColumns = [...(form.getValues("tableColumns") || [])];
+      const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
       
       if (isNested && nestedIndex !== undefined) {
         const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
@@ -194,7 +197,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
         };
       }
       
-      form.setValue("tableColumns", currentColumns);
+      form.setValue("options", currentColumns); // Set the 'options' field
       setNewColumnOption("");
     }
   };
@@ -205,7 +208,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
     isNested = false, 
     nestedIndex?: number
   ) => {
-    const currentColumns = [...(form.getValues("tableColumns") || [])];
+    const currentColumns = [...((form.getValues("options") as TableColumn[] | undefined) || [])];
     
     if (isNested && nestedIndex !== undefined) {
       const currentNestedColumns = [...(currentColumns[columnIndex].nestedColumns || [])];
@@ -229,7 +232,7 @@ export function TableBuilder({ form }: TableBuilderProps) {
       };
     }
     
-    form.setValue("tableColumns", currentColumns);
+    form.setValue("options", currentColumns); // Set the 'options' field
   };
 
   return (
