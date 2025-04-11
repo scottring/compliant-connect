@@ -21,10 +21,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import TagBadge from "@/components/tags/TagBadge";
 import CommentsThread from "@/components/comments/CommentsThread";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Flag, AlertCircle } from "lucide-react";
+import { MessageCircle, Flag, AlertCircle, Trash2 } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,7 +44,7 @@ interface QuestionItemProps {
   question: Question | DBQuestion;
   answer?: SupplierResponse;
   productSheetId: string;
-  onAnswerUpdate: (value: string | boolean | number | string[]) => void;
+  onAnswerUpdate: (value: string | boolean | number | string[] | Record<string, string>[]) => void;
   onAddComment: (text: string) => void;
   isReadOnly?: boolean;
 }
@@ -55,7 +63,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
     console.log(`QuestionItem (${question.id}): Comments in prop:`, answer?.comments);
   }, [answer, question.id]);
   const [commentsOpen, setCommentsOpen] = React.useState(false); // Reset to initially closed
-  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | undefined>(answer?.value as string | number | boolean | string[] | undefined);
+  const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | Record<string, string>[] | undefined>(answer?.value as string | number | boolean | string[] | Record<string, string>[] | undefined);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [feedbackText, setFeedbackText] = useState(""); // State for the new feedback input
 
@@ -73,6 +81,10 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
         return z.array(z.string()).optional();
       case "file":
         return z.string().optional();
+      case "list_table": // Add this case
+        // Assuming the value is an array of objects (rows)
+        // where keys are column headers (strings) and values are strings
+        return z.array(z.record(z.string())).optional();
       default:
         return z.string().optional();
     }
@@ -102,7 +114,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
     }
   };
 
-  const handleValueChange = (value: string | number | boolean | string[]) => {
+  const handleValueChange = (value: string | number | boolean | string[] | Record<string, string>[]) => {
     if (isReadOnly) return; // Don't update if in read-only mode
     
     form.setValue("answer", value);
@@ -247,7 +259,91 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
             Start upload
           </Button>
         );
-      
+
+      case "list_table": { // Use block scope for local variables
+        const columns = question.options || [];
+        // Ensure answer is treated as an array of records, default to empty array
+        const tableData = (form.watch("answer") as Record<string, string>[] | undefined) || [];
+
+        // Handler to update a specific cell in the table data
+        const handleCellChange = (rowIndex: number, column: string, value: string) => {
+          if (isReadOnly) return;
+          const newData = [...tableData]; // Create a mutable copy
+          // Ensure the row object exists before assigning to its property
+          if (!newData[rowIndex]) {
+             newData[rowIndex] = {}; // Initialize if somehow missing (e.g., adding rows)
+          }
+          newData[rowIndex] = { ...newData[rowIndex], [column]: value }; // Update specific cell
+          handleValueChange(newData); // Update the main form state
+        };
+
+        // Handler to add a new empty row
+        const handleAddRow = () => {
+          if (isReadOnly) return;
+          // Create a new row object with empty strings for each column
+          const newRow = columns.reduce((acc, col) => ({ ...acc, [col]: "" }), {});
+          handleValueChange([...tableData, newRow]); // Add the new row to the form state
+        };
+
+        // Handler to delete a row (Optional but good UX)
+        const handleDeleteRow = (rowIndex: number) => {
+          if (isReadOnly) return;
+          const newData = tableData.filter((_, index) => index !== rowIndex);
+          handleValueChange(newData);
+        };
+
+        return (
+          <div className="space-y-3">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {columns.map((col) => (
+                    <TableHead key={col}>{col}</TableHead>
+                  ))}
+                  {!isReadOnly && <TableHead className="w-[50px]"></TableHead>} {/* Header for delete button */}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tableData.map((row, rowIndex) => (
+                  <TableRow key={rowIndex}>
+                    {columns.map((col) => (
+                      <TableCell key={col}>
+                        <Input
+                          value={row[col] || ""}
+                          onChange={(e) => handleCellChange(rowIndex, col, e.target.value)}
+                          disabled={isReadOnly}
+                          readOnly={isReadOnly}
+                          placeholder={`Enter ${col}...`}
+                          className="min-w-[100px]" // Prevent inputs from becoming too small
+                        />
+                      </TableCell>
+                    ))}
+                    {!isReadOnly && (
+                       <TableCell className="text-right">
+                         <Button
+                           type="button"
+                           variant="ghost"
+                           size="sm"
+                           onClick={() => handleDeleteRow(rowIndex)}
+                           aria-label="Delete row"
+                         >
+                           <Trash2 className="h-4 w-4 text-red-500" /> {/* Assuming Trash2 is imported */}
+                         </Button>
+                       </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {!isReadOnly && (
+              <Button type="button" variant="outline" size="sm" onClick={handleAddRow}>
+                Add Row
+              </Button>
+            )}
+          </div>
+        );
+      } // End list_table case
+
       default:
         return (
           <Input 

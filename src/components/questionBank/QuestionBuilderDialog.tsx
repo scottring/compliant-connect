@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-// Removed Badge import as it wasn't used directly here
+import { TableBuilder } from "./TableBuilder"; // Use named import
+import { TableColumn } from "@/types/index"; // Use full path for clarity
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TagBadge from "@/components/tags/TagBadge";
@@ -21,16 +22,67 @@ import { toast } from "sonner";
 // Import only necessary types from hook
 import { QuestionType, DBQuestion } from "@/hooks/use-question-bank"; // Removed Section, Subsection
 
-// Updated Zod schema to use section_id consistently
-const formSchema = z.object({
-  sectionId: z.string().min(1, "Parent Section is required"), // Represents the top-level section selection
-  subsectionId: z.string().optional(), // Represents the specific section/subsection where the question belongs
+// Define Zod schemas for table structures based on TypeScript types
+const columnTypeEnum = z.enum(["text", "number", "boolean", "select", "multi-select"]);
+
+const nestedTableColumnsSchema = z.object({
+  name: z.string().min(1, "Column name is required"),
+  type: columnTypeEnum,
+  options: z.array(z.string()).optional(), // For select/multi-select in nested
+});
+
+const tableColumnSchema = z.object({
+  name: z.string().min(1, "Column name is required"),
+  type: columnTypeEnum,
+  options: z.array(z.string()).optional(), // For select/multi-select
+  nested: z.boolean().optional(),
+  nestedColumns: z.array(nestedTableColumnsSchema).optional(),
+});
+
+// Base schema for common fields
+const baseSchema = z.object({
+  sectionId: z.string().min(1, "Parent Section is required"),
+  subsectionId: z.string().optional(),
   text: z.string().min(1, "Question text is required"),
   description: z.string().optional(),
   required: z.boolean().default(true),
-  type: z.enum(["text", "number", "boolean", "single_select", "multi_select", "date", "file", "LIST_TABLE"] as const),
-  options: z.array(z.string()).optional(),
 });
+
+// Discriminated union based on question type
+const formSchema = z.discriminatedUnion("type", [
+  // Type 'text' - no options field
+  baseSchema.extend({
+    type: z.literal("text"),
+  }),
+  // Type 'number' - no options field
+  baseSchema.extend({
+    type: z.literal("number"),
+  }),
+  // Type 'boolean' - no options field
+  baseSchema.extend({
+    type: z.literal("boolean"),
+  }),
+  // Type 'date' - no options field
+  baseSchema.extend({
+    type: z.literal("date"),
+  }),
+  // Type 'file' - no options field
+  baseSchema.extend({
+    type: z.literal("file"),
+  }),
+  baseSchema.extend({
+    type: z.literal("single_select"),
+    options: z.array(z.string()).min(1, "At least one option is required"),
+  }),
+  baseSchema.extend({
+    type: z.literal("multi_select"),
+    options: z.array(z.string()).min(1, "At least one option is required"),
+  }),
+  baseSchema.extend({
+    type: z.literal("list_table"),
+    options: z.array(tableColumnSchema).min(1, "At least one column is required"),
+  }),
+]);
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -89,7 +141,7 @@ export function QuestionBuilderDialog({
       description: "",
       required: true,
       type: "text",
-      options: [],
+      // options field removed from defaultValues
     },
   });
 
@@ -131,13 +183,14 @@ export function QuestionBuilderDialog({
   }, [selectedParentSectionId, allSectionsFromView]);
 
   const questionType = form.watch("type");
-  const showOptions = questionType === "single_select" || questionType === "multi_select";
-  // Other type checks remain the same...
-  const showFileUpload = questionType === "file";
-  const showBooleanOptions = questionType === "boolean";
-  const showDateOptions = questionType === "date";
-  const showNumberOptions = questionType === "number";
-  const showTextOptions = questionType === "text";
+  const showOptionsInput = questionType === "single_select" || questionType === "multi_select";
+  const showListTableBuilder = questionType === "list_table";
+  // Other type checks can be simplified or removed if not needed for UI logic beyond options
+  // const showFileUpload = questionType === "file";
+  // const showBooleanOptions = questionType === "boolean";
+  // const showDateOptions = questionType === "date";
+  // const showNumberOptions = questionType === "number";
+  // const showTextOptions = questionType === "text";
  
   // Sync local dropdown state with context-derived state
   useEffect(() => {
@@ -169,7 +222,7 @@ export function QuestionBuilderDialog({
       let defaultDescription = "";
       let defaultRequired = true;
       let defaultType: QuestionType = "text";
-      let defaultOptions: string[] = [];
+      let defaultOptions: string[] | TableColumn[] | null = null; // Allow different option types
       let defaultTags: Tag[] = [];
 
       if (editingQuestion) {
@@ -193,8 +246,16 @@ export function QuestionBuilderDialog({
         defaultText = editingQuestion.text;
         defaultDescription = editingQuestion.description || "";
         defaultRequired = editingQuestion.required;
-        defaultType = editingQuestion.type;
-        defaultOptions = Array.isArray(editingQuestion.options) ? editingQuestion.options : []; // Ensure options is array
+        defaultType = editingQuestion.type as FormValues['type']; // Cast to the specific literal type
+        // Set options based on the actual type, ensuring correct structure
+        if (defaultType === 'single_select' || defaultType === 'multi_select') {
+            defaultOptions = Array.isArray(editingQuestion.options) ? editingQuestion.options.map(String) : [];
+        } else if (defaultType === 'list_table') {
+            // TODO: Add proper validation/parsing if options from DB aren't guaranteed TableColumn[]
+            defaultOptions = Array.isArray(editingQuestion.options) ? editingQuestion.options : [];
+        } else {
+            defaultOptions = null;
+        }
         defaultTags = editingQuestion.tags || [];
 
       } else if (preselectedSectionId) {
@@ -218,6 +279,7 @@ export function QuestionBuilderDialog({
       }
 
       // Reset the form with determined defaults
+      // Reset form, asserting the type to handle the discriminated union
       form.reset({
         sectionId: defaultParentSectionId,
         subsectionId: defaultSubsectionId,
@@ -225,8 +287,13 @@ export function QuestionBuilderDialog({
         description: defaultDescription,
         required: defaultRequired,
         type: defaultType,
-        options: defaultOptions,
-      });
+        // Set options based on type, ensuring correct structure for reset
+        options: (defaultType === 'single_select' || defaultType === 'multi_select')
+                 ? (defaultOptions as string[] || []) // Default to empty array if null/undefined
+                 : (defaultType === 'list_table')
+                 ? (defaultOptions as TableColumn[] || []) // Default to empty array if null/undefined
+                 : null, // Explicitly null for other types
+      } as FormValues); // Assert the entire object as FormValues
       setSelectedTags(defaultTags);
       // Reset local states for forms
       setShowNewSectionForm(false);
@@ -269,26 +336,35 @@ export function QuestionBuilderDialog({
     }
   };
 
-  const addOption = () => {
+  const addOption = () => { // Only for single/multi-select
+    const currentType = form.getValues("type");
+    if (currentType !== 'single_select' && currentType !== 'multi_select') return;
     if (newOption.trim()) {
-      const currentOptions = form.getValues("options") || [];
+      // Assert type as string[] since we checked the question type
+      const currentOptions = (form.getValues("options") as string[] | null) || [];
       form.setValue("options", [...currentOptions, newOption.trim()]);
       setNewOption("");
     }
   };
 
-  const removeOption = (index: number) => {
-    const currentOptions = form.getValues("options") || [];
+  const removeOption = (index: number) => { // Only for single/multi-select
+    const currentType = form.getValues("type");
+    if (currentType !== 'single_select' && currentType !== 'multi_select') return;
+    // Assert type as string[]
+    const currentOptions = (form.getValues("options") as string[] | null) || [];
     form.setValue("options", currentOptions.filter((_, i) => i !== index));
   };
 
-  const handleBulkImportOptions = () => {
+  const handleBulkImportOptions = () => { // Only for single/multi-select
+    const currentType = form.getValues("type");
+    if (currentType !== 'single_select' && currentType !== 'multi_select') return;
     if (bulkOptionsText.trim()) {
       const newOptions = bulkOptionsText
         .split(/[\n,]/)
         .map(option => option.trim())
         .filter(option => option !== "");
-      const currentOptions = form.getValues("options") || [];
+      // Assert type as string[]
+      const currentOptions = (form.getValues("options") as string[] | null) || [];
       form.setValue("options", [...currentOptions, ...newOptions]);
       setBulkOptionsText("");
       setShowBulkImport(false);
@@ -426,10 +502,11 @@ export function QuestionBuilderDialog({
     }
 
     try {
-      // Ensure options are string array or null
-      let processedOptions: string[] | null = null;
-      if (showOptions && Array.isArray(values.options)) {
-          processedOptions = values.options.filter(opt => typeof opt === 'string');
+      // Serialize options to JSON for storage, matching DB expectation (Json | null)
+      let optionsForDb: any | null = null;
+      if (values.type === 'single_select' || values.type === 'multi_select' || values.type === 'list_table') {
+        // Zod ensures values.options matches the type structure here
+        optionsForDb = values.options ? JSON.parse(JSON.stringify(values.options)) : null;
       }
 
       const questionData = {
@@ -437,7 +514,7 @@ export function QuestionBuilderDialog({
         description: values.description || null, // Use null if empty
         required: values.required,
         type: values.type as QuestionType, // Already validated by Zod
-        options: processedOptions, // Use processed options
+        options: optionsForDb, // Pass serialized options
         section_id: targetSectionId, // Use the determined target section/subsection ID
         tags: selectedTags,
       };
@@ -498,14 +575,13 @@ export function QuestionBuilderDialog({
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select a parent section" />
+                                <SelectValue placeholder="Select Parent Section" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {/* Ensure mapping uses localParentSections */}
                               {localParentSections.map((section) => (
                                 <SelectItem key={section.id} value={section.id}>
-                                  {section.name} ({section.number}) {/* Show number for clarity */}
+                                  {section.number} {section.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -513,8 +589,8 @@ export function QuestionBuilderDialog({
                           <Button
                             type="button"
                             variant="outline"
-                            size="icon" // Make button smaller
-                            onClick={() => setShowNewSectionForm(true)}
+                            size="icon"
+                            onClick={() => setShowNewSectionForm(!showNewSectionForm)}
                             disabled={isSubmitting}
                           >
                             <Plus className="h-4 w-4" />
@@ -524,23 +600,21 @@ export function QuestionBuilderDialog({
                       </FormItem>
                     )}
                   />
-
                   {showNewSectionForm && (
                     <div className="flex gap-2 items-center p-2 border rounded">
                       <Input
-                        placeholder="New section name"
+                        placeholder="New Parent Section Name"
                         value={newSectionName}
                         onChange={(e) => setNewSectionName(e.target.value)}
-                        className="flex-grow"
                         disabled={isSubmitting}
                       />
                       <Button
                         type="button"
+                        size="sm"
                         onClick={handleCreateSection}
                         disabled={!newSectionName.trim() || isSubmitting}
-                        size="sm"
                       >
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+                        Create
                       </Button>
                       <Button
                         type="button"
@@ -559,28 +633,25 @@ export function QuestionBuilderDialog({
                 <div className="space-y-2"> {/* Reduced spacing */}
                   <FormField
                     control={form.control}
-                    name="subsectionId" // Controls the specific subsection selection
+                    name="subsectionId" // Controls the subsection dropdown
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Subsection (Optional)</FormLabel>
                         <div className="flex gap-2">
                           <Select
                             onValueChange={field.onChange}
-                            value={field.value || ""} // Handle empty string for placeholder
+                            value={field.value}
                             disabled={!selectedParentSectionId || isSubmitting}
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder={selectedParentSectionId ? "Select a subsection (or leave blank)" : "Select a parent section first"} />
+                                <SelectValue placeholder="Select Subsection (Optional)" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {/* Allow clearing selection via placeholder */}
-                              {/* Ensure mapping uses localSubsections */}
-                              {/* Use local state for options */}
                               {localSubsections.map((subsection) => (
                                 <SelectItem key={subsection.id} value={subsection.id}>
-                                  {subsection.name} ({subsection.number}) {/* Show number for clarity */}
+                                  {subsection.number} {subsection.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -588,8 +659,8 @@ export function QuestionBuilderDialog({
                           <Button
                             type="button"
                             variant="outline"
-                            size="icon" // Make button smaller
-                            onClick={() => setShowNewSubsectionForm(true)}
+                            size="icon"
+                            onClick={() => setShowNewSubsectionForm(!showNewSubsectionForm)}
                             disabled={!selectedParentSectionId || isSubmitting}
                           >
                             <Plus className="h-4 w-4" />
@@ -599,23 +670,21 @@ export function QuestionBuilderDialog({
                       </FormItem>
                     )}
                   />
-
-                  {showNewSubsectionForm && selectedParentSectionId && ( // Only show if parent is selected
+                  {showNewSubsectionForm && selectedParentSectionId && (
                     <div className="flex gap-2 items-center p-2 border rounded">
                       <Input
-                        placeholder="New subsection name"
+                        placeholder="New Subsection Name"
                         value={newSubsectionName}
                         onChange={(e) => setNewSubsectionName(e.target.value)}
-                        className="flex-grow"
                         disabled={isSubmitting}
                       />
                       <Button
                         type="button"
+                        size="sm"
                         onClick={handleCreateSubsection}
                         disabled={!newSubsectionName.trim() || isSubmitting}
-                        size="sm"
                       >
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+                        Create
                       </Button>
                       <Button
                         type="button"
@@ -703,13 +772,12 @@ export function QuestionBuilderDialog({
                        </PopoverContent>
                      </Popover>
                    </div>
-                   <div className="flex flex-wrap gap-1 min-h-[24px] p-1 border rounded">
-                     {selectedTags.length > 0 ? selectedTags.map((tag) => (
-                       <TagBadge key={tag.id} tag={tag} onClick={() => toggleTag(tag)} />
-                     )) : <span className="text-xs text-muted-foreground">No tags selected</span>}
+                   <div className="flex flex-wrap gap-2">
+                     {selectedTags.map((tag) => (
+                       <TagBadge key={tag.id} tag={tag} onClick={() => toggleTag(tag)} selected={true} />
+                     ))}
                    </div>
                  </div>
-
 
                 {/* Question Type */}
                 <FormField
@@ -727,11 +795,12 @@ export function QuestionBuilderDialog({
                         <SelectContent>
                           <SelectItem value="text">Text</SelectItem>
                           <SelectItem value="number">Number</SelectItem>
-                          <SelectItem value="boolean">Boolean (Yes/No)</SelectItem>
+                          <SelectItem value="boolean">Yes/No</SelectItem>
                           <SelectItem value="single_select">Single Select</SelectItem>
                           <SelectItem value="multi_select">Multi Select</SelectItem>
                           <SelectItem value="date">Date</SelectItem>
                           <SelectItem value="file">File Upload</SelectItem>
+                          <SelectItem value="list_table">List Table</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -739,11 +808,11 @@ export function QuestionBuilderDialog({
                   )}
                 />
 
-                {/* Options (for select types) */}
-                {showOptions && (
-                  <div className="space-y-3 p-3 border rounded">
-                    <FormLabel>Options</FormLabel>
-                    <div className="flex items-center space-x-2">
+                {/* Options Input for Select/Multi-Select */}
+                {showOptionsInput && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Options</FormLabel>
                       <Button
                         type="button"
                         variant="outline"
@@ -751,28 +820,26 @@ export function QuestionBuilderDialog({
                         onClick={() => setShowBulkImport(!showBulkImport)}
                         disabled={isSubmitting}
                       >
-                        {showBulkImport ? <X className="h-4 w-4 mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
-                        {showBulkImport ? "Cancel Bulk Add" : "Bulk Add"}
+                        {showBulkImport ? <X className="h-4 w-4 mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
+                        {showBulkImport ? "Cancel" : "Bulk Import"}
                       </Button>
                     </div>
-
                     {showBulkImport ? (
                       <div className="space-y-2">
                         <Textarea
-                          placeholder="Enter options separated by new lines or commas"
+                          placeholder="Option 1&#10;Option 2&#10;Option 3"
                           value={bulkOptionsText}
                           onChange={(e) => setBulkOptionsText(e.target.value)}
-                          rows={4}
                           disabled={isSubmitting}
                         />
                         <Button type="button" size="sm" onClick={handleBulkImportOptions} disabled={!bulkOptionsText.trim() || isSubmitting}>
-                          Add Options
+                          Import Options
                         </Button>
                       </div>
                     ) : (
                       <div className="flex space-x-2">
                         <Input
-                          placeholder="New option"
+                          placeholder="Add an option"
                           value={newOption}
                           onChange={(e) => setNewOption(e.target.value)}
                           onKeyPress={(e) => {
@@ -813,6 +880,22 @@ export function QuestionBuilderDialog({
                       )}
                     </div>
                   </div>
+                )}
+
+                {/* Table Builder for List Table */}
+                {showListTableBuilder && (
+                  <FormField
+                    control={form.control}
+                    name="options"
+                    render={() => (
+                      <FormItem>
+                        <FormControl>
+                          <TableBuilder form={form} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
 
                 {/* Required Checkbox */}

@@ -886,6 +886,7 @@ export type Database = {
         | "date"
         | "file"
         | "LIST_TABLE"
+        | "list_table"
       relationship_status: "pending" | "active" | "inactive" | "rejected"
       response_status: "draft" | "submitted" | "flagged" | "approved"
     }
@@ -1021,6 +1022,7 @@ export const Constants = {
         "date",
         "file",
         "LIST_TABLE",
+        "list_table",
       ],
       relationship_status: ["pending", "active", "inactive", "rejected"],
       response_status: ["draft", "submitted", "flagged", "approved"],
