@@ -884,7 +884,7 @@ const SupplierResponseForm = () => {
                                 // Pass the calculated number along with the question data
                                 question={{ ...question, hierarchical_number: hierarchicalNumber }}
                                 answer={answer} // Pass the correctly typed answer
-                                productSheetId={productSheet.id} // Pass PIR ID
+                                pirId={productSheet.id} // Pass PIR ID using the new prop name
                                 onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value)}
                                 onAddComment={(text) => handleAddComment(question.id, text)} // Pass question.id
                                 isReadOnly={isReadOnly()} // Pass read-only state based on PIR status

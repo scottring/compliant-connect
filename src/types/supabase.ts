@@ -222,6 +222,85 @@ export type Database = {
           },
         ]
       }
+      pir_response_component_materials: {
+        Row: {
+          component_id: string
+          created_at: string | null
+          id: string
+          material_name: string | null
+          order_index: number
+          percentage: number | null
+          recyclable: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          component_id: string
+          created_at?: string | null
+          id?: string
+          material_name?: string | null
+          order_index?: number
+          percentage?: number | null
+          recyclable?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          component_id?: string
+          created_at?: string | null
+          id?: string
+          material_name?: string | null
+          order_index?: number
+          percentage?: number | null
+          recyclable?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pir_response_component_materials_component_id_fkey"
+            columns: ["component_id"]
+            isOneToOne: false
+            referencedRelation: "pir_response_components"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pir_response_components: {
+        Row: {
+          component_name: string | null
+          created_at: string | null
+          id: string
+          order_index: number
+          pir_response_id: string
+          position: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          component_name?: string | null
+          created_at?: string | null
+          id?: string
+          order_index?: number
+          pir_response_id: string
+          position?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          component_name?: string | null
+          created_at?: string | null
+          id?: string
+          order_index?: number
+          pir_response_id?: string
+          position?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pir_response_components_pir_response_id_fkey"
+            columns: ["pir_response_id"]
+            isOneToOne: false
+            referencedRelation: "pir_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pir_responses: {
         Row: {
           answer: Json
@@ -887,6 +966,7 @@ export type Database = {
         | "file"
         | "LIST_TABLE"
         | "list_table"
+        | "component_material_list"
       relationship_status: "pending" | "active" | "inactive" | "rejected"
       response_status: "draft" | "submitted" | "flagged" | "approved"
     }
@@ -1023,6 +1103,7 @@ export const Constants = {
         "file",
         "LIST_TABLE",
         "list_table",
+        "component_material_list",
       ],
       relationship_status: ["pending", "active", "inactive", "rejected"],
       response_status: ["draft", "submitted", "flagged", "approved"],

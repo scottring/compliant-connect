@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
+import { SessionContextProvider } from '@supabase/auth-helpers-react'; // Import Supabase provider
+import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { QuestionBankProvider } from "./context/QuestionBankContext";
 import { useCompanyData } from "./hooks/use-company-data";
@@ -34,8 +36,8 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { useState, useEffect } from "react";
 import UserSwitcher from "./components/UserSwitcher";
 import AdminSettings from "@/pages/AdminSettings";
-import { supabase } from '@/integrations/supabase/client'
-import { useToast } from '@/components/ui/use-toast'
+import { supabase } from '@/integrations/supabase/client'; // Import Supabase client instance
+import { useToast } from '@/components/ui/use-toast';
 
 // Simplified CheckCompany component
 const CheckCompany = () => {
@@ -79,7 +81,8 @@ const App = () => {
   return (
     <>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+        <SessionContextProvider supabaseClient={supabase}>
+          <AuthProvider>
           <AppProvider>
             <QuestionBankProvider>
               <TooltipProvider>
@@ -148,7 +151,8 @@ const App = () => {
               </TooltipProvider>
             </QuestionBankProvider>
           </AppProvider>
-        </AuthProvider>
+          </AuthProvider>
+        </SessionContextProvider>
       </QueryClientProvider>
     </>
   );
