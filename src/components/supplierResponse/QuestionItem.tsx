@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import { ResponseStatus } from '@/types/pir'; // Import ResponseStatus
+import { useQueryClient } from '@tanstack/react-query'; // Import useQueryClient
 import { toast } from 'sonner'; // Import toast
 // TODO: Import Supabase client hook, e.g., import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import {
@@ -70,6 +71,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   const [commentsOpen, setCommentsOpen] = React.useState(false); // Reset to initially closed
   const [debouncedValue, setDebouncedValue] = useState<string | number | boolean | string[] | Record<string, string>[] | undefined>(answer?.value as string | number | boolean | string[] | Record<string, string>[] | undefined);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [componentSaveTimeout, setComponentSaveTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout for component/material list saves
   const [feedbackText, setFeedbackText] = useState(""); // State for the new feedback input
   // --- State for component_material_list type ---
   type ComponentData = Database['public']['Tables']['pir_response_components']['Row'] & {
@@ -78,8 +80,8 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   const [componentMaterialData, setComponentMaterialData] = useState<ComponentData[]>([]);
   const [isLoadingComponentData, setIsLoadingComponentData] = useState(false);
   const [errorLoadingComponentData, setErrorLoadingComponentData] = useState<string | null>(null);
-  // TODO: Get Supabase client instance, e.g., const supabase = useSupabaseClient<Database>();
   const supabase = useSupabaseClient<Database>();
+  const queryClient = useQueryClient(); // Get query client instance
 
   // --- Effect to fetch data for component_material_list ---
   useEffect(() => {
@@ -217,6 +219,15 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       }
     };
   }, [saveTimeout]);
+
+  // Cleanup component/material save timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (componentSaveTimeout) {
+        clearTimeout(componentSaveTimeout);
+      }
+    };
+  }, [componentSaveTimeout]);
 
   // Check if this answer has been flagged
   const hasFlags = answer?.flags && answer.flags.length > 0;
@@ -603,6 +614,16 @@ case 'component_material_list': {
   const handleComponentMaterialUpdate = async (componentIndex: number, materialIndex: number | null, field: string, value: any) => {
     if (!supabase || isReadOnly) return; // Ensure client exists and not read-only
 
+    // Convert and validate percentage values
+    if (field === 'percentage') {
+      const numValue = Number(value);
+      if (isNaN(numValue) || numValue < 0 || numValue > 100) {
+        toast.error('Percentage must be a number between 0-100');
+        return;
+      }
+      value = numValue.toString(); // Store as string to match DB schema
+    }
+
     const component = componentMaterialData[componentIndex];
     if (!component) {
       console.error("Component not found at index:", componentIndex);
@@ -630,42 +651,67 @@ case 'component_material_list': {
 
     console.log(`Updating ${tableName} record ${recordId} with:`, updatePayload);
 
-    try {
-      const { error } = await supabase
-        .from(tableName)
-        .update(updatePayload)
-        .eq('id', recordId);
+    // 1. Optimistically update local state immediately for UI responsiveness
+    setComponentMaterialData(prevData => {
+      // Use deep copy to avoid mutation issues with nested objects/arrays
+      const newData = JSON.parse(JSON.stringify(prevData));
+      const targetComponent = newData[componentIndex];
 
-      if (error) {
-        console.error(`Error updating ${tableName}:`, error);
-        // TODO: Add user feedback (e.g., toast notification)
-        return; // Don't update local state if DB update failed
+      if (!targetComponent) {
+        console.warn("Component not found during optimistic update:", componentIndex);
+        return prevData; // Return original data if component not found
       }
 
-      // Optimistically update local state
-      setComponentMaterialData(prevData => {
-        const newData = [...prevData];
-        const targetComponent = { ...newData[componentIndex] }; // Shallow copy component
-
-        if (materialIndex === null) {
-          // Update component field
-          (targetComponent as any)[field] = value;
-        } else {
-          // Update material field
-          const targetMaterials = [...targetComponent.materials]; // Shallow copy materials array
-          const targetMaterial = { ...targetMaterials[materialIndex] }; // Shallow copy material
-          (targetMaterial as any)[field] = value;
-          targetMaterials[materialIndex] = targetMaterial;
-          targetComponent.materials = targetMaterials;
+      if (materialIndex === null) {
+        // Update component field
+        targetComponent[field as keyof Database['public']['Tables']['pir_response_components']['Row']] = value;
+      } else {
+        // Update material field
+        const targetMaterial = targetComponent.materials[materialIndex];
+        if (!targetMaterial) {
+          console.warn("Material not found during optimistic update:", { componentIndex, materialIndex });
+          return prevData; // Return original data if material not found
         }
-        newData[componentIndex] = targetComponent;
-        return newData;
-      });
+        targetMaterial[field as keyof Database['public']['Tables']['pir_response_component_materials']['Row']] = value;
+      }
+      return newData;
+    });
 
-    } catch (err) {
-      console.error("Unexpected error during update:", err);
-      // TODO: Add user feedback
+    // 2. Debounce the actual database update
+    if (componentSaveTimeout) {
+      clearTimeout(componentSaveTimeout);
     }
+
+    const timeout = setTimeout(async () => {
+      console.log(`Debounced save: Updating ${tableName} record ${recordId} with payload:`, updatePayload);
+      try {
+        const { data, error } = await supabase
+          .from(tableName)
+          .update(updatePayload)
+          .eq('id', recordId)
+          .select();
+        
+        if (data) {
+          console.log(`Successfully updated ${tableName} record:`, data);
+        }
+
+        if (error) {
+          console.error(`Error during debounced update of ${tableName}:`, error);
+          toast.error(`Failed to save changes for ${field}. Please try again.`);
+          // TODO: Consider reverting optimistic update here if needed, though complex.
+        } else {
+          console.log(`Debounced save successful for ${tableName} record ${recordId}`);
+          // Optionally add a success toast, but might be too noisy
+          // toast.success("Changes saved.");
+        }
+      } catch (err) {
+        console.error("Unexpected error during debounced update:", err);
+        toast.error("An unexpected error occurred while saving changes.");
+      }
+    }, 3000); // 3-second delay
+
+    setComponentSaveTimeout(timeout);
+
   };
   const handleAddMaterial = async (componentIndex: number) => {
     if (!supabase || isReadOnly || !answer?.id) return;
@@ -754,8 +800,8 @@ case 'component_material_list': {
       }
       responseId = newResponse.id;
       console.log("Created base response record with ID:", responseId);
-      // TODO: Consider updating the parent state or refetching to make this new 'answer' available
-      // For now, we'll just use the responseId locally for the component insert.
+      // Invalidate the parent query to refetch data including the new response ID
+      queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
     }
 
     // 2. Now add the component, linked to the responseId
