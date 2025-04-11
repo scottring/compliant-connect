@@ -395,10 +395,12 @@ export const useQuestionBank = (): UseQuestionBankReturn => {
         tags: [] // Placeholder, tags will be added next
     }));
 
-    const questionIds = mappedQuestions.map(q => q.id); // Use the mapped 'id' field
+    const questionIds = mappedQuestions.map(q => q.id).filter(id => id); // Filter out null/undefined IDs
     if (questionIds.length === 0) return mappedQuestions;
     const { data: tagsData, error: tagsError } = await supabase.from('question_tags')
-      .select(`question_id, tags ( id, name, description, created_at, updated_at )`).in('question_id', questionIds); // Added created_at, updated_at for tags
+      .select(`question_id, tags ( id, name, description, created_at, updated_at )`)
+      .in('question_id', questionIds)
+      .not('question_id', 'is', null); // Explicitly exclude null question_ids
     if (tagsError) {
       console.error('Error loading question tags:', tagsError);
       // If tags fail, return questions with empty tags array
