@@ -280,6 +280,8 @@ const useSubmitReviewMutation = (
 
 
 const CustomerReview = () => {
+  console.log("[DEBUG] CustomerReview: Component rendering started."); // ADD THIS LOG
+  console.log("[DEBUG] CustomerReview: Component rendering started."); // ADD THIS LOG
   const { id: pirId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -326,6 +328,7 @@ const CustomerReview = () => {
   // --- Fetch PIR Details Query ---
   const fetchPirDetailsForReview = async (id: string): Promise<PirDetailsForReview> => {
       // 1. Fetch PIR Request and related companies/product
+      console.log("[DEBUG] Fetching PIR details...");
       const { data: pirData, error: pirError } = await supabase
           .from('pir_requests')
           .select(`
@@ -337,31 +340,40 @@ const CustomerReview = () => {
           .eq('id', id)
           .single();
       if (pirError || !pirData) throw new Error(`Failed to fetch PIR details: ${pirError?.message ?? 'Not found'}`);
+      console.log("[DEBUG] Fetched PIR details:", pirData);
 
       // 2. Fetch Tags associated with the PIR
+      console.log("[DEBUG] Fetching tag links...");
       const { data: tagLinks, error: tagLinksError } = await supabase
           .from('pir_tags')
           .select('tag:tags(*)')
           .eq('pir_id', id);
       if (tagLinksError) throw new Error(`Failed to fetch PIR tags: ${tagLinksError.message}`);
+      console.log("[DEBUG] Fetched tag links:", tagLinks);
       const tags = (tagLinks?.map(link => link.tag).filter(Boolean).flat() || []) as Tag[];
+       console.log("Fetched PIR tags:", tags); // Log tags
 
       // 3. Fetch Questions based on Tags (Two-step process)
       const tagIds = tags.map(t => t.id);
       let questions: DBQuestionForReview[] = [];
       if (tagIds.length > 0) {
           // Step 3a: Get question IDs linked to the tags
+          console.log("[DEBUG] Fetching question tag links...");
           const { data: questionTagLinks, error: qtError } = await supabase
               .from('question_tags')
               .select('question_id')
               .in('tag_id', tagIds);
 
           if (qtError) throw new Error(`Failed to fetch question IDs for tags: ${qtError.message}`);
+          console.log("[DEBUG] Fetched question tag links:", questionTagLinks);
 
           const questionIds = [...new Set(questionTagLinks?.map(link => link.question_id).filter(Boolean) || [])];
+          console.log("Extracted question IDs from tags:", questionIds); // Log questionIds
+          console.log("Extracted question IDs from tags:", questionIds); // Log questionIds
 
           // Step 3b: Fetch questions using the IDs, including nested data
           if (questionIds.length > 0) {
+              console.log("[DEBUG] Fetching questions data...");
               const { data: questionsData, error: qError } = await supabase
                   .from('questions')
                   .select(`
@@ -369,8 +381,11 @@ const CustomerReview = () => {
                       subsection:question_sections!section_id (*)
                   `)
                   .in('id', questionIds);
+                  console.log("Fetched questions data:", questionsData); // Log questionsData
+                  console.log("Fetched questions data:", questionsData); // Log questionsData
 
               if (qError) throw new Error(`Failed to fetch questions data: ${qError.message}`);
+              console.log("[DEBUG] Fetched questions data:", questionsData);
 
 
 
@@ -408,6 +423,10 @@ const CustomerReview = () => {
                           options: typedQuestionData.options,
                           created_at: typedQuestionData.created_at,
                           updated_at: typedQuestionData.updated_at,
+                          // Log question details here, especially type
+                          // questionType: typedQuestionData.type,
+                          // Log question details here, especially type
+                          // questionType: typedQuestionData.type,
                           tags: [], // Placeholder
                           subsection: subsection, // Assign the mapped subsection
                           section: undefined, // Placeholder: Will be populated later
@@ -428,15 +447,19 @@ const CustomerReview = () => {
                   const subsectionOrderB = b.subsection?.order || 0;
                   return subsectionOrderA - subsectionOrderB;
               });
+              console.log("Structured questions:", questions); // Log structured questions
+              console.log("Structured questions:", questions); // Log structured questions
           }
       }
 
       // 4. Fetch Base Responses with Flags
+      console.log("[DEBUG] Fetching base responses...");
       const { data: baseResponsesData, error: responsesError } = await supabase
           .from('pir_responses')
           .select('*, response_flags(*)') // Fetch nested flags
           .eq('pir_id', id);
       if (responsesError) throw new Error(`Failed to fetch base responses: ${responsesError.message}`);
+      console.log("[DEBUG] Fetched base responses:", baseResponsesData);
 
       // 5. Fetch and structure Component/Material data for relevant responses
       const componentMaterialQuestionIds = questions
@@ -458,12 +481,14 @@ const CustomerReview = () => {
 
           if (relevantResponseIds.length > 0) {
               // Fetch components linked to these responses
+              console.log("[DEBUG] Fetching components data...");
               const { data: componentsData, error: componentsError } = await supabase
                   .from('pir_response_components')
                   .select('*')
                   .in('pir_response_id', relevantResponseIds)
                   .order('order_index', { ascending: true }); // Ensure components are ordered
 
+              console.log("[DEBUG] Fetched components data:", componentsData);
               if (componentsError) throw new Error(`Failed to fetch components: ${componentsError.message}`);
               console.log("[DEBUG] CustomerReview: Fetched componentsData:", componentsData); // Log 3
 
@@ -473,6 +498,7 @@ const CustomerReview = () => {
               let materialsData: Database['public']['Tables']['pir_response_component_materials']['Row'][] = [];
               if (componentIds.length > 0) {
                   // Fetch materials linked to these components
+                  console.log("[DEBUG] Fetching materials data...");
                   const { data: fetchedMaterials, error: materialsError } = await supabase
                       .from('pir_response_component_materials')
                       .select('*')
@@ -480,6 +506,7 @@ const CustomerReview = () => {
                       .order('order_index', { ascending: true }); // Ensure materials are ordered
 
                   if (materialsError) throw new Error(`Failed to fetch materials: ${materialsError.message}`);
+                  console.log("[DEBUG] Fetched materials data:", fetchedMaterials);
                   materialsData = fetchedMaterials || [];
                   console.log("[DEBUG] CustomerReview: Fetched materialsData:", materialsData); // Log 5
               } else {
@@ -529,6 +556,10 @@ const CustomerReview = () => {
                           console.log(`[DEBUG] CustomerReview: No component data found for response ${response.id}. response.answer remains:`, response.answer);
                       }
                   }
+                  // Log the final state of response.answer for this specific question type after potential modification
+                  if (componentMaterialQuestionIds.includes(response.question_id || '')) {
+                      console.log(`[DEBUG] CustomerReview: Final response.answer for component/material Q ${response.question_id} (Response ID: ${response.id}):`, JSON.stringify(response.answer, null, 2)); // ADD THIS LOG
+                  }
                   // ELSE: If not a component/material question, response.answer remains unchanged
               });
           }
@@ -549,6 +580,7 @@ const CustomerReview = () => {
           responses: responsesData as (DBPIRResponse & { response_flags?: DBFlag[] })[],
       };
   };
+  console.log("[DEBUG] CustomerReview: Setting up useQuery for pirDetailsForReview..."); // ADD THIS LOG
 
   const {
       data: pirDetails,

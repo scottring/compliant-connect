@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Question, SupplierResponse } from "../../types/index"; // Use relative path
+import { Question, QuestionType, SupplierResponse } from "../../types/index"; // Use relative path
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import TagBadge from "@/components/tags/TagBadge";
@@ -23,6 +23,15 @@ import {
 } from "@/components/ui/tooltip";
 import CommentsThread from "@/components/comments/CommentsThread";
 import { toast } from "sonner";
+import { Database } from "@/types/supabase";
+
+// Define types for component material list
+type Material = Database['public']['Tables']['pir_response_component_materials']['Row'];
+type Component = Database['public']['Tables']['pir_response_components']['Row'] & {
+  materials: Material[];
+};
+
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "success";
 
 interface ReviewQuestionItemProps {
   question: Question;
@@ -47,6 +56,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   isLocked, // Receive the isLocked prop
   // isPreviouslyFlagged = false, // Removed from props
 }) => {
+  console.log("ReviewQuestionItem - question prop:", question); // ADD THIS LOG
   console.log(`ReviewQuestionItem Props for Q:${question.id}`, { question, answer, status, note }); // Re-add log
   // Log received props
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -60,64 +70,15 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
 
     // Handle component_material_list type
     if (question.type === 'component_material_list') {
+      console.log(`ReviewQuestionItem Q:${question.id} - Received answer.value for component_material_list:`, JSON.stringify(answer?.value, null, 2)); // ADD THIS LOG
       try {
-        const components = Array.isArray(answer.value) ? answer.value : [];
-        if (components.length === 0) {
+        // The answer.value should be an array of components from the database
+        const components = answer?.answer as Component[]; // Add optional chaining just in case
+
+        if (!answer || !Array.isArray(components) || components.length === 0) { // Add check for answer existence
           return <span className="text-muted-foreground italic">No components listed</span>;
         }
 
-        return (
-          <div className="space-y-2">
-            {components.map((component, i) => (
-              <div key={i} className="border rounded p-2">
-                <div className="font-medium">{component.component_name}</div>
-                {component.materials?.length > 0 && (
-                  <div className="mt-1 ml-2">
-                    {component.materials.map((material, j) => (
-                      <div key={j} className="text-sm">
-                        {material.material_name} - {material.percentage}% {material.recyclable === 'yes' ? '(Recyclable)' : ''}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        );
-      } catch (e) {
-        console.error('Error rendering component_material_list:', e);
-        return <span className="text-destructive">Error displaying components</span>;
-      }
-    }
-    
-    switch (question.type) {
-      case "text":
-        return <div className="whitespace-pre-wrap">{answer.value as string}</div>;
-      case "number":
-        return <div>{answer.value as number}</div>;
-      case "boolean":
-        return <div>{(answer.value as boolean) ? "Yes" : "No"}</div>;
-      case "single_select": // Corrected enum value
-        return <div>{answer.value as string}</div>;
-      case "multi_select": // This case seems correct
-        return (
-          <div className="flex flex-wrap gap-1">
-            {(answer.value as string[]).map((value, index) => (
-              <Badge key={index} variant="outline">{value}</Badge>
-            ))}
-          </div>
-        );
-      case "file":
-        return <div className="text-blue-600 underline">{answer.value as string}</div>;
-      case "component_material_list": {
-        // Explicitly type the expected structure for clarity
-        type Material = { id: string; material_name: string | null; percentage: number | null; recyclable: string | null };
-        type Component = { id: string; component_name: string | null; position: string | null; materials: Material[] };
-        const components = answer.value as Component[];
-
-        if (!Array.isArray(components) || components.length === 0) {
-          return <span className="text-muted-foreground italic">No component data provided</span>;
-        }
         return (
           <div className="space-y-3">
             {components.map((component) => (
@@ -138,7 +99,32 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
             ))}
           </div>
         );
+      } catch (e) {
+        console.error('Error rendering component_material_list:', e, answer.value);
+        return <span className="text-destructive">Error displaying components</span>;
       }
+    }
+    
+    switch (question.type as QuestionType) {
+      case "text":
+        return <div className="whitespace-pre-wrap">{answer.value as string}</div>;
+      case "number":
+        return <div>{answer.value as number}</div>;
+      case "boolean":
+        return <div>{(answer.value as boolean) ? "Yes" : "No"}</div>;
+      case "single_select":
+        return <div>{answer.value as string}</div>;
+      case "multi_select":
+        return (
+          <div className="flex flex-wrap gap-1">
+            {(answer.value as string[]).map((value, index) => (
+              <Badge key={index} variant="outline">{value}</Badge>
+            ))}
+          </div>
+        );
+      case "file":
+        return <div className="text-blue-600 underline">{answer.value as string}</div>;
+      // Removed redundant component_material_list case - handled above the switch
       default:
         // Attempt to stringify if it's an object/array, otherwise default string conversion
         if (typeof answer.value === 'object' && answer.value !== null) {
