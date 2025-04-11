@@ -168,11 +168,6 @@ export function QuestionBuilderDialog({
     return Array.from(sectionsMap.values()).sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
   }, [questions]);
 
-  const parentSections = useMemo(() => {
-    // Assuming level 1 indicates top-level sections based on the view definition
-    return allSectionsFromView.filter(s => s.level === 1);
-  }, [allSectionsFromView]);
-
   const selectedParentSectionId = form.watch("sectionId"); // Watch the parent section dropdown
 
   const subsections = useMemo(() => {
@@ -199,8 +194,7 @@ export function QuestionBuilderDialog({
   // Sync local dropdown state with context-derived state
   useEffect(() => {
     if (open) {
-      console.log("[Sync Effect] Running. parentSections:", parentSections, "subsections:", subsections);
-      setLocalParentSections(parentSections);
+      setLocalParentSections(allSectionsFromView);
       // Subsections depend on the selected parent, which might be set by the reset effect later
       // Re-evaluate subsections based on the *current* form value for sectionId
       const currentParentId = form.getValues("sectionId");
@@ -210,10 +204,9 @@ export function QuestionBuilderDialog({
           return parentSection && s.number.startsWith(parentSection.number + '.');
       });
       setLocalSubsections(derivedSubsections);
-      console.log("[Sync Effect] Finished. localParentSections:", parentSections, "localSubsections:", derivedSubsections);
     }
     // Dependencies: Run when dialog opens OR when derived sections change while open
-  }, [open, parentSections, subsections, form, allSectionsFromView]); // <<<< KEY CHANGE HERE
+  }, [open, subsections, form, allSectionsFromView]); // <<<< KEY CHANGE HERE
 
 
 
@@ -385,7 +378,7 @@ export function QuestionBuilderDialog({
         const newSection = await addSection({
           name: newSectionName.trim(),
           description: "",
-          order_index: parentSections.length, // Simple ordering
+          order_index: allSectionsFromView.length, // Simple ordering
           parent_id: null // Explicitly null for top-level
         });
         console.log("[handleCreateSection] addSection returned:", newSection);
