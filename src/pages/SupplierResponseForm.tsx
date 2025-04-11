@@ -193,8 +193,89 @@ const SupplierResponseForm = () => {
   const { user } = useUser();
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [comments, setComments] = useState<Record<string, string[]>>({});
-
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  // --- Mutations (Moved to top level) ---
+  const updateAnswerMutation = useMutation({
+    mutationFn: async ({ questionId, value }: { questionId: string; value: any }) => {
+      if (!pirId) throw new Error("PIR ID is missing");
+
+      // Prepare data for upsert
+      const responseData = {
+        pir_id: pirId,
+        question_id: questionId,
+        answer: value,
+        status: 'draft', // Keep status as draft when saving individual answers
+      };
+
+      // Upsert the response based on pir_id and question_id
+      const { error } = await supabase
+        .from('pir_responses')
+        .upsert(responseData, { onConflict: 'pir_id, question_id' }); // Adjust onConflict if needed
+
+      if (error) throw error;
+      return responseData; // Return data on success
+    },
+    onSuccess: (data, variables) => {
+      toast.success(`Answer saved for question ID: ${variables.questionId}`);
+      queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
+    },
+    onError: (error: Error, variables) => {
+      toast.error(`Failed to save answer for question ID ${variables.questionId}: ${error.message}`);
+    },
+  });
+
+  const submitResponsesMutation = useSubmitResponsesMutation(queryClient, navigate);
+
+  // Define input type for the add comment mutation
+  type AddCommentInput = {
+    responseId: string;
+    userId: string;
+    commentText: string;
+  };
+
+  const useAddCommentMutation = (queryClient: ReturnType<typeof useQueryClient>, pirId: string | undefined) => {
+    return useMutation<void, Error, AddCommentInput>({
+      mutationFn: async ({ responseId, userId, commentText }) => {
+        console.log("useAddCommentMutation: mutationFn started", { responseId, userId, commentText }); // Log start
+        if (!responseId || !userId || !commentText) {
+          console.error("useAddCommentMutation: Missing required data", { responseId, userId, commentText });
+          throw new Error("Missing required data for adding comment.");
+        }
+        if (!user) {
+          console.error("useAddCommentMutation: User not available");
+          throw new Error("User not available.");
+        }
+
+        const { error } = await supabase
+          .from('pir_response_comments')
+          .insert({
+            response_id: responseId,
+            user_id: userId, // Use the authenticated user's ID
+            comment_text: commentText,
+          });
+
+        if (error) {
+          console.error("useAddCommentMutation: Error inserting comment:", error);
+          throw new Error(`Failed to add comment: ${error.message}`);
+        }
+        console.log("useAddCommentMutation: Comment inserted successfully"); // Log success
+      },
+      onSuccess: () => {
+        console.log("useAddCommentMutation: onSuccess triggered"); // Log onSuccess
+        toast.success('Comment added successfully');
+        // Invalidate the query to refetch comments
+        queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
+        console.log("useAddCommentMutation: Query invalidated"); // Log query invalidation
+      },
+      onError: (error) => {
+        console.error("useAddCommentMutation: onError triggered", error); // Log onError
+        toast.error(`Failed to add comment: ${error.message}`);
+      }
+    });
+  };
+
+  const addCommentMutation = useAddCommentMutation(queryClient, pirId);
 
   // --- Fetch PIR Details Query ---
   // Update return type to include comments
@@ -244,42 +325,48 @@ const SupplierResponseForm = () => {
               );
 
 
-          if (questionsError) throw new Error(`Failed to fetch questions for PIR tags: ${questionsError.message}`);
-
+          if (questionsError) {
+              console.error("Error fetching questions for PIR tags:", questionsError);
+              // Throw the error to trigger the main error boundary
+              throw new Error(`Failed to fetch questions for PIR: ${questionsError.message}`);
+          }
           // Process fetched questions to include tags
-          questions = (questionsData || []).map((q: any) => {
-              const currentSection = q.question_sections as any; // Renamed from subsection
-              const parentSection = currentSection?.parent_section as any; // Renamed from section
-              const questionTags = (q.question_tags?.map((qt: any) => qt.tags).filter(Boolean).flat() || []) as Tag[];
-              return {
-                  ...q,
-                  tags: questionTags,
-                  // Keep the nested structure consistent with PirDetails interface
-                  question_sections: currentSection ? {
-                      ...currentSection,
-                      parent_section: parentSection ? { ...parentSection } : undefined
-                  } : undefined
-              };
-          });
+          // Process and sort only if questionsData is not null and not empty
+          if (questionsData && questionsData.length > 0) {
+              questions = questionsData.map((q: any) => {
+                  const currentSection = q.question_sections as any; // Renamed from subsection
+                  const parentSection = currentSection?.parent_section as any; // Renamed from section
+                  // Ensure question_tags exists and is an array before mapping
+                  const questionTags = (Array.isArray(q.question_tags) ? q.question_tags.map((qt: any) => qt.tags).filter(Boolean).flat() : []) as Tag[];
+                  return {
+                      ...q,
+                      tags: questionTags,
+                      // Keep the nested structure consistent with PirDetails interface
+                      question_sections: currentSection ? {
+                          ...currentSection,
+                          parent_section: parentSection ? { ...parentSection } : undefined
+                      } : undefined
+                  };
+              });
 
-          // Sort Questions
-          // Explicitly type a and b based on the updated PirDetails['questions'] element type
-          questions.sort((a: PirDetailsWithComments['questions'][number], b: PirDetailsWithComments['questions'][number]) => { // Corrected type name
-              // Sort by parent section order_index first, then current section order_index, then question order_index
-              // Use 0 for null order_index to ensure consistent sorting
-              const parentOrderA = a.question_sections?.parent_section?.order_index ?? 0;
-              const parentOrderB = b.question_sections?.parent_section?.order_index ?? 0;
-              if (parentOrderA !== parentOrderB) return parentOrderA - parentOrderB;
+              // Sort Questions
+              questions.sort((a: PirDetailsWithComments['questions'][number], b: PirDetailsWithComments['questions'][number]) => {
+                  const parentOrderA = a.question_sections?.parent_section?.order_index ?? Infinity; // Sort items without parent section last
+                  const parentOrderB = b.question_sections?.parent_section?.order_index ?? Infinity;
+                  if (parentOrderA !== parentOrderB) return parentOrderA - parentOrderB;
 
-              const currentOrderA = a.question_sections?.order_index ?? 0;
-              const currentOrderB = b.question_sections?.order_index ?? 0;
-              if (currentOrderA !== currentOrderB) return currentOrderA - currentOrderB;
+                  const currentOrderA = a.question_sections?.order_index ?? Infinity; // Sort items without current section last
+                  const currentOrderB = b.question_sections?.order_index ?? Infinity;
+                  if (currentOrderA !== currentOrderB) return currentOrderA - currentOrderB;
 
-              // Access order_index directly from the question object (DBQuestion type)
-              const questionOrderA = a.order_index ?? 0; // Use the order_index from the question itself
-              const questionOrderB = b.order_index ?? 0; // Use the order_index from the question itself
-              return questionOrderA - questionOrderB;
-          });
+                  const questionOrderA = a.order_index ?? Infinity; // Sort items without order_index last
+                  const questionOrderB = b.order_index ?? Infinity;
+                  return questionOrderA - questionOrderB;
+              });
+          } else if (!questionsError) { // Only log if there wasn't already a fetch error
+              // If questionsData is null or empty, questions remains []
+              console.log(`No questions found or associated with PIR ${id} for tags: ${pirTagIds.join(', ')}`);
+          }
       } else {
           }
 
@@ -329,28 +416,80 @@ const SupplierResponseForm = () => {
       };
   };
 
-  const {
-      data: pirDetails, // Keep name pirDetails, but it holds PirDetailsWithComments
-      isLoading: isLoadingPir,
-      error: errorPir,
-  } = useQuery<PirDetailsWithComments, Error>({ // Use updated interface here
-      queryKey: ['pirDetails', pirId],
-      queryFn: () => fetchPirDetails(pirId!),
-      enabled: !!pirId,
+  const { data: pirDetails, isLoading: isLoadingPir, error: errorPir } = useQuery<PirDetailsWithComments, Error>({
+    queryKey: ['pirDetails', pirId],
+    queryFn: () => fetchPirDetails(pirId!),
+    enabled: !!pirId,
+    retry: false, // Don't retry failed requests
   });
 
-  // --- Authorization Check ---
+  // --- Effects (Moved to top level, but dependencies ensure they run only when needed) ---
+  // Authorization Check
   useEffect(() => {
-    if (pirDetails && currentCompany && !isLoadingPir) {
+    // Ensure all necessary data is loaded and valid before performing the check
+    // Note: isLoadingPir check is removed here as the effect runs after the loading state returns
+    if (pirDetails?.pir && currentCompany) {
       const expectedSupplierId = pirDetails.pir.supplier_company_id;
-      if (currentCompany.id !== expectedSupplierId) {
+      // Check if expectedSupplierId is actually present before comparing
+      if (expectedSupplierId && currentCompany.id !== expectedSupplierId) {
         toast.error("Unauthorized: You are not the designated supplier for this request.");
         navigate('/unauthorized', { replace: true });
+      } else if (!expectedSupplierId) {
+        // Handle case where supplier ID might be missing on the PIR record
+        console.error("PIR record is missing supplier_company_id:", pirDetails.pir.id);
+        toast.error("Error: Request data is incomplete (missing supplier ID).");
+        // Optionally navigate away or show an error state
+        // navigate('/error-page', { replace: true });
       }
     }
-    // Run check when PIR details or current company context changes after initial load
-  }, [pirDetails, currentCompany, isLoadingPir, navigate]);
-  // --- End Fetch PIR Details Query ---
+    // Run check only when pirDetails or currentCompany changes *after* initial load
+  }, [pirDetails, currentCompany, navigate]);
+
+
+  // Initialize expanded sections based on fetched questions
+  useEffect(() => {
+    if (pirDetails?.questions) {
+      const initialExpandedState: Record<string, boolean> = {};
+      pirDetails.questions.forEach(question => {
+        const parentSectionId = question.question_sections?.parent_section?.id ?? question.question_sections?.id ?? "root";
+        // Default to true (expanded) if not already set
+        if (initialExpandedState[parentSectionId] === undefined) {
+          initialExpandedState[parentSectionId] = true;
+        }
+      });
+      setExpandedSections(initialExpandedState);
+    }
+  }, [pirDetails?.questions]); // Depend only on the questions array
+
+  // Show loading state
+  if (isLoadingPir) {
+      return <div className="flex items-center justify-center h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>;
+  }
+
+  // Show error state
+  if (errorPir) {
+      return <div className="flex items-center justify-center h-screen">
+          <div className="text-center p-6 bg-destructive/10 rounded-lg">
+              <h2 className="text-xl font-bold mb-2">Error Loading Request</h2>
+              <p className="text-muted-foreground mb-4">{errorPir.message}</p>
+              <Button onClick={() => window.location.reload()}>Retry</Button>
+          </div>
+      </div>;
+  }
+
+  // Ensure we have valid data before rendering
+  if (!pirDetails) {
+      return <div className="flex items-center justify-center h-screen">
+          <div className="text-center p-6 bg-destructive/10 rounded-lg">
+              <h2 className="text-xl font-bold mb-2">Invalid Request Data</h2>
+              <p className="text-muted-foreground">The request data could not be loaded.</p>
+          </div>
+      </div>;
+  }
+
+  // --- End Effects ---
 
 
   // TODO: Add Mutations for updating/submitting responses and adding comments
@@ -364,9 +503,6 @@ const SupplierResponseForm = () => {
   const sheetTags = pirDetails?.tags ?? [];
   const sheetResponses = pirDetails?.responses ?? [];
   const sheetComments = pirDetails?.comments ?? []; // Extract comments
-
-  // Initialize expanded sections
-  useEffect(() => { /* ... */ }, [sheetQuestions]);
 
   // Grouping logic for questions
   const questionsGrouped = sheetQuestions.reduce(
@@ -407,100 +543,26 @@ const SupplierResponseForm = () => {
       createdAt: new Date(comment.created_at), // Convert timestamp string to Date object
     }));
 
-    acc[response.question_id!] = {
-        id: response.id,
-        questionId: response.question_id!,
-        value: response.answer as any,
-        comments: mappedComments,
-        flags: response.response_flags || [],
-    } as SupplierResponse;
+    // Safely handle potentially null question_id
+    if (response.question_id) {
+      acc[response.question_id] = {
+          id: response.id,
+          questionId: response.question_id, // Use the checked value
+          value: response.answer as any,
+          comments: mappedComments,
+          flags: response.response_flags || [],
+      } as SupplierResponse;
+    } else {
+      // Log or handle responses missing a question_id if necessary
+      console.warn("PIR Response missing question_id:", response.id);
+    }
     return acc;
   }, {} as Record<string, SupplierResponse>);
 
   // --- End Derived State ---
 
 
-  // --- Mutations ---
-  const updateAnswerMutation = useMutation({
-    mutationFn: async ({ questionId, value }: { questionId: string; value: any }) => {
-      if (!pirId) throw new Error("PIR ID is missing");
-
-      // Prepare data for upsert
-      const responseData = {
-        pir_id: pirId,
-        question_id: questionId,
-        answer: value,
-        status: 'draft', // Keep status as draft when saving individual answers
-      };
-
-      // Upsert the response based on pir_id and question_id
-      // Assumes a unique constraint exists on (pir_id, question_id)
-      const { error } = await supabase
-        .from('pir_responses')
-        .upsert(responseData, { onConflict: 'pir_id, question_id' }); // Adjust onConflict if needed
-
-      if (error) throw error;
-      return responseData; // Return data on success
-    },
-    onSuccess: (data, variables) => {
-      toast.success(`Answer saved for question ID: ${variables.questionId}`);
-      // Invalidate the query cache to refetch the latest data, ensuring type consistency
-      queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
-    },
-    onError: (error: Error, variables) => {
-      toast.error(`Failed to save answer for question ID ${variables.questionId}: ${error.message}`);
-    },
-  });
-
-  const submitResponsesMutation = useSubmitResponsesMutation(queryClient, navigate);
-  
-  // --- Add Comment Mutation ---
-  // Define input type for the add comment mutation
-  type AddCommentInput = {
-    responseId: string;
-    userId: string;
-    commentText: string;
-  };
-  
-  const useAddCommentMutation = (queryClient: ReturnType<typeof useQueryClient>, pirId: string | undefined) => {
-    return useMutation<void, Error, AddCommentInput>({
-      mutationFn: async ({ responseId, userId, commentText }) => {
-        console.log("useAddCommentMutation: mutationFn started", { responseId, userId, commentText }); // Log start
-        if (!responseId || !userId || !commentText) {
-          console.error("useAddCommentMutation: Missing required data", { responseId, userId, commentText });
-          throw new Error("Missing required data for adding comment.");
-        }
-  
-        const { error } = await supabase
-          .from('pir_response_comments') // Correct table name
-          .insert({
-            response_id: responseId,
-            user_id: userId,
-            comment_text: commentText, // Correct column name
-          });
-  
-        if (error) {
-          // Improved error handling
-          const errorMessage = error.message || 'Unknown database error';
-          console.error("Supabase insert error (pir_response_comments):", error); // Log the full error object
-          throw new Error(`Failed to add comment: ${errorMessage}`);
-        }
-      },
-      onSuccess: () => {
-        console.log("useAddCommentMutation: onSuccess triggered"); // Log success
-        toast.success('Comment added successfully');
-        // Invalidate pirDetails to refetch comments
-        console.log("useAddCommentMutation: Invalidating pirDetails query", { pirId });
-        queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
-      },
-      onError: (error) => {
-        console.error("useAddCommentMutation: onError triggered", error); // Log error
-        toast.error(`Failed to add comment: ${error.message}`);
-      },
-    });
-  };
-  
-  const addCommentMutation = useAddCommentMutation(queryClient, pirId);
+  // --- End Mutations (definitions moved to top level) ---
   // --- End Add Comment Mutation ---
 
   const handleSubmit = async () => {
@@ -721,7 +783,7 @@ const SupplierResponseForm = () => {
         <CardContent className="space-y-4">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><h3 className="font-medium text-sm text-muted-foreground mb-1">Product Name</h3><p>{productName}</p></div>
-            <div><h3 className="font-medium text-sm text-muted-foreground mb-1">Date Requested</h3><p>{new Date(productSheet.created_at!).toLocaleDateString()}</p></div>
+            <div><h3 className="font-medium text-sm text-muted-foreground mb-1">Date Requested</h3><p>{productSheet.created_at ? new Date(productSheet.created_at).toLocaleDateString() : 'N/A'}</p></div>
             <div><h3 className="font-medium text-sm text-muted-foreground mb-1">Description</h3><p>{productSheet.description || "N/A"}</p></div>
             <div>
               <h3 className="font-medium text-sm text-muted-foreground mb-1">Information Categories</h3>
@@ -767,12 +829,13 @@ const SupplierResponseForm = () => {
                   {/* Iterate through the actual sections (subsections) within the parent group */}
                   {Object.entries(sections).map(([currentSectionId, questions]) => {
                     // Skip showing subsection title if both parent and subsection are General
-                    const isGeneralSection = 
-                      (parentSectionId === "root" || parentSectionId === "unsectioned") && 
-                      (currentSectionId === "unsectioned" || 
-                       (questionInSection => questionInSection?.question_sections?.name?.toLowerCase() === "general")(
-                         sheetQuestions.find(q => q.section_id === currentSectionId)
-                       ));
+                    // Safely check if the section is considered "General"
+                    const foundQuestionForSection = sheetQuestions.find(q => q.section_id === currentSectionId);
+                    const currentSectionName = foundQuestionForSection?.question_sections?.name?.toLowerCase();
+
+                    const isGeneralSection =
+                      (parentSectionId === "root" || parentSectionId === "unsectioned") &&
+                      (currentSectionId === "unsectioned" || currentSectionName === "general");
                     
                     return (
                       <div key={currentSectionId} className="space-y-6">

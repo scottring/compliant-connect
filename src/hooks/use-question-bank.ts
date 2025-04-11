@@ -245,9 +245,13 @@ const useDeleteQuestionMutation = (
     setError: React.Dispatch<React.SetStateAction<string | null>>
 ): UseMutationResult<boolean, Error, string> => {
     return useMutation<boolean, Error, string>({
-        mutationFn: async (id) => { /* ... implementation ... */
+        mutationFn: async (id) => {
             if (!user) throw new Error('You must be logged in');
-            const { error } = await supabase.from('questions').delete().eq('id', id);
+            if (!id) throw new Error('Invalid question ID');
+            const { error } = await supabase.from('questions')
+                .delete()
+                .eq('id', id)
+                .not('id', 'is', null); // Explicitly exclude null IDs
             if (error) throw new Error(`Delete failed: ${error.message}`);
             return true;
         },
