@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Tag, Company, Subsection, Section, SupplierResponse, Flag as LocalFlagType, Question as LocalQuestionType } from "../types/index"; // Use relative path
 import { PIRRequest, PIRStatus, PIRResponse as DBPIRResponse, ResponseStatus, isValidPIRStatusTransition, isValidResponseStatusTransition } from "@/types/pir";
 import { Database } from "@/types/supabase";
+import { Json } from "@/types/supabase"; // Import Json type
 type DBFlag = Database['public']['Tables']['response_flags']['Row'];
 type DBQuestionType = Database['public']['Enums']['question_type'];
 import TagBadge from "@/components/tags/TagBadge";
@@ -430,12 +431,110 @@ const CustomerReview = () => {
           }
       }
 
-      // 4. Fetch Responses with Flags
-      const { data: responsesData, error: responsesError } = await supabase
+      // 4. Fetch Base Responses with Flags
+      const { data: baseResponsesData, error: responsesError } = await supabase
           .from('pir_responses')
           .select('*, response_flags(*)') // Fetch nested flags
           .eq('pir_id', id);
-      if (responsesError) throw new Error(`Failed to fetch responses: ${responsesError.message}`);
+      if (responsesError) throw new Error(`Failed to fetch base responses: ${responsesError.message}`);
+
+      // 5. Fetch and structure Component/Material data for relevant responses
+      const componentMaterialQuestionIds = questions
+          .filter(q => q.type === 'component_material_list')
+          .map(q => q.id);
+      console.log("[DEBUG] CustomerReview: Component/Material Question IDs:", componentMaterialQuestionIds); // Log 1
+
+      // Initialize with base data and ensure response_flags is an array
+      const responsesWithComponents = (baseResponsesData || []).map(response => ({
+          ...response,
+          response_flags: response.response_flags || [],
+      }));
+
+      if (componentMaterialQuestionIds.length > 0) {
+          const relevantResponseIds = responsesWithComponents
+              .filter(r => r.question_id && componentMaterialQuestionIds.includes(r.question_id))
+              .map(r => r.id);
+          console.log("[DEBUG] CustomerReview: Relevant Response IDs for Components:", relevantResponseIds); // Log 2
+
+          if (relevantResponseIds.length > 0) {
+              // Fetch components linked to these responses
+              const { data: componentsData, error: componentsError } = await supabase
+                  .from('pir_response_components')
+                  .select('*')
+                  .in('pir_response_id', relevantResponseIds)
+                  .order('order_index', { ascending: true }); // Ensure components are ordered
+
+              if (componentsError) throw new Error(`Failed to fetch components: ${componentsError.message}`);
+              console.log("[DEBUG] CustomerReview: Fetched componentsData:", componentsData); // Log 3
+
+              const componentIds = (componentsData || []).map(c => c.id);
+              console.log("[DEBUG] CustomerReview: Component IDs:", componentIds); // Log 4
+
+              let materialsData: Database['public']['Tables']['pir_response_component_materials']['Row'][] = [];
+              if (componentIds.length > 0) {
+                  // Fetch materials linked to these components
+                  const { data: fetchedMaterials, error: materialsError } = await supabase
+                      .from('pir_response_component_materials')
+                      .select('*')
+                      .in('component_id', componentIds)
+                      .order('order_index', { ascending: true }); // Ensure materials are ordered
+
+                  if (materialsError) throw new Error(`Failed to fetch materials: ${materialsError.message}`);
+                  materialsData = fetchedMaterials || [];
+                  console.log("[DEBUG] CustomerReview: Fetched materialsData:", materialsData); // Log 5
+              } else {
+                  console.log("[DEBUG] CustomerReview: No component IDs found, skipping material fetch."); // Log 5 Alt
+              }
+
+              // Structure the data: Group materials by component_id
+              const materialsByComponentId = materialsData.reduce((acc, material) => {
+                  const componentId = material.component_id;
+                  if (!acc[componentId]) {
+                      acc[componentId] = [];
+                  }
+                  acc[componentId].push(material);
+                  return acc;
+              }, {} as Record<string, Database['public']['Tables']['pir_response_component_materials']['Row'][]>);
+              console.log("[DEBUG] CustomerReview: Grouped materialsByComponentId:", JSON.stringify(materialsByComponentId)); // Log 6
+
+              // Structure the data: Group components by response_id and attach materials
+              const componentsByResponseId = (componentsData || []).reduce((acc, component) => {
+                  const responseId = component.pir_response_id;
+                  if (!acc[responseId]) {
+                      acc[responseId] = [];
+                  }
+                  // Attach the grouped materials to each component
+                  const componentWithMaterials = {
+                      ...component,
+                      materials: materialsByComponentId[component.id] || []
+                  };
+                  acc[responseId].push(componentWithMaterials);
+                  return acc;
+              }, {} as Record<string, (Database['public']['Tables']['pir_response_components']['Row'] & { materials: Database['public']['Tables']['pir_response_component_materials']['Row'][] })[]>);
+              // Log 7 is added later in the merge section
+
+
+              // Merge the structured component data into the relevant responses
+              console.log("[DEBUG] CustomerReview: Merging component data. componentsByResponseId:", JSON.stringify(componentsByResponseId)); // Log the grouped data
+              responsesWithComponents.forEach(response => {
+                  // Only process if it's a component/material question
+                  if (componentMaterialQuestionIds.includes(response.question_id || '')) {
+                      console.log(`[DEBUG] CustomerReview: Processing response ${response.id} (Q: ${response.question_id}). Has data in componentsByResponseId?`, !!componentsByResponseId[response.id]);
+                      if (componentsByResponseId[response.id]) { // Check if data exists for this response
+                          // Replace the potentially simple 'answer' field with the structured data
+                          // Use 'unknown' then 'Json' for type safety if needed, assuming the structure matches Json requirements
+                          response.answer = componentsByResponseId[response.id] as unknown as Json; // <--- THIS IS THE KEY LINE
+                          console.log(`[DEBUG] CustomerReview: Overwrote response.answer for ${response.id} with structured data:`, JSON.stringify(response.answer)); // Log the overwritten value
+                      } else {
+                          console.log(`[DEBUG] CustomerReview: No component data found for response ${response.id}. response.answer remains:`, response.answer);
+                      }
+                  }
+                  // ELSE: If not a component/material question, response.answer remains unchanged
+              });
+          }
+      }
+      // Use the processed responses array which now includes structured component data where applicable
+      const responsesData = responsesWithComponents;
 
       const safePirData = pirData as Database['public']['Tables']['pir_requests']['Row'];
 
@@ -446,7 +545,8 @@ const CustomerReview = () => {
           customer: pirData.customer as Company | null,
           tags: tags,
           questions: questions,
-          responses: (responsesData || []) as (DBPIRResponse & { response_flags?: DBFlag[] })[],
+          // Use the potentially augmented responsesData
+          responses: responsesData as (DBPIRResponse & { response_flags?: DBFlag[] })[],
       };
   };
 

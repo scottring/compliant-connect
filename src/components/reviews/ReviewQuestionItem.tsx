@@ -57,6 +57,38 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
     if (!answer || answer.value === undefined || answer.value === null) {
       return <span className="text-muted-foreground italic">No answer provided</span>;
     }
+
+    // Handle component_material_list type
+    if (question.type === 'component_material_list') {
+      try {
+        const components = Array.isArray(answer.value) ? answer.value : [];
+        if (components.length === 0) {
+          return <span className="text-muted-foreground italic">No components listed</span>;
+        }
+
+        return (
+          <div className="space-y-2">
+            {components.map((component, i) => (
+              <div key={i} className="border rounded p-2">
+                <div className="font-medium">{component.component_name}</div>
+                {component.materials?.length > 0 && (
+                  <div className="mt-1 ml-2">
+                    {component.materials.map((material, j) => (
+                      <div key={j} className="text-sm">
+                        {material.material_name} - {material.percentage}% {material.recyclable === 'yes' ? '(Recyclable)' : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      } catch (e) {
+        console.error('Error rendering component_material_list:', e);
+        return <span className="text-destructive">Error displaying components</span>;
+      }
+    }
     
     switch (question.type) {
       case "text":
@@ -77,7 +109,48 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
         );
       case "file":
         return <div className="text-blue-600 underline">{answer.value as string}</div>;
+      case "component_material_list": {
+        // Explicitly type the expected structure for clarity
+        type Material = { id: string; material_name: string | null; percentage: number | null; recyclable: string | null };
+        type Component = { id: string; component_name: string | null; position: string | null; materials: Material[] };
+        const components = answer.value as Component[];
+
+        if (!Array.isArray(components) || components.length === 0) {
+          return <span className="text-muted-foreground italic">No component data provided</span>;
+        }
+        return (
+          <div className="space-y-3">
+            {components.map((component) => (
+              <div key={component.id} className="border rounded p-2 bg-background">
+                <p className="font-medium">{component.component_name || "Unnamed Component"} {component.position ? `(${component.position})` : ''}</p>
+                {component.materials && component.materials.length > 0 ? (
+                  <ul className="list-disc pl-5 mt-1 text-sm space-y-1">
+                    {component.materials.map((material) => (
+                      <li key={material.id}>
+                        {material.material_name || "Unnamed Material"}: {material.percentage ?? 'N/A'}% {material.recyclable ? `(${material.recyclable})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic pl-5 mt-1">No materials listed for this component.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      }
       default:
+        // Attempt to stringify if it's an object/array, otherwise default string conversion
+        if (typeof answer.value === 'object' && answer.value !== null) {
+          try {
+            // Use pre for better formatting of JSON string
+            return <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(answer.value, null, 2)}</pre>;
+          } catch (e) {
+            // Fallback if stringify fails (should be rare)
+            return <div>{String(answer.value)}</div>;
+          }
+        }
+        // Default for primitive types not explicitly handled
         return <div>{String(answer.value)}</div>;
     }
   };
