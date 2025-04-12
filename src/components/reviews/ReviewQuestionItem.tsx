@@ -73,7 +73,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
       console.log(`ReviewQuestionItem Q:${question.id} - Received answer.value for component_material_list:`, JSON.stringify(answer?.value, null, 2)); // ADD THIS LOG
       try {
         // The answer.value should be an array of components from the database
-        const components = answer?.answer as Component[]; // Add optional chaining just in case
+        const components = answer?.value as Component[]; // Correctly access data from answer.value
 
         if (!answer || !Array.isArray(components) || components.length === 0) { // Add check for answer existence
           return <span className="text-muted-foreground italic">No components listed</span>;
