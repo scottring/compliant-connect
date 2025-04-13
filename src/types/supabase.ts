@@ -906,23 +906,12 @@ export type Database = {
         }
         Relationships: []
       }
-      v_sections_hierarchy: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          full_path_name: string | null
-          id: string | null
-          level: number | null
-          name: string | null
-          order_index: number | null
-          parent_id: string | null
-          path_string: string | null
-          updated_at: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
+      check_supplier_response_access_and_log: {
+        Args: { response_id: string }
+        Returns: boolean
+      }
       create_question_with_tags: {
         Args: {
           p_subsection_id: string
@@ -946,16 +935,26 @@ export type Database = {
           updated_at: string | null
         }
       }
+      is_company_member_or_admin: {
+        Args: { p_company_id: string }
+        Returns: boolean
+      }
+      update_question_order: {
+        Args: { p_updates: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       flag_status: "open" | "in_progress" | "resolved" | "rejected"
       pir_status:
         | "draft"
+        | "sent"
+        | "in_progress"
         | "submitted"
-        | "in_review"
-        | "flagged"
-        | "approved"
+        | "reviewed"
         | "rejected"
+        | "resubmitted"
+        | "canceled"
       question_type:
         | "text"
         | "number"
@@ -1087,11 +1086,13 @@ export const Constants = {
       flag_status: ["open", "in_progress", "resolved", "rejected"],
       pir_status: [
         "draft",
+        "sent",
+        "in_progress",
         "submitted",
-        "in_review",
-        "flagged",
-        "approved",
+        "reviewed",
         "rejected",
+        "resubmitted",
+        "canceled",
       ],
       question_type: [
         "text",

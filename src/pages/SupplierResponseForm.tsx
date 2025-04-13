@@ -81,8 +81,9 @@ const useSubmitResponsesMutation = (
             }
             
             const currentStatus = currentPir.status as PIRStatus;
-            if (currentStatus !== 'draft' && currentStatus !== 'flagged') {
-                throw new Error(`Cannot submit responses when PIR is in ${currentStatus} status. PIR must be in draft or flagged status.`);
+            // Allow submission only from 'sent', 'rejected', or 'draft' states (matching isReadOnly logic)
+            if (!['sent', 'rejected', 'draft'].includes(currentStatus)) {
+                throw new Error(`Cannot submit responses when PIR is in ${currentStatus} status. PIR must be in 'sent', 'rejected', or 'draft' status.`);
             }
 
             // 2. Update all responses first
@@ -111,7 +112,8 @@ const useSubmitResponsesMutation = (
             }
 
             // 3. If status was 'flagged', resolve all open flags
-            if (currentStatus === 'flagged') {
+            // Resolve flags if the submission is coming from a 'rejected' state
+            if (currentStatus === 'rejected') {
                 // Get all response IDs for this PIR
                 const responseIds = responses.map(r => r.id);
                 
@@ -132,21 +134,30 @@ const useSubmitResponsesMutation = (
             }
 
             // 4. Update PIR status to 'submitted'
-            const { error: pirUpdateError } = await supabase
+            // 4. Update PIR status to 'submitted'
+            // Determine the next status based on the current status
+            const nextStatus: PIRStatus = currentStatus === 'rejected' ? 'resubmitted' : 'submitted';
+
+            // 4. Update PIR status
+            const { data: updateResult, error: pirUpdateError } = await supabase // Capture data and error
                 .from('pir_requests')
-                .update({ 
-                    status: 'submitted' as PIRStatus,
-                    updated_at: new Date().toISOString() 
+                .update({
+                    status: nextStatus, // Use the determined status
+                    updated_at: new Date().toISOString()
                 })
-                .eq('id', pirId);
+                .eq('id', pirId)
+                .select() // Select the result to log it
+                .single(); // Use single() if you expect one record or null
 
             if (pirUpdateError) {
                 throw new Error(`Failed to update PIR status: ${pirUpdateError.message}`);
+            } else {
             }
         },
         onSuccess: async (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['pirDetails', variables.pirId] });
             queryClient.invalidateQueries({ queryKey: ['pirRequests'] });
+            queryClient.invalidateQueries({ queryKey: ['incomingPirs'] }); // Invalidate the supplier's incoming list
             toast.success('Responses submitted successfully');
 
             try {
@@ -831,34 +842,44 @@ const SupplierResponseForm = () => {
 
   // Status display logic
   const getDisplayStatus = (): string => {
-    if (!productSheet) return 'loading...';
-    // Use correct enum values from PIRStatus
-    // Example logic - adjust based on actual workflow
-    if (productSheet.status === "draft" && completionRate > 0) return "Draft (In Progress)";
-    if (productSheet.status === "submitted") return "Submitted (Pending Review)";
-    if (productSheet.status === "flagged") return "Revisions Required";
-    return productSheet.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    if (!productSheet) return 'Loading...';
+    const status = productSheet.status as PIRStatus; // Use the correct variable
+    switch (status) {
+      case 'sent': return 'New Request';
+      case 'in_progress': return 'In Progress';
+      case 'submitted': return 'Submitted';
+      case 'rejected': return 'Needs Update'; // Map 'rejected' to 'Needs Update'
+      case 'resubmitted': return 'Resubmitted';
+      case 'reviewed': return 'Approved'; // Map 'reviewed' to 'Approved'
+      case 'draft': return 'Draft (In Progress)'; // Keep draft distinct
+      case 'canceled': return 'Canceled';
+      // Handle legacy/unexpected statuses if necessary, or default
+      default: return (status as string).replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+    }
   };
   const getStatusColorClass = (): string => {
      if (!productSheet) return "bg-gray-100 text-gray-800";
-     // Use correct enum values from PIRStatus
-     switch (productSheet.status) {
-       case "approved": return "bg-green-100 text-green-800";
-       case "rejected": return "bg-red-100 text-red-800";
-       case "in_review": return "bg-blue-100 text-blue-800";
-       case "flagged": return "bg-yellow-100 text-yellow-800"; // Use 'flagged' based on enum
-       case "submitted": return "bg-purple-100 text-purple-800"; // Example for submitted
-       default: return "bg-gray-100 text-gray-800"; // Draft
+     const status = productSheet.status as PIRStatus; // Use the correct variable and type
+     switch (status) {
+       case 'sent': return 'bg-blue-100 text-blue-800'; // New Request
+       case 'in_progress': return 'bg-blue-100 text-blue-800'; // In Progress
+       case 'submitted': return 'bg-purple-100 text-purple-800'; // Submitted
+       case 'resubmitted': return 'bg-purple-100 text-purple-800'; // Resubmitted
+       case 'rejected': return 'bg-yellow-100 text-yellow-800'; // Needs Update (use yellow for attention)
+       case 'reviewed': return 'bg-green-100 text-green-800'; // Approved
+       case 'draft': return 'bg-orange-100 text-orange-800'; // Draft
+       case 'canceled': return 'bg-gray-100 text-gray-800'; // Canceled
+       default: return 'bg-gray-100 text-gray-800'; // Default/Unknown
      }
   };
   // --- End Status Logic ---
 
   // Get status from productSheet and add a helper to check if form should be read-only
   const isReadOnly = (): boolean => {
-    if (!productSheet) return false;
-    // Form is read-only when status is 'submitted', 'in_review', 'approved', or 'rejected'
-    // 'flagged' status should keep the form editable
-    return ['submitted', 'in_review', 'approved', 'rejected'].includes(productSheet.status);
+    if (!productSheet) return true; // Default to read-only if no sheet
+    const status = productSheet.status as PIRStatus; // Use the correct variable and type
+    // Allow editing only if status is 'sent' (New Request), 'rejected' (Needs Update), or 'draft'
+    return !(status === 'sent' || status === 'rejected' || status === 'draft');
   };
 
   // --- Render Logic ---
@@ -882,7 +903,8 @@ const SupplierResponseForm = () => {
         ) : undefined}
       />
 
-      {productSheet?.status === 'flagged' && (
+      {/* Show revisions required banner if status is 'rejected' */}
+      {productSheet?.status === 'rejected' && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-md">
           <h3 className="font-medium mb-1">Revisions Required</h3>
           <p>

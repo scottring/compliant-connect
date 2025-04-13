@@ -48,7 +48,7 @@ interface PirDetailsForReview {
     customer: Company | null;
     tags: Tag[];
     questions: DBQuestionForReview[];
-    responses: (DBPIRResponse & { response_flags?: DBFlag[] })[];
+    responses: (DBPIRResponse & { response_flags?: DBFlag[]; customer_review_status?: ResponseStatus | null })[]; // Added customer_review_status
 }
 
 
@@ -88,70 +88,18 @@ const useSubmitReviewMutation = (
             const currentStatus = currentPir.status as PIRStatus;
             console.log("Current PIR status before update:", currentStatus);
             
-            if (currentStatus !== 'submitted' && currentStatus !== 'flagged' && currentStatus !== 'in_review') {
-                throw new Error(`Cannot review PIR with status: ${currentStatus}`);
+            // Allow review if status is submitted or resubmitted
+            // Allow review if status is submitted or resubmitted
+            if (currentStatus !== 'submitted' && currentStatus !== 'resubmitted') {
+                 console.warn(`[DEBUG] CustomerReview: Attempted review on PIR ${pirId} with invalid status: ${currentStatus}. Allowed: submitted, resubmitted.`);
+                 // Allow proceeding if already 'in_progress' or 'reviewed' to handle potential race conditions or re-entries, but log warning.
+                 // Check against the *new* potential intermediate/final statuses
+                 if (currentStatus !== 'in_progress' && currentStatus !== 'reviewed' && currentStatus !== 'rejected') {
+                    throw new Error(`Cannot initiate review for PIR with status: ${currentStatus}. Expected 'submitted' or 'resubmitted'.`);
+                 }
             }
 
-            // Always update PIR to 'in_review' during processing
-            console.log(`[DEBUG] CustomerReview: Attempting to update PIR ${pirId} status from ${currentStatus} to 'in_review'`);
-            const { error: statusError } = await supabase
-                .from('pir_requests')
-                .update({ 
-                    status: 'in_review' as PIRStatus,
-                    updated_at: new Date().toISOString() 
-                })
-                .eq('id', pirId);
-                
-            if (statusError) throw new Error(`Failed to update PIR to in_review: ${statusError.message}`);
-            
-            // Verify the status was updated
-            const { data: verifyUpdate, error: verifyError } = await supabase
-                .from('pir_requests')
-                .select('status')
-                .eq('id', pirId)
-                .single();
-                
-            console.log(`[DEBUG] CustomerReview: Verified PIR ${pirId} status after initial update: ${verifyUpdate?.status} (Error: ${verifyError?.message})`);
-            
-            // Send notification for in_review status
-            try {
-                console.log("Fetching PIR record for in_review notification...");
-                const { data: updatedPirRecord, error: fetchError } = await supabase
-                    .from('pir_requests')
-                    .select(`
-                        *,
-                        products(name),
-                        supplier:companies!pir_requests_supplier_company_id_fkey(name, contact_email),
-                        customer:companies!pir_requests_customer_id_fkey(name, contact_email)
-                    `)
-                    .eq('id', pirId)
-                    .single();
-
-                if (fetchError || !updatedPirRecord) {
-                    console.error(`Failed to fetch PIR record for in_review notification: ${fetchError?.message || 'Not found'}`);
-                } else {
-                    console.log("Sending notification for in_review status:", updatedPirRecord);
-                    const { data, error: functionError } = await supabase.functions.invoke(
-                        'send-email',
-                        {
-                            body: {
-                                type: 'PIR_STATUS_UPDATE',
-                                record: updatedPirRecord,
-                            }
-                        }
-                    );
-
-                    if (functionError) {
-                        console.error("Error sending in_review notification:", functionError);
-                    } else {
-                        console.log("In-review notification sent successfully:", data);
-                    }
-                }
-            } catch (notificationError: any) {
-                console.error("Failed to send in_review notification:", notificationError);
-                console.error("Notification error details:", notificationError.stack || JSON.stringify(notificationError));
-                // Don't throw here, continue with the review process
-            }
+            // Intermediate 'in_progress' update and notification removed as per instructions.
 
             // Process each response
             for (const [responseId, status] of Object.entries(reviewStatuses)) {
@@ -183,23 +131,25 @@ const useSubmitReviewMutation = (
                 if (flagError) throw new Error(`Failed to save flags: ${flagError.message}`);
             }
 
-            // Determine final PIR status
-            const finalStatus: PIRStatus = hasFlags ? 'flagged' : 'approved';
+            // Determine final PIR status based on whether any flags were generated in this submission
+            // The 'hasFlags' variable was set earlier based on the 'reviewStatuses' input.
+            const finalPirStatus: PIRStatus = hasFlags ? 'rejected' : 'reviewed';
+            console.log(`[DEBUG] CustomerReview: Determined final PIR status based on responses: ${finalPirStatus}`); // Add log
 
-            // Update PIR status and product if approved
+            // Update PIR status and product if approved (now 'reviewed')
             const updatePayload: Database['public']['Tables']['pir_requests']['Update'] = {
-                status: finalStatus,
+                status: finalPirStatus, // Use the determined status
                 updated_at: new Date().toISOString(),
             };
-            if (finalStatus === 'approved' && productId) {
+            // Link product only if the final status is 'reviewed'
+            if (finalPirStatus === 'reviewed' && productId) {
                 updatePayload.product_id = productId;
             }
 
-            console.log(`[DEBUG] CustomerReview: Attempting to update PIR ${pirId} to final status: ${finalStatus}`, "with payload:", updatePayload);
-            
+
             const { error: pirUpdateError } = await supabase
                 .from('pir_requests')
-                .update(updatePayload)
+                .update(updatePayload) // Payload already uses finalPirStatus
                 .eq('id', pirId);
             if (pirUpdateError) throw new Error(`Failed to update PIR status: ${pirUpdateError.message}`);
 
@@ -209,10 +159,10 @@ const useSubmitReviewMutation = (
                 .select('status, updated_at')
                 .eq('id', pirId)
                 .single();
-                
+
             console.log(`[DEBUG] CustomerReview: Verified final PIR ${pirId} status: ${finalStatusCheck?.status} (Updated at: ${finalStatusCheck?.updated_at}, Error: ${finalCheckError?.message})`);
-            
-            return { finalStatus };
+
+            return { finalStatus: finalPirStatus }; // Return the determined status
         },
         onSuccess: async (data, variables) => {
             console.log(`[DEBUG] CustomerReview: Mutation onSuccess for PIR ${variables.pirId}. Final status determined by mutationFn: ${data.finalStatus}`);
@@ -278,6 +228,44 @@ const useSubmitReviewMutation = (
 };
 // --- End Submit Review Mutation Hook ---
 
+// --- Mutation to update individual response customer review status ---
+type UpdateResponseStatusInput = {
+    responseId: string;
+    status: ResponseStatus;
+};
+
+const useUpdateResponseCustomerStatusMutation = (
+    queryClient: ReturnType<typeof useQueryClient>
+): UseMutationResult<void, Error, UpdateResponseStatusInput> => {
+    return useMutation<void, Error, UpdateResponseStatusInput>({
+        mutationFn: async ({ responseId, status }) => {
+            console.log(`[DEBUG] CustomerReview: Updating customer_review_status for response ${responseId} to ${status}`);
+            const { error } = await supabase
+                .from('pir_responses')
+                .update({ customer_review_status: status })
+                .eq('id', responseId);
+
+            if (error) {
+                console.error(`[DEBUG] CustomerReview: Failed to update customer_review_status for response ${responseId}:`, error);
+                throw new Error(`Failed to update response status: ${error.message}`);
+            }
+            console.log(`[DEBUG] CustomerReview: Successfully updated customer_review_status for response ${responseId}`);
+        },
+        onSuccess: (_, variables) => {
+            // Optionally invalidate specific queries if needed, but local state update might suffice
+            // queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
+            console.log(`[DEBUG] CustomerReview: Mutation onSuccess for updating response ${variables.responseId} status.`);
+            // No toast here, keep UI less noisy for individual actions
+        },
+        onError: (error, variables) => {
+            toast.error(`Failed to update status for response: ${error.message}`);
+            // Optionally revert local state change here if needed
+            console.error(`[DEBUG] CustomerReview: Mutation onError for updating response ${variables.responseId} status:`, error);
+        },
+    });
+};
+// --- End Update Response Status Mutation ---
+
 
 const CustomerReview = () => {
   console.log("[DEBUG] CustomerReview: Component rendering started."); // ADD THIS LOG
@@ -324,6 +312,7 @@ const CustomerReview = () => {
   const [reviewStatus, setReviewStatus] = useState<Record<string, "approved" | "flagged" | "pending">>({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [isLocked, setIsLocked] = useState(false); // State for view-only mode
+  const updateResponseStatusMutation = useUpdateResponseCustomerStatusMutation(queryClient);
 
   // --- Fetch PIR Details Query ---
   const fetchPirDetailsForReview = async (id: string): Promise<PirDetailsForReview> => {
@@ -456,7 +445,7 @@ const CustomerReview = () => {
       console.log("[DEBUG] Fetching base responses...");
       const { data: baseResponsesData, error: responsesError } = await supabase
           .from('pir_responses')
-          .select('*, response_flags(*)') // Fetch nested flags
+          .select('*, customer_review_status, response_flags(*)') // Fetch nested flags AND customer_review_status
           .eq('pir_id', id);
       if (responsesError) throw new Error(`Failed to fetch base responses: ${responsesError.message}`);
       console.log("[DEBUG] Fetched base responses:", baseResponsesData);
@@ -595,21 +584,23 @@ const CustomerReview = () => {
   // Determine if the review is in a read-only state
   // PIR should be read-only AFTER the customer submits their review, until supplier responds again
   const isReadOnly = React.useMemo(() => {
+    // Determine if the form should be read-only based on PIR status
+    // Aligning with the useEffect logic which seems correct for terminal states.
     if (!pirDetails?.pir) return false;
-    
-    // These statuses mean the review has been completed and should be read-only
-    // until the supplier responds and changes status back to 'submitted'
-    return ['approved', 'in_review', 'flagged'].includes(pirDetails.pir.status);
+    const readOnlyStatuses: PIRStatus[] = ['reviewed', 'rejected', 'canceled']; // Final states where review is locked.
+    console.log("[DEBUG] CustomerReview: Calculating isReadOnly. PIR Status:", pirDetails?.pir?.status);
+    return readOnlyStatuses.includes(pirDetails.pir.status as PIRStatus);
   }, [pirDetails]);
 
   // Initialize state with read-only setting
   useEffect(() => {
     if (pirDetails?.pir) {
-      setIsLocked(
-        pirDetails.pir.status === 'approved' || 
-        pirDetails.pir.status === 'in_review' || 
-        pirDetails.pir.status === 'flagged'
-      );
+      // Lock if status is reviewed, rejected, or canceled (new terminal states)
+      const terminalStatuses: PIRStatus[] = ['reviewed', 'rejected', 'canceled'];
+      const shouldBeLocked = terminalStatuses.includes(pirDetails.pir.status as PIRStatus);
+      console.log(`[DEBUG] CustomerReview: PIR status is ${pirDetails.pir.status}. Locked state set to: ${shouldBeLocked}`);
+      // Pass the calculated boolean to setIsLocked
+      setIsLocked(shouldBeLocked);
     }
   }, [pirDetails]);
 
@@ -673,7 +664,8 @@ const CustomerReview = () => {
   const sheetQuestions = pirDetails?.questions ?? [];
   const sheetTags = pirDetails?.tags ?? [];
   const sheetResponses = pirDetails?.responses ?? [];
-  const isPreviouslyReviewed = productSheet?.status === "flagged";
+  // Check if the status indicates a previous review cycle (e.g., rejected, resubmitted)
+  const isPreviouslyReviewed = productSheet?.status === "rejected" || productSheet?.status === "resubmitted";
 
   // Grouping logic
   const questionsBySections = sheetQuestions.reduce(
@@ -702,6 +694,7 @@ const CustomerReview = () => {
         id: response.id,
         questionId: response.question_id!,
         value: response.answer as any,
+        customer_review_status: response.customer_review_status, // Add customer review status
         comments: [], // Map to empty array
         // Correctly map DBFlag to LocalFlagType
         flags: (response.response_flags || []).map(flag => ({
@@ -776,12 +769,17 @@ const CustomerReview = () => {
   const handleApprove = (responseId: string) => {
     setReviewStatus(prev => ({ ...prev, [responseId]: "approved" }));
     setReviewNotes(prev => ({ ...prev, [responseId]: "" }));
+    // Persist the status change
+    updateResponseStatusMutation.mutate({ responseId, status: 'approved' });
     toast.success("Answer marked as approved");
    };
   const handleFlag = (responseId: string, note: string) => {
     if (!note?.trim()) { toast.error("Please add a note explaining the issue."); return; }
     setReviewStatus(prev => ({ ...prev, [responseId]: "flagged" }));
     setReviewNotes(prev => ({ ...prev, [responseId]: note }));
+    // Persist the status change
+    updateResponseStatusMutation.mutate({ responseId, status: 'flagged' });
+    // Note: Flag creation still happens during the final submit (useSubmitReviewMutation)
     toast.info("Answer marked as flagged");
    };
   const handleUpdateNote = (responseId: string, note: string) => { setReviewNotes(prev => ({ ...prev, [responseId]: note })); };
@@ -861,11 +859,9 @@ const CustomerReview = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={pageTitle}
-        subtitle={isPreviouslyReviewed 
-          ? "Reviewing flagged issues" 
-          : pirDetails?.pir.status === 'in_review' 
-            ? "Submitted review" 
-            : "Initial review"}
+        subtitle={isPreviouslyReviewed
+          ? "Reviewing previously flagged issues" // Clarified text
+          : "Initial review"} // Simplified ternary
         actions={
           <>
             {isLocked && (
@@ -899,9 +895,8 @@ const CustomerReview = () => {
         <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-md">
           <h3 className="font-medium mb-1">View-Only Mode</h3>
           <p>
-            {pirDetails?.pir.status === 'in_review' 
-              ? "Your review has been submitted. The supplier will now be notified to address any flagged issues. You'll be able to review again when the supplier submits updated information."
-              : "This review is complete. You'll be able to approve or flag responses again when the supplier submits updated information."}
+            {/* Simplified message for locked state */}
+            This review process is complete or the request has been canceled. No further actions are needed at this time.
           </p>
         </div>
       )}
@@ -966,12 +961,14 @@ const CustomerReview = () => {
                             question={questionForComponent} // Pass mapped question
                             answer={answer}
                             status={status}
+                            customerReviewStatus={answer?.customer_review_status} // Pass down the persistent status
                             note={reviewNotes[answer.id] || ""}
                             onApprove={() => { if (answer) handleApprove(answer.id); }}
                             onFlag={(note) => { if (answer) handleFlag(answer.id, note); }}
                             onUpdateNote={(note) => { if (answer) handleUpdateNote(answer.id, note); }}
                             isLocked={isResponseLocked} // Pass response-specific locked state
                             // isPreviouslyFlagged is now handled internally by ReviewQuestionItem
+                            // Pass responseId for context if needed (already available via 'answer.id')
                           />
                           {index < filteredSectionQuestions.length - 1 && <Separator />}
                         </div>
@@ -989,13 +986,15 @@ const CustomerReview = () => {
       {/* Only show the bottom submit button if not locked */}
       {!isLocked && (
         <div className="mt-6 flex justify-end">
-          <Button 
-            className="bg-brand hover:bg-brand/90" 
-            onClick={handleSubmitReview} 
+          <Button
+            className="bg-brand hover:bg-brand/90"
+            onClick={handleSubmitReview}
+            // Disable only if submitting or if no review actions have been taken yet
             disabled={submitReviewMutation.isPending || Object.keys(reviewStatus).length === 0}
+            size="lg" // Keep consistent size if desired
           >
             <Send className="mr-2 h-4 w-4" />
-            {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+            {submitReviewMutation.isPending ? "Submitting..." : "Submit Final Review"} {/* Updated Text */}
           </Button>
         </div>
       )}

@@ -11,12 +11,14 @@ export type RelationshipStatus = Database['public']['Enums']['relationship_statu
 
 // Valid status transitions
 export const PIR_STATUS_TRANSITIONS: Record<PIRStatus, PIRStatus[]> = {
-  'draft': ['submitted'],
-  'submitted': ['in_review'],
-  'in_review': ['approved', 'flagged', 'rejected'],
-  'flagged': ['submitted'],
-  'approved': [],
-  'rejected': []
+  'draft': ['sent'],
+  'sent': ['in_progress'],
+  'in_progress': ['submitted'],
+  'submitted': ['reviewed', 'rejected'],
+  'reviewed': [], // Terminal status
+  'rejected': ['resubmitted', 'canceled'],
+  'resubmitted': ['submitted'],
+  'canceled': [] // Terminal status
 } as const;
 
 export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[]> = {
@@ -29,11 +31,13 @@ export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[
 // Status display names for UI
 export const PIR_STATUS_DISPLAY: Record<PIRStatus, string> = {
   'draft': 'Draft',
+  'sent': 'Sent',
+  'in_progress': 'In Progress',
   'submitted': 'Submitted',
-  'in_review': 'In Review',
-  'flagged': 'Changes Requested',
-  'approved': 'Approved',
-  'rejected': 'Rejected'
+  'reviewed': 'Reviewed / Approved', // Changed from approved, updated display text
+  'rejected': 'Reviewed - Feedback Required',
+  'resubmitted': 'Resubmitted',
+  'canceled': 'Canceled'
 } as const;
 
 export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {

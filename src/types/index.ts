@@ -141,7 +141,8 @@ export interface SupplierResponse {
   answer?: Database["public"]["Tables"]["pir_response_components"]["Row"][] | null; // Added to support component_material_list
   comments?: Comment[];
   flags?: Flag[];
-  status?: Database['public']['Enums']['flag_status']; // Status for reviewed responses
+  status?: Database['public']['Enums']['flag_status']; // Status for reviewed responses (Note: This might be the supplier's internal status, not the customer's review)
+  customer_review_status?: Database['public']['Enums']['response_status'] | null; // Added customer review status
 }
 
 export interface PIR {

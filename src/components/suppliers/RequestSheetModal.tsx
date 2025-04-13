@@ -106,7 +106,7 @@ const useCreatePIRMutation = (
       } = {
         customer_id: input.customerId,
         supplier_company_id: input.supplierId,
-        status: 'draft',
+        status: 'sent',
         product_id: productId,
         suggested_product_name: suggestedProductName,
       };

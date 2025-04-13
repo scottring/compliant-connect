@@ -131,9 +131,10 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
 
     // Adjust filtering based on tabs (e.g., 'pending', 'completed')
     if (activeTab === "pending") {
-      pirsToFilter = incomingPirs.filter(pir => pir.status !== 'approved' && pir.status !== 'rejected'); // Use 'approved' instead of 'completed'
-    } else if (activeTab === "completed") { // Should be 'approved' tab based on status correction
-      pirsToFilter = incomingPirs.filter(pir => pir.status === 'approved'); // Use 'approved' instead of 'completed'
+      // Pending tab should show statuses requiring supplier action or waiting for customer review
+      pirsToFilter = incomingPirs.filter(pir => ['sent', 'in_progress', 'submitted', 'rejected', 'resubmitted', 'draft'].includes(pir.status));
+    } else if (activeTab === "completed") { // Completed tab should show 'reviewed' (Approved) and possibly 'canceled'
+      pirsToFilter = incomingPirs.filter(pir => ['reviewed', 'canceled'].includes(pir.status));
     }
     // Add more statuses or 'all' tab as needed
 
@@ -255,19 +256,26 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                              {/* Supplier-centric status display */}
                              <span
                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                 pir.status === "approved" ? "bg-green-100 text-green-800" :
-                                 pir.status === "rejected" ? "bg-red-100 text-red-800" :
-                                 pir.status === "submitted" ? "bg-purple-100 text-purple-800" : // Submitted by supplier
-                                 pir.status === "flagged" ? "bg-yellow-100 text-yellow-800" : // Changes Requested
-                                 pir.status === "in_review" ? "bg-blue-100 text-blue-800" : // Under Review
-                                 "bg-gray-100 text-gray-800" // Draft / Other
+                                 /* Match styling to supplier perspective intent using actual status values */
+                                 pir.status === "reviewed" ? "bg-green-100 text-green-800" : /* Approved */
+                                 pir.status === "rejected" ? "bg-yellow-100 text-yellow-800" : /* Needs Update (use yellow for attention) */
+                                 pir.status === "submitted" || pir.status === "resubmitted" ? "bg-purple-100 text-purple-800" : /* Submitted/Resubmitted */
+                                 pir.status === "sent" || pir.status === "in_progress" ? "bg-blue-100 text-blue-800" : /* New/In Progress */
+                                 pir.status === "draft" ? "bg-orange-100 text-orange-800" : /* Response Required (use orange for attention) */
+                                 pir.status === "canceled" ? "bg-gray-100 text-gray-800" : /* Canceled */
+                                 "bg-gray-100 text-gray-800" /* Other/Default */
                                }`}
-                             >
-                               { pir.status === 'draft' ? 'Response Required' :
+                            >
+                               { /* Supplier-specific status display */
+                                 pir.status === 'sent' ? 'New Request' :
+                                 pir.status === 'in_progress' ? 'In Progress' :
                                  pir.status === 'submitted' ? 'Submitted' :
-                                 pir.status === 'flagged' ? 'Changes Requested' :
-                                 pir.status === 'in_review' ? 'Under Review' :
-                                 pir.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) // Default formatting
+                                 pir.status === 'rejected' ? 'Needs Update' :
+                                 pir.status === 'resubmitted' ? 'Resubmitted' :
+                                 pir.status === 'reviewed' ? 'Approved' :
+                                 pir.status === 'draft' ? 'Response Required' : // Keep existing draft handling
+                                 pir.status === 'canceled' ? 'Canceled' : // Explicitly handle canceled
+                                 (pir.status as string).replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) // Default for any unexpected status (cast to string to avoid 'never')
                                }
                              </span>
                           </TableCell>
@@ -279,11 +287,12 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                                 handlePirAction(pir); // Always goes to the form
                               }}
                               size="sm"
-                              variant={(pir.status === 'draft' || pir.status === 'flagged') ? "default" : "outline"} // Highlight actionable button
-                              disabled={!(pir.status === 'draft' || pir.status === 'flagged')} // Disable if not draft or flagged
-                              className={`ml-auto ${(pir.status === 'draft' || pir.status === 'flagged') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
-                           >
-                              {pir.status === 'draft' || pir.status === 'flagged' ? (
+                              // Actionable states for supplier: 'sent' (New), 'rejected' (Needs Update), 'draft' (if saving progress)
+                              variant={(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft') ? "default" : "outline"} // Highlight actionable button
+                              disabled={!(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft')} // Disable if not actionable
+                              className={`ml-auto ${(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
+                          >
+                              {(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft') ? (
                                 <> <SendHorizontal className="h-4 w-4 mr-2" /> Respond </>
                               ) : (
                                 <> <Eye className="h-4 w-4 mr-2" /> View </>

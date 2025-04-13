@@ -11,9 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { Search, Filter, Eye, Calendar, Tag, ArrowUpDown, Plus, Flag } from "lucide-react"; // Added Plus and Flag
+import { Search, Filter, Eye, Calendar, Tag, ArrowUpDown, Plus, Flag, ClipboardCheck } from "lucide-react"; // Added Plus, Flag, ClipboardCheck
 import TaskProgress from "@/components/ui/progress/TaskProgress";
-import { PIRSummary, PIRStatus } from "@/types/pir"; // Import shared types
+import { PIRSummary, PIRStatus, PIR_STATUS_DISPLAY } from "@/types/pir"; // Import shared types, added PIR_STATUS_DISPLAY
 
 // Define the database record type for the query result (Adjusted)
 interface PirRequestRecord {
@@ -105,23 +105,27 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
     sheet.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter by status
+  // Filter by new status values
   const drafts = filteredProductSheets.filter((sheet) => sheet.status === "draft");
-  const pending = filteredProductSheets.filter((sheet) => sheet.status === "pending"); // Added pending
-  const submitted = filteredProductSheets.filter((sheet) => sheet.status === "submitted"); // This might not be used if pending covers it
-  const reviewing = filteredProductSheets.filter((sheet) => sheet.status === "in_review");
-  const approved = filteredProductSheets.filter((sheet) => sheet.status === "approved");
+  const sentInProgress = filteredProductSheets.filter((sheet) => sheet.status === "sent" || sheet.status === "in_progress");
+  const submittedResubmitted = filteredProductSheets.filter((sheet) => sheet.status === "submitted" || sheet.status === "resubmitted");
+  const terminal = filteredProductSheets.filter((sheet) => sheet.status === "reviewed" || sheet.status === "rejected" || sheet.status === "canceled");
+  // Individual statuses if needed for specific tabs later
+  const reviewed = filteredProductSheets.filter((sheet) => sheet.status === "reviewed");
   const rejected = filteredProductSheets.filter((sheet) => sheet.status === "rejected");
-  const revisionRequested = filteredProductSheets.filter((sheet) => sheet.status === "revision_requested"); // Added revision
+  const canceled = filteredProductSheets.filter((sheet) => sheet.status === "canceled");
 
   const handleProductSheetClick = (pirId: string, status: PIRStatus) => {
-    // Navigate to review page if submitted/flagged, otherwise view (which will redirect if not supplier)
-    if (status === 'submitted' || status === 'flagged') { // Use 'flagged' based on CustomerReview logic
+    // Customer should always go to the CustomerReview page.
+    // It handles both active review (submitted/resubmitted) and read-only view (reviewed/rejected/canceled).
+    // Other statuses like draft/sent/in_progress might also be viewable there in a read-only state.
+    if (status === 'submitted' || status === 'resubmitted' || status === 'reviewed' || status === 'rejected' || status === 'canceled' || status === 'in_progress') {
       navigate(`/customer-review/${pirId}`);
     } else {
-      // Navigate to supplier form - relies on auth check within that component
-      // TODO: Ideally, create a dedicated read-only view page for customers for other statuses
-      navigate(`/supplier-response-form/${pirId}`);
+      // For 'draft' or 'sent', maybe navigate somewhere else or show a message?
+      // For now, let's also direct them to customer-review, which might show limited info or a status message.
+      console.warn(`OutgoingPIRs: Navigating to CustomerReview for status ${status}. Consider a dedicated view.`);
+      navigate(`/customer-review/${pirId}`);
     }
   };
 
@@ -163,19 +167,20 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
                   {/* <TableCell> <TaskProgress value={completionRate} size="sm" showLabel /> </TableCell> */}
                   <TableCell>
                     {/* Customer-centric status display */}
+                    {/* Use styles consistent with SupplierProducts */}
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      sheet.status === "approved" ? "bg-green-100 text-green-800" :
-                      sheet.status === "rejected" ? "bg-red-100 text-red-800" :
-                      sheet.status === "submitted" ? "bg-purple-100 text-purple-800" : // Ready for Review
-                      sheet.status === "flagged" ? "bg-yellow-100 text-yellow-800" : // Revision Requested
-                      sheet.status === "in_review" ? "bg-blue-100 text-blue-800" : // In Review
-                      "bg-gray-100 text-gray-800" // Draft / Other
+                      sheet.status === 'reviewed' ? 'bg-green-100 text-green-800' :
+                      sheet.status === 'submitted' ? 'bg-orange-100 text-orange-800' :
+                      sheet.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' :
+                      sheet.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                      sheet.status === 'sent' ? 'bg-cyan-100 text-cyan-800' :
+                      sheet.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      sheet.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                      sheet.status === 'draft' ? 'bg-gray-100 text-gray-800' :
+                      'bg-gray-100 text-gray-800'
                     }`}>
-                      { sheet.status === 'submitted' ? 'Pending Review' :
-                        sheet.status === 'flagged' ? 'Revision Requested' :
-                        sheet.status === 'in_review' ? 'In Review' :
-                        sheet.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) // Default formatting
-                      }
+                      {/* Use PIR_STATUS_DISPLAY map */}
+                      {PIR_STATUS_DISPLAY[sheet.status] || (sheet.status.charAt(0).toUpperCase() + sheet.status.slice(1))}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -191,8 +196,9 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
                       // disabled={sheet.status === 'draft'}
                     >
                       {/* Change label based on status */}
-                      {sheet.status === 'submitted' || sheet.status === 'flagged' ? (
-                        <> <Flag className="h-4 w-4 mr-2" /> Review </>
+                      {/* Update button based on new review statuses */}
+                      {sheet.status === 'submitted' || sheet.status === 'resubmitted' ? (
+                        <> <ClipboardCheck className="h-4 w-4 mr-2" /> Review </> // Changed icon
                       ) : (
                         <> <Eye className="h-4 w-4 mr-2" /> View </>
                       )}
@@ -250,25 +256,20 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
           <div className="text-center p-8 text-muted-foreground">Please select a company.</div>
       ) : (
           <Tabs defaultValue="all" className="w-full">
-            <TabsList className="grid w-full grid-cols-7"> {/* Adjusted grid cols */}
+            {/* Updated Tabs based on new status groupings */}
+            <TabsList className="grid w-full grid-cols-5"> {/* Adjusted grid cols */}
               <TabsTrigger value="all">All ({filteredProductSheets.length})</TabsTrigger>
               <TabsTrigger value="draft">Draft ({drafts.length})</TabsTrigger>
-              <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
-              {/* <TabsTrigger value="submitted">Submitted ({submitted.length})</TabsTrigger> */}
-              <TabsTrigger value="reviewing">In Review ({reviewing.length})</TabsTrigger>
-              <TabsTrigger value="revision">Needs Revision ({revisionRequested.length})</TabsTrigger>
-              <TabsTrigger value="approved">Approved ({approved.length})</TabsTrigger>
-              <TabsTrigger value="rejected">Rejected ({rejected.length})</TabsTrigger>
+              <TabsTrigger value="in_progress">Sent / In Progress ({sentInProgress.length})</TabsTrigger>
+              <TabsTrigger value="needs_review">Needs Review ({submittedResubmitted.length})</TabsTrigger>
+              <TabsTrigger value="terminal">Completed / Canceled ({terminal.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">{renderProductSheetTable(filteredProductSheets)}</TabsContent>
             <TabsContent value="draft" className="mt-6">{renderProductSheetTable(drafts)}</TabsContent>
-            <TabsContent value="pending" className="mt-6">{renderProductSheetTable(pending)}</TabsContent>
-            {/* <TabsContent value="submitted" className="mt-6">{renderProductSheetTable(submitted)}</TabsContent> */}
-            <TabsContent value="reviewing" className="mt-6">{renderProductSheetTable(reviewing)}</TabsContent>
-            <TabsContent value="revision" className="mt-6">{renderProductSheetTable(revisionRequested)}</TabsContent>
-            <TabsContent value="approved" className="mt-6">{renderProductSheetTable(approved)}</TabsContent>
-            <TabsContent value="rejected" className="mt-6">{renderProductSheetTable(rejected)}</TabsContent>
+            <TabsContent value="in_progress" className="mt-6">{renderProductSheetTable(sentInProgress)}</TabsContent>
+            <TabsContent value="needs_review" className="mt-6">{renderProductSheetTable(submittedResubmitted)}</TabsContent>
+            <TabsContent value="terminal" className="mt-6">{renderProductSheetTable(terminal)}</TabsContent>
           </Tabs>
       )}
     </div>

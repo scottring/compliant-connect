@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Question, QuestionType, SupplierResponse } from "../../types/index"; // Use relative path
+import { ResponseStatus } from "@/types/pir"; // Import the specific enum type
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import TagBadge from "@/components/tags/TagBadge";
@@ -36,7 +37,8 @@ type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "succe
 interface ReviewQuestionItemProps {
   question: Question;
   answer?: SupplierResponse; // Make answer optional
-  status: "approved" | "flagged" | "pending";
+  status: "approved" | "flagged" | "pending"; // This is the *current session's* review status
+  customerReviewStatus?: ResponseStatus | null; // Use the imported enum type
   note: string;
   onApprove: () => void;
   onFlag: (note: string) => void;
@@ -53,7 +55,8 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
   onApprove,
   onFlag,
   onUpdateNote,
-  isLocked, // Receive the isLocked prop
+  isLocked, // Receive the isLocked prop (overall PIR lock)
+  customerReviewStatus, // Receive the persistent status
   // isPreviouslyFlagged = false, // Removed from props
 }) => {
   console.log("ReviewQuestionItem - question prop:", question); // ADD THIS LOG
@@ -249,11 +252,19 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
           </div>
         )}
         
-        {status === "approved" ? (
+        {/* Show persistent approved status first */}
+        {customerReviewStatus === ("approved" as ResponseStatus) ? (
+           <div className="bg-green-50 border border-green-200 rounded p-3 opacity-75"> {/* Added opacity */}
+            <div className="flex items-center">
+              <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+              <p className="font-medium text-green-800">Previously Approved (Locked)</p>
+            </div>
+          </div>
+        ) : status === "approved" ? ( // Then show current session approval
           <div className="bg-green-50 border border-green-200 rounded p-3">
             <div className="flex items-center">
               <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-              <p className="font-medium text-green-800">Approved</p>
+              <p className="font-medium text-green-800">Approved (This Session)</p>
             </div>
           </div>
         ) : isLocked ? (
@@ -280,16 +291,18 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                 value={note}
                 onChange={(e) => onUpdateNote(e.target.value)}
                 className="min-h-[80px]"
-                disabled={isLocked} // Disable textarea if locked
+                disabled={isLocked || customerReviewStatus === ('approved' as ResponseStatus)} // Disable textarea if locked or previously approved
               />
             </div>
             {/* Only show approve/reject buttons if not locked */}
-            {!isLocked && (
+            {/* Only show approve/reject buttons if not locked AND not previously approved */}
+            {!isLocked && customerReviewStatus !== ('approved' as ResponseStatus) && (
               <div className="flex flex-col space-y-2">
                 <Button 
                   variant="outline" 
                   className="border-green-500 text-green-700 hover:bg-green-50"
                   onClick={onApprove}
+                  disabled={customerReviewStatus === ('approved' as ResponseStatus)} // Redundant check, but safe
                 >
                   <CheckCircle className="mr-2 h-4 w-4" />
                   {(answer?.flags && answer.flags.length > 0) ? "Resolve" : "Approve"}
@@ -303,7 +316,7 @@ const ReviewQuestionItem: React.FC<ReviewQuestionItemProps> = ({
                           variant="outline" 
                           className="border-red-500 text-red-700 hover:bg-red-50"
                           onClick={handleSubmitFlag}
-                          disabled={!note.trim()} // Disable flag button if no note
+                          disabled={!note.trim() || customerReviewStatus === ('approved' as ResponseStatus)} // Disable flag button if no note or previously approved
                         >
                           <Flag className="mr-2 h-4 w-4" />
                           {(answer?.flags && answer.flags.length > 0) ? "Flag Again" : "Flag"}
