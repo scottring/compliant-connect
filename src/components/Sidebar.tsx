@@ -169,15 +169,19 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
           }}
           className="flex items-center"
         >
-          <img
-            src="/stacksdata-logo.png" // Updated logo path
-            alt="StacksData"
-            className={cn(
-              "h-24 w-auto transition-all duration-300", // Set height to h-24 (3x original)
-              collapsed ? "scale-90" : "scale-100"
-            )}
-          />
-          {/* Removed the StacksData text label */}
+          {collapsed ? (
+            <img
+              src="/stacksdata%20icon.png" // Path with space encoded
+              alt="StacksData Icon"
+              className="h-10 w-10 object-contain transition-all duration-300" // Adjusted size for collapsed state
+            />
+          ) : (
+            <img
+              src="/stacksdata-logo.png" // Original logo path
+              alt="StacksData Logo"
+              className="h-24 w-auto transition-all duration-300" // Original size for expanded state
+            />
+          )}
         </motion.div>
       </div>
 
