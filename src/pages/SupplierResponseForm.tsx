@@ -82,8 +82,9 @@ const useSubmitResponsesMutation = (
             
             const currentStatus = currentPir.status as PIRStatus;
             // Allow submission only from 'sent', 'rejected', or 'draft' states (matching isReadOnly logic)
-            if (!['sent', 'rejected', 'draft'].includes(currentStatus)) {
-                throw new Error(`Cannot submit responses when PIR is in ${currentStatus} status. PIR must be in 'sent', 'rejected', or 'draft' status.`);
+            // Allow submission only from 'rejected', or 'draft' states (matching isReadOnly logic) - 'submitted' is handled by resubmission logic if needed
+            if (!['rejected', 'draft'].includes(currentStatus)) {
+                throw new Error(`Cannot submit responses when PIR is in ${currentStatus} status. PIR must be in 'rejected' or 'draft' status.`); // Removed 'sent'
             }
 
             // 2. Update all responses first
@@ -845,7 +846,7 @@ const SupplierResponseForm = () => {
     if (!productSheet) return 'Loading...';
     const status = productSheet.status as PIRStatus; // Use the correct variable
     switch (status) {
-      case 'sent': return 'New Request';
+      // Removed 'sent' mapping, 'submitted' is handled below
       case 'in_progress': return 'In Progress';
       case 'submitted': return 'Submitted';
       case 'rejected': return 'Needs Update'; // Map 'rejected' to 'Needs Update'
@@ -861,7 +862,7 @@ const SupplierResponseForm = () => {
      if (!productSheet) return "bg-gray-100 text-gray-800";
      const status = productSheet.status as PIRStatus; // Use the correct variable and type
      switch (status) {
-       case 'sent': return 'bg-blue-100 text-blue-800'; // New Request
+       // Removed 'sent' styling, 'submitted' is handled below
        case 'in_progress': return 'bg-blue-100 text-blue-800'; // In Progress
        case 'submitted': return 'bg-purple-100 text-purple-800'; // Submitted
        case 'resubmitted': return 'bg-purple-100 text-purple-800'; // Resubmitted
@@ -878,8 +879,8 @@ const SupplierResponseForm = () => {
   const isReadOnly = (): boolean => {
     if (!productSheet) return true; // Default to read-only if no sheet
     const status = productSheet.status as PIRStatus; // Use the correct variable and type
-    // Allow editing only if status is 'sent' (New Request), 'rejected' (Needs Update), or 'draft'
-    return !(status === 'sent' || status === 'rejected' || status === 'draft');
+    // Allow editing only if status is 'rejected' (Needs Update), or 'draft'
+    return !(status === 'rejected' || status === 'draft'); // Removed 'sent'
   };
 
   // --- Render Logic ---

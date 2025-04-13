@@ -122,7 +122,7 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
     if (status === 'submitted' || status === 'resubmitted' || status === 'reviewed' || status === 'rejected' || status === 'canceled' || status === 'in_progress') {
       navigate(`/customer-review/${pirId}`);
     } else {
-      // For 'draft' or 'sent', maybe navigate somewhere else or show a message?
+      // For 'draft', maybe navigate somewhere else or show a message? (Removed 'sent')
       // For now, let's also direct them to customer-review, which might show limited info or a status message.
       console.warn(`OutgoingPIRs: Navigating to CustomerReview for status ${status}. Consider a dedicated view.`);
       navigate(`/customer-review/${pirId}`);
@@ -173,7 +173,7 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
                       sheet.status === 'submitted' ? 'bg-orange-100 text-orange-800' :
                       sheet.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' :
                       sheet.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      sheet.status === 'sent' ? 'bg-cyan-100 text-cyan-800' :
+                      // Removed 'sent' styling, 'submitted' is handled above
                       sheet.status === 'rejected' ? 'bg-red-100 text-red-800' :
                       sheet.status === 'canceled' ? 'bg-red-100 text-red-800' :
                       sheet.status === 'draft' ? 'bg-gray-100 text-gray-800' :

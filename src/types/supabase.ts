@@ -305,6 +305,9 @@ export type Database = {
         Row: {
           answer: Json
           created_at: string | null
+          customer_review_status:
+            | Database["public"]["Enums"]["response_status"]
+            | null
           id: string
           pir_id: string | null
           question_id: string | null
@@ -315,6 +318,9 @@ export type Database = {
         Insert: {
           answer: Json
           created_at?: string | null
+          customer_review_status?:
+            | Database["public"]["Enums"]["response_status"]
+            | null
           id?: string
           pir_id?: string | null
           question_id?: string | null
@@ -325,6 +331,9 @@ export type Database = {
         Update: {
           answer?: Json
           created_at?: string | null
+          customer_review_status?:
+            | Database["public"]["Enums"]["response_status"]
+            | null
           id?: string
           pir_id?: string | null
           question_id?: string | null

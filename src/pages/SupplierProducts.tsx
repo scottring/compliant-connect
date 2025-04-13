@@ -292,7 +292,7 @@ const SupplierProducts = () => {
                       pir.status === 'submitted' ? 'bg-orange-100 text-orange-800' : // Orange for submitted
                       pir.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' : // Purple for resubmitted
                       pir.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :   // Blue for in progress
-                      pir.status === 'sent' ? 'bg-cyan-100 text-cyan-800' :         // Cyan for sent
+                      pir.status === 'submitted' ? 'bg-cyan-100 text-cyan-800' :         // Cyan for sent
                       pir.status === 'rejected' ? 'bg-red-100 text-red-800' :       // Red for rejected
                       pir.status === 'canceled' ? 'bg-red-100 text-red-800' :       // Red for canceled
                       pir.status === 'draft' ? 'bg-gray-100 text-gray-800' :         // Gray for draft

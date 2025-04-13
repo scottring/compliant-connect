@@ -132,7 +132,7 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
     // Adjust filtering based on tabs (e.g., 'pending', 'completed')
     if (activeTab === "pending") {
       // Pending tab should show statuses requiring supplier action or waiting for customer review
-      pirsToFilter = incomingPirs.filter(pir => ['sent', 'in_progress', 'submitted', 'rejected', 'resubmitted', 'draft'].includes(pir.status));
+      pirsToFilter = incomingPirs.filter(pir => ['in_progress', 'submitted', 'rejected', 'resubmitted', 'draft'].includes(pir.status)); // Removed 'sent'
     } else if (activeTab === "completed") { // Completed tab should show 'reviewed' (Approved) and possibly 'canceled'
       pirsToFilter = incomingPirs.filter(pir => ['reviewed', 'canceled'].includes(pir.status));
     }
@@ -267,7 +267,7 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                                }`}
                             >
                                { /* Supplier-specific status display */
-                                 pir.status === 'sent' ? 'New Request' :
+                                 // Removed 'sent' mapping, 'submitted' is handled below
                                  pir.status === 'in_progress' ? 'In Progress' :
                                  pir.status === 'submitted' ? 'Submitted' :
                                  pir.status === 'rejected' ? 'Needs Update' :
@@ -287,12 +287,12 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                                 handlePirAction(pir); // Always goes to the form
                               }}
                               size="sm"
-                              // Actionable states for supplier: 'sent' (New), 'rejected' (Needs Update), 'draft' (if saving progress)
-                              variant={(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft') ? "default" : "outline"} // Highlight actionable button
-                              disabled={!(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft')} // Disable if not actionable
-                              className={`ml-auto ${(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
+                              // Actionable states for supplier: 'rejected' (Needs Update), 'draft' (if saving progress)
+                              variant={(pir.status === 'rejected' || pir.status === 'draft') ? "default" : "outline"} // Highlight actionable button
+                              disabled={!(pir.status === 'rejected' || pir.status === 'draft')} // Disable if not actionable
+                              className={`ml-auto ${(pir.status === 'rejected' || pir.status === 'draft') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
                           >
-                              {(pir.status === 'sent' || pir.status === 'rejected' || pir.status === 'draft') ? (
+                              {(pir.status === 'rejected' || pir.status === 'draft') ? (
                                 <> <SendHorizontal className="h-4 w-4 mr-2" /> Respond </>
                               ) : (
                                 <> <Eye className="h-4 w-4 mr-2" /> View </>
