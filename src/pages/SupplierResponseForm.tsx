@@ -95,7 +95,7 @@ const useSubmitResponsesMutation = (
                     // id: response.id, // DO NOT include the placeholder ID here. Upsert uses onConflict.
                     pir_id: pirId, // Need pir_id for upsert onConflict
                     question_id: response.questionId, // Need question_id for upsert onConflict
-                    status: 'submitted' as ResponseStatus,
+                    // status: 'submitted' as ResponseStatus,
                     submitted_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                     // Conditionally include the answer based on question type

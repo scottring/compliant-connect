@@ -1,1 +1,0 @@
-alter table "public"."questions" alter column type type "public"."question_type" using type::text::"public"."question_type";

@@ -1,0 +1,14 @@
+# Migration Validation Report
+
+## Schema Validation
+- [ ] Same number of tables in both projects
+- [ ] Same enum types with identical values in both projects
+
+## Data Validation
+- [ ] Same number of records in each table between projects
+
+## Discrepancies
+(Document any discrepancies here)
+
+## Conclusion
+(Indicate whether the migration was successful or not)

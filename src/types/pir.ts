@@ -14,7 +14,8 @@ export type PIRStatus =
   | 'reviewed'
   | 'rejected'
   | 'resubmitted'
-  | 'canceled';
+  | 'canceled'
+  | 'in_review';
 // export type PIRStatus = Database['public']['Enums']['pir_status']; // Original line, commented out
 export type ResponseStatus = Database['public']['Enums']['response_status'];
 export type FlagStatus = Database['public']['Enums']['flag_status'];
@@ -34,6 +35,7 @@ export const PIR_STATUS_TRANSITIONS: Record<PIRStatus, PIRStatus[]> = {
   'rejected': ['resubmitted', 'canceled'],   // Supplier resubmits, or customer cancels
   'resubmitted': ['reviewed', 'rejected', 'canceled'], // Resubmitted goes back for review
   'canceled': [],                            // Terminal
+  'in_review': ['reviewed', 'rejected'],       // Customer is reviewing
 };
 
 export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[]> = {
@@ -56,6 +58,7 @@ export const PIR_STATUS_DISPLAY: Record<PIRStatus, string> = {
   'rejected': 'Rejected', // Customer rejected response
   'resubmitted': 'Resubmitted', // Supplier resubmitted after rejection
   'canceled': 'Canceled', // Request canceled
+  'in_review': 'In Review', // Customer is reviewing
 };
 
 export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {

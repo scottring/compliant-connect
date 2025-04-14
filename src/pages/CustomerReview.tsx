@@ -133,25 +133,41 @@ const useSubmitReviewMutation = (
 
             // Determine final PIR status based on whether any flags were generated in this submission
             // The 'hasFlags' variable was set earlier based on the 'reviewStatuses' input.
-            const finalPirStatus: PIRStatus = hasFlags ? 'rejected' : 'reviewed';
+            let finalPirStatus: PIRStatus = hasFlags ? 'rejected' : 'reviewed';
+            let pirUpdateErrorInReview: Error | null = null;
             console.log(`[DEBUG] CustomerReview: Determined final PIR status based on responses: ${finalPirStatus}`); // Add log
+
+            // Update PIR status to 'in_review' if resubmitted and has flags
+            if (currentStatus === 'resubmitted' && hasFlags) {
+                const { error: pirUpdateError } = await supabase
+                    .from('pir_requests')
+                    .update({ status: 'in_review' })
+                    .eq('id', pirId);
+                if (pirUpdateError) {
+                    pirUpdateErrorInReview = new Error(`Failed to update PIR status to in_review: ${pirUpdateError.message}`);
+                } else {
+                    finalPirStatus = 'rejected'; // Set finalPirStatus to rejected after in_review update
+                }
+            }
 
             // Update PIR status and product if approved (now 'reviewed')
             const updatePayload: Database['public']['Tables']['pir_requests']['Update'] = {
-                status: finalPirStatus, // Use the determined status
+        status: finalPirStatus, // Use the determined status
                 updated_at: new Date().toISOString(),
             };
             // Link product only if the final status is 'reviewed'
-            if (finalPirStatus === 'reviewed' && productId) {
+            if (finalPirStatus === 'reviewed' && productId)
                 updatePayload.product_id = productId;
-            }
 
 
-            const { error: pirUpdateError } = await supabase
+            const { error: pirUpdateErrorFinal } = await supabase
                 .from('pir_requests')
                 .update(updatePayload) // Payload already uses finalPirStatus
                 .eq('id', pirId);
-            if (pirUpdateError) throw new Error(`Failed to update PIR status: ${pirUpdateError.message}`);
+            if (pirUpdateErrorInReview) {
+                throw pirUpdateErrorInReview;
+            }
+            if (pirUpdateErrorFinal) throw new Error(`Failed to update PIR status: ${pirUpdateErrorFinal.message}`);
 
             // Verify the final status update
             const { data: finalStatusCheck, error: finalCheckError } = await supabase

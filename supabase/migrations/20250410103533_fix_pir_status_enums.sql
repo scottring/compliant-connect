@@ -76,6 +76,8 @@ BEGIN
     RETURN NEW;
   ELSIF OLD.status = 'flagged' AND NEW.status = 'submitted' THEN
     RETURN NEW;
+  ELSIF OLD.status = 'resubmitted' AND NEW.status = 'rejected' THEN
+    RETURN NEW;
   ELSE
     RAISE EXCEPTION 'Invalid status transition from % to %', OLD.status, NEW.status;
   END IF;

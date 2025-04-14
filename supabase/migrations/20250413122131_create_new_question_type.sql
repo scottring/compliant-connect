@@ -1,1 +1,0 @@
-create type "public"."question_type" as enum ('text', 'number', 'boolean', 'single_select', 'multi_select', 'date', 'file', 'LIST_TABLE');
