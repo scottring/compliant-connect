@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from "react-router-dom";
 import PageHeader, { PageHeaderAction } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { useQuery, useMutation, useQueryClient, UseMutationResult } from '@tanst
 import { toast } from "sonner";
 import { useCompanyData } from '@/hooks/use-company-data'; // Import useCompanyData
 import { useUser } from '@/hooks/use-user';
+import { debounce } from 'lodash-es';
 
 // Type for the combined PIR data fetched by the query
 // Updated interface to include comments data fetched separately
@@ -83,8 +84,9 @@ const useSubmitResponsesMutation = (
             const currentStatus = currentPir.status as PIRStatus;
             // Allow submission only from 'sent', 'rejected', or 'draft' states (matching isReadOnly logic)
             // Allow submission only from 'rejected', or 'draft' states (matching isReadOnly logic) - 'submitted' is handled by resubmission logic if needed
-            if (!['rejected', 'draft'].includes(currentStatus)) {
-                throw new Error(`Cannot submit responses when PIR is in ${currentStatus} status. PIR must be in 'rejected' or 'draft' status.`); // Removed 'sent'
+            // Allow submission only from 'sent', 'in_progress', or 'rejected' states (matching isReadOnly logic)
+            if (!['sent', 'in_progress', 'rejected'].includes(currentStatus)) {
+                throw new Error(`Cannot submit responses when PIR is in '${currentStatus}' status. Action is only allowed for 'sent', 'in_progress', or 'rejected' statuses.`);
             }
 
             // 2. Update all responses first
@@ -106,7 +108,7 @@ const useSubmitResponsesMutation = (
 
             const { error: responsesError } = await supabase
                 .from('pir_responses')
-                .upsert(responseUpdates);
+                .upsert(responseUpdates, { onConflict: 'pir_id, question_id' });
 
             if (responsesError) {
                 throw new Error(`Failed to update responses: ${responsesError.message}`);
@@ -215,7 +217,10 @@ const SupplierResponseForm = () => {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [comments, setComments] = useState<Record<string, string[]>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-
+  const isInitialLoad = useRef(true); // Ref to track initial data load for state initialization
+  const answersInitialized = useRef(false); // Ref to ensure answers are initialized only once
+  // State for controlling the Add/Edit Component dialog
+  const [isComponentDialogOpen, setIsComponentDialogOpen] = useState<boolean>(false);
   // --- Mutations (Moved to top level) ---
   const updateAnswerMutation = useMutation({
     mutationFn: async ({ questionId, value, questionType }: { questionId: string; value: any; questionType: QuestionType }) => {
@@ -238,6 +243,8 @@ const SupplierResponseForm = () => {
           .upsert(baseResponseData, { onConflict: 'pir_id, question_id' }) // Ensure nulls overwrite (defaultToNull removed)
           .select('id') // Select the ID after upsert
           .single();
+  
+        console.log("upsertedResponse:", upsertedResponse);
 
       if (upsertError || !upsertedResponse) {
           console.error("Error upserting base response:", upsertError);
@@ -290,6 +297,13 @@ const SupplierResponseForm = () => {
           }
 
           // --- Step 2b: Insert new components and materials ---
+          // Add explicit check for pirResponseId before the loop
+          if (!pirResponseId) {
+              console.error("Critical Error: pirResponseId is missing before component insertion loop.");
+              throw new Error("Cannot add component: Response context ID not found after upsert.");
+          }
+          console.log(`Using pirResponseId: ${pirResponseId} for component insertion.`); // Log the ID
+
           for (const [compIndex, component] of components.entries()) { // Use for...of with entries() for index and await
               const componentInsert: TablesInsert<'pir_response_components'> = {
                   pir_response_id: pirResponseId,
@@ -337,12 +351,9 @@ const SupplierResponseForm = () => {
       return { pirResponseId };
     },
     onSuccess: (data, variables) => {
-      // Distinguish success message based on type?
-      if (variables.questionType === 'component_material_list') {
-          toast.success(`Component/Material list saved for question.`);
-      } else {
-          toast.success(`Answer saved for question.`);
-      }
+      // Success toast removed to avoid excessive notifications on auto-save.
+      // Errors will still be shown via onError.
+      // console.log(`Answer saved for question ${variables.questionId}`); // Optional: Log success instead of toasting
       queryClient.invalidateQueries({ queryKey: ['pirDetails', pirId] });
     },
     onError: (error: Error, variables) => {
@@ -351,6 +362,15 @@ const SupplierResponseForm = () => {
   });
 
   const submitResponsesMutation = useSubmitResponsesMutation(queryClient, navigate);
+
+  // Debounced version of the update mutation
+  const debouncedUpdateAnswer = useCallback(
+    debounce((args: { questionId: string; value: any; questionType: QuestionType }) => {
+      console.log("debouncedUpdateAnswer called with:", args);
+      updateAnswerMutation.mutate(args);
+    }, 500),
+    [updateAnswerMutation] // Dependency array includes the mutation function
+  );
 
   // Define input type for the add comment mutation
   type AddCommentInput = {
@@ -877,10 +897,10 @@ const SupplierResponseForm = () => {
 
   // Get status from productSheet and add a helper to check if form should be read-only
   const isReadOnly = (): boolean => {
-    if (!productSheet) return true; // Default to read-only if no sheet
-    const status = productSheet.status as PIRStatus; // Use the correct variable and type
-    // Allow editing only if status is 'rejected' (Needs Update), or 'draft'
-    return !(status === 'rejected' || status === 'draft'); // Removed 'sent'
+    if (!pirDetails?.pir) return true; // Default to read-only if no PIR details
+    const status = pirDetails.pir.status as PIRStatus; // Use pirDetails.pir.status
+    // Allow editing only if status is 'sent', 'rejected', or 'resubmitted'
+    return !['sent', 'rejected', 'resubmitted'].includes(status);
   };
 
   // --- Render Logic ---
@@ -1030,11 +1050,22 @@ const SupplierResponseForm = () => {
                               <QuestionItem
                                 // Pass the calculated number along with the question data
                                 question={{ ...question, hierarchical_number: hierarchicalNumber }}
-                                answer={answer} // Pass the correctly typed answer
-                                pirId={productSheet.id} // Pass PIR ID using the new prop name
-                                onAnswerUpdate={(value) => handleAnswerUpdate(question.id, value, question.type)}
+                                // Prioritize local state (answers), fallback to fetched data map (answersMap)
+                                answer={answersMap[question.id]} // Use answersMap directly as QuestionItem handles internal state now
+                                pirId={pirId!} // Use the correct pirId variable from useParams
+                                onAnswerUpdate={(value) => {
+                                  // Update local state immediately for responsiveness
+                                  setAnswers(prev => ({ ...prev, [question.id]: value }));
+                                  // Call the debounced function to save to the backend
+                                  debouncedUpdateAnswer({ questionId: question.id, value, questionType: question.type });
+                                }}
                                 onAddComment={(text) => handleAddComment(question.id, text)} // Pass question.id
                                 isReadOnly={isReadOnly()} // Pass read-only state based on PIR status
+                                // Conditionally pass dialog state and handler for component list questions
+                                {...(question.type === 'component_material_list' && {
+                                  isComponentDialogOpen: isComponentDialogOpen,
+                                  onComponentDialogOpenChange: setIsComponentDialogOpen,
+                                })}
                               />
                             </div>
                           );

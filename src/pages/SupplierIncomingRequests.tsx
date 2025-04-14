@@ -132,7 +132,8 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
     // Adjust filtering based on tabs (e.g., 'pending', 'completed')
     if (activeTab === "pending") {
       // Pending tab should show statuses requiring supplier action or waiting for customer review
-      pirsToFilter = incomingPirs.filter(pir => ['in_progress', 'submitted', 'rejected', 'resubmitted', 'draft'].includes(pir.status)); // Removed 'sent'
+      // Pending tab: statuses requiring supplier action ('sent', 'in_progress', 'rejected') or waiting for customer ('submitted', 'resubmitted')
+      pirsToFilter = incomingPirs.filter(pir => ['sent', 'in_progress', 'submitted', 'rejected', 'resubmitted'].includes(pir.status));
     } else if (activeTab === "completed") { // Completed tab should show 'reviewed' (Approved) and possibly 'canceled'
       pirsToFilter = incomingPirs.filter(pir => ['reviewed', 'canceled'].includes(pir.status));
     }
@@ -254,28 +255,31 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                           <TableCell>{dateReceived}</TableCell>
                           <TableCell>
                              {/* Supplier-centric status display */}
+                             {/* Supplier-centric status display - Adjusted styles and text */}
                              <span
                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                 /* Match styling to supplier perspective intent using actual status values */
-                                 pir.status === "reviewed" ? "bg-green-100 text-green-800" : /* Approved */
-                                 pir.status === "rejected" ? "bg-yellow-100 text-yellow-800" : /* Needs Update (use yellow for attention) */
-                                 pir.status === "submitted" || pir.status === "resubmitted" ? "bg-purple-100 text-purple-800" : /* Submitted/Resubmitted */
-                                 pir.status === "sent" || pir.status === "in_progress" ? "bg-blue-100 text-blue-800" : /* New/In Progress */
-                                 pir.status === "draft" ? "bg-orange-100 text-orange-800" : /* Response Required (use orange for attention) */
-                                 pir.status === "canceled" ? "bg-gray-100 text-gray-800" : /* Canceled */
-                                 "bg-gray-100 text-gray-800" /* Other/Default */
+                                 pir.status === "sent" ? "bg-blue-100 text-blue-800" :          // New request
+                                 pir.status === "in_progress" ? "bg-blue-100 text-blue-800" :   // Working on it
+                                 pir.status === "rejected" ? "bg-yellow-100 text-yellow-800" : // Needs update
+                                 pir.status === "submitted" ? "bg-purple-100 text-purple-800" : // Submitted, waiting customer
+                                 pir.status === "resubmitted" ? "bg-purple-100 text-purple-800" :// Resubmitted, waiting customer
+                                 pir.status === "reviewed" ? "bg-green-100 text-green-800" :   // Approved by customer
+                                 pir.status === "canceled" ? "bg-gray-100 text-gray-800" :     // Canceled
+                                 // 'draft' shouldn't appear here, but handle defensively
+                                 pir.status === "draft" ? "bg-orange-100 text-orange-800" :
+                                 "bg-gray-100 text-gray-800" // Default fallback
                                }`}
-                            >
-                               { /* Supplier-specific status display */
-                                 // Removed 'sent' mapping, 'submitted' is handled below
+                             >
+                               { /* Supplier-specific status display text - Adjusted */
+                                 pir.status === 'sent' ? 'New Request' :
                                  pir.status === 'in_progress' ? 'In Progress' :
-                                 pir.status === 'submitted' ? 'Submitted' :
                                  pir.status === 'rejected' ? 'Needs Update' :
+                                 pir.status === 'submitted' ? 'Submitted' :
                                  pir.status === 'resubmitted' ? 'Resubmitted' :
                                  pir.status === 'reviewed' ? 'Approved' :
-                                 pir.status === 'draft' ? 'Response Required' : // Keep existing draft handling
-                                 pir.status === 'canceled' ? 'Canceled' : // Explicitly handle canceled
-                                 (pir.status as string).replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) // Default for any unexpected status (cast to string to avoid 'never')
+                                 pir.status === 'canceled' ? 'Canceled' :
+                                 pir.status === 'draft' ? 'Response Required (Draft)' : // Clarify if draft appears
+                                 (pir.status as string).replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
                                }
                              </span>
                           </TableCell>
@@ -288,13 +292,15 @@ const SupplierIncomingRequests = () => { // Renamed from OurProducts
                               }}
                               size="sm"
                               // Actionable states for supplier: 'rejected' (Needs Update), 'draft' (if saving progress)
-                              variant={(pir.status === 'rejected' || pir.status === 'draft') ? "default" : "outline"} // Highlight actionable button
-                              disabled={!(pir.status === 'rejected' || pir.status === 'draft')} // Disable if not actionable
-                              className={`ml-auto ${(pir.status === 'rejected' || pir.status === 'draft') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
+                              // Supplier actionable states: 'sent', 'in_progress', 'rejected' (and 'draft' if applicable)
+                              variant={(pir.status === 'sent' || pir.status === 'in_progress' || pir.status === 'rejected' || pir.status === 'draft') ? "default" : "outline"}
+                              disabled={!(pir.status === 'sent' || pir.status === 'in_progress' || pir.status === 'rejected' || pir.status === 'draft')}
+                              className={`ml-auto ${(pir.status === 'sent' || pir.status === 'in_progress' || pir.status === 'rejected' || pir.status === 'draft') ? 'bg-brand hover:bg-brand/90 text-white' : ''}`}
                           >
-                              {(pir.status === 'rejected' || pir.status === 'draft') ? (
+                              {/* Adjusted button text/icon */}
+                              {(pir.status === 'sent' || pir.status === 'in_progress' || pir.status === 'rejected' || pir.status === 'draft') ? (
                                 <> <SendHorizontal className="h-4 w-4 mr-2" /> Respond </>
-                              ) : (
+                              ) : ( // View for submitted, resubmitted, reviewed, canceled
                                 <> <Eye className="h-4 w-4 mr-2" /> View </>
                               )}
                             </Button>

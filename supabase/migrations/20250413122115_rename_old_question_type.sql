@@ -1,0 +1,1 @@
+alter type "public"."question_type" rename to "question_type__old_version_to_be_dropped";

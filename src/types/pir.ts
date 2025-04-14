@@ -4,22 +4,37 @@ import type { Tag } from './tag';
 
 // Use generated Enums directly
 export type QuestionType = Database['public']['Enums']['question_type'];
-export type PIRStatus = Database['public']['Enums']['pir_status'];
+// Manually define PIRStatus based on direct DB query, as generation failed
+// Actual DB Enum: ('draft' | 'sent' | 'in_progress' | 'submitted' | 'reviewed' | 'rejected' | 'resubmitted' | 'canceled')
+export type PIRStatus =
+  | 'draft'
+  | 'sent'
+  | 'in_progress'
+  | 'submitted'
+  | 'reviewed'
+  | 'rejected'
+  | 'resubmitted'
+  | 'canceled';
+// export type PIRStatus = Database['public']['Enums']['pir_status']; // Original line, commented out
 export type ResponseStatus = Database['public']['Enums']['response_status'];
 export type FlagStatus = Database['public']['Enums']['flag_status'];
 export type RelationshipStatus = Database['public']['Enums']['relationship_status'];
 
 // Valid status transitions
 // Valid status transitions based on migration 20250410103533 and allowing resubmission
+// Valid status transitions based on the *actual* DB enum values + observed usage
+// NOTE: These transitions might need refinement based on actual application logic.
+// Adjusted transitions based on actual enum and likely workflow
 export const PIR_STATUS_TRANSITIONS: Record<PIRStatus, PIRStatus[]> = {
-  'draft': ['submitted'],
-  'submitted': ['in_review'],
-  'in_review': ['approved', 'flagged', 'rejected'],
-  'flagged': ['submitted'], // Resubmit after flagging
-  'approved': [], // Terminal status
-  'rejected': ['submitted'], // Resubmit after rejection
-  // Removed: sent, in_progress, resubmitted, reviewed, canceled as distinct keys/values based on the core enum change
-} as const;
+  'draft': ['sent', 'canceled'],             // Customer sends or cancels draft
+  'sent': ['in_progress', 'submitted', 'canceled'], // Supplier starts, submits directly, or customer cancels
+  'in_progress': ['submitted', 'canceled'],  // Supplier submits or cancels
+  'submitted': ['reviewed', 'rejected', 'canceled'], // Customer reviews, rejects, or cancels
+  'reviewed': [],                            // Terminal state after customer review
+  'rejected': ['resubmitted', 'canceled'],   // Supplier resubmits, or customer cancels
+  'resubmitted': ['reviewed', 'rejected', 'canceled'], // Resubmitted goes back for review
+  'canceled': [],                            // Terminal
+};
 
 export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[]> = {
   'draft': ['submitted'],
@@ -30,15 +45,18 @@ export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[
 
 // Status display names for UI
 // Status display names for UI based on migration 20250410103533
+// Status display names for UI based on the *actual* DB enum values + observed usage
+// Adjusted display names based on actual enum
 export const PIR_STATUS_DISPLAY: Record<PIRStatus, string> = {
   'draft': 'Draft',
-  'submitted': 'Submitted', // Replaced 'Sent' functionality
-  'in_review': 'In Review',
-  'flagged': 'Flagged',
-  'approved': 'Approved',
-  'rejected': 'Rejected',
-  // Removed: sent, in_progress, reviewed, resubmitted, canceled
-} as const;
+  'sent': 'Sent', // Initial state after customer sends
+  'in_progress': 'In Progress', // Supplier started working
+  'submitted': 'Submitted', // Supplier submitted response, pending review
+  'reviewed': 'Reviewed', // Customer completed review
+  'rejected': 'Rejected', // Customer rejected response
+  'resubmitted': 'Resubmitted', // Supplier resubmitted after rejection
+  'canceled': 'Canceled', // Request canceled
+};
 
 export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {
   'draft': 'Draft',

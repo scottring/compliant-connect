@@ -19,6 +19,8 @@ interface ComponentManagerProps {
   isReadOnly?: boolean; // Optional flag to disable editing/deleting
   onComponentSelect: (id: string | null) => void; // Callback when a component row is selected
   selectedComponentId: string | null; // The ID of the currently selected component
+  isDialogOpen: boolean; // Control dialog visibility from parent
+  onOpenChange: (open: boolean) => void; // Notify parent of dialog state changes
 }
 
 const ComponentManager: React.FC<ComponentManagerProps> = ({
@@ -26,6 +28,8 @@ const ComponentManager: React.FC<ComponentManagerProps> = ({
   isReadOnly = false,
   onComponentSelect,
   selectedComponentId,
+  isDialogOpen, // Destructure new prop
+  onOpenChange, // Destructure new prop
 }) => {
   // Get the Supabase client instance
   const supabase = useSupabaseClient<Database>();
@@ -37,8 +41,7 @@ const ComponentManager: React.FC<ComponentManagerProps> = ({
   // State for storing any errors during data fetch
   const [error, setError] = useState<string | null>(null);
 
-  // State for Add/Edit Dialog
-  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  // State for Add/Edit Dialog (Dialog open state is now controlled by parent)
   const [editingComponent, setEditingComponent] = useState<ComponentRow | null>(null);
   // State for form inputs
   const [componentName, setComponentName] = useState<string>('');
@@ -87,20 +90,14 @@ const ComponentManager: React.FC<ComponentManagerProps> = ({
     fetchComponents(); // Execute the fetch function
   }, [pirResponseId, supabase]); // Dependencies: re-run effect if pirResponseId or supabase client changes
 
-  // Function to open the dialog for adding a new component
-  const handleAddComponent = () => {
-    setEditingComponent(null); // Clear any previous editing state
-    setComponentName(''); // Reset form fields
-    setPosition('');
-    setIsDialogOpen(true); // Open the dialog
-  };
+  // Function to open the dialog for adding a new component (Now handled by parent via onAddComponentRequest prop in QuestionItem)
 
   // Function to open the dialog for editing an existing component
   const handleEditComponent = (component: ComponentRow) => {
     setEditingComponent(component); // Set the component to be edited
     setComponentName(component.component_name || ''); // Populate form fields
     setPosition(component.position || '');
-    setIsDialogOpen(true); // Open the dialog
+    onOpenChange(true); // Open the dialog via parent callback
   };
 
 
@@ -156,7 +153,7 @@ const ComponentManager: React.FC<ComponentManagerProps> = ({
       }
 
       toast.success(`Component successfully ${editingComponent ? 'updated' : 'added'}.`);
-      setIsDialogOpen(false); // Close dialog on success
+      onOpenChange(false); // Close dialog via parent callback
       await fetchComponents(); // Refetch the list
 
     } catch (err: any) {
@@ -269,18 +266,11 @@ const ComponentManager: React.FC<ComponentManagerProps> = ({
         </TableBody>
       </Table>
 
-      {/* Only show Add Component button if not read-only */}
-      {!isReadOnly && (
-        <div className="flex justify-end">
-           <Button onClick={handleAddComponent}>
-             Add Component
-           </Button>
-        </div>
-      )}
+      {/* Add Component button is now rendered in QuestionItem */}
     </div>
 
       {/* Add/Edit Component Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>{editingComponent ? 'Edit Component' : 'Add New Component'}</DialogTitle>
@@ -315,11 +305,12 @@ const ComponentManager: React.FC<ComponentManagerProps> = ({
             </div>
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" disabled={isSaving}>
-                Cancel
-              </Button>
-            </DialogClose>
+            {/* DialogClose might interfere with controlled state, handle close via onOpenChange */}
+            {/* <DialogClose asChild> */}
+            <Button type="button" variant="secondary" disabled={isSaving} onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            {/* </DialogClose> */}
             <Button type="button" onClick={handleSaveComponent} disabled={isSaving}>
               {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Component'}
             </Button>

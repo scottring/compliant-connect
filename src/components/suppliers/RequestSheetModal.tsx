@@ -100,13 +100,13 @@ const useCreatePIRMutation = (
       const pirInsertData: {
         customer_id: string;
         supplier_company_id: string;
-        status: 'draft';
+        status: 'sent'; // Allow 'sent' status
         product_id: string | null;
         suggested_product_name?: string | null;
       } = {
         customer_id: input.customerId,
         supplier_company_id: input.supplierId,
-        status: 'submitted', // Changed from 'sent'
+        status: 'sent', // Changed back to 'sent'
         product_id: productId,
         suggested_product_name: suggestedProductName,
       };

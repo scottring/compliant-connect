@@ -182,18 +182,18 @@ const SupplierProducts = () => {
   }, [pirRequests, searchTerm]);
 
   // Updated handler to check status before navigating
+  // Updated handler to navigate consistently to CustomerReview page for most statuses from customer view
   const handleAction = (pir: PirDisplayData) => {
-    // Navigate based on the new status workflow
-    if (pir.status === 'submitted' || pir.status === 'resubmitted') {
-      // Customer's turn to review submitted/resubmitted responses
+    // Customer should generally go to the CustomerReview page from this view.
+    // It handles active review (submitted/resubmitted) and read-only view for other states.
+    if (pir.status === 'draft') {
+      // Maybe navigate to an edit page or show a message? For now, view in CustomerReview.
+      console.warn(`SupplierProducts: Navigating to CustomerReview for status ${pir.status}. Consider a dedicated view/edit.`);
       navigate(`/customer-review/${pir.id}`);
-    } else if (pir.status === 'reviewed' || pir.status === 'rejected' || pir.status === 'canceled') {
-       // View final/terminal states (approved, rejected, canceled)
-       navigate(`/customer-review/${pir.id}`);
     } else {
-      // Default for draft, sent, in_progress - likely view/edit form or supplier view
-      // Assuming these statuses might be viewed/actioned via the supplier response form link for now
-      navigate(`/supplier-response-form/${pir.id}`);
+      // All other statuses (sent, in_progress, submitted, resubmitted, reviewed, rejected, canceled)
+      // will be viewed (or actioned if applicable) on the CustomerReview page.
+      navigate(`/customer-review/${pir.id}`);
     }
   };
 
@@ -286,20 +286,23 @@ const SupplierProducts = () => {
                     {pir.updatedAt ? format(new Date(pir.updatedAt), "yyyy-MM-dd") : "N/A"}
                   </TableCell>
                   <TableCell>
+                    {/* Status badge styling aligned with OutgoingPIRs */}
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      // Updated styles for new statuses
-                      pir.status === 'reviewed' ? 'bg-green-100 text-green-800' :    // Green for reviewed/approved
-                      pir.status === 'submitted' ? 'bg-orange-100 text-orange-800' : // Orange for submitted
-                      pir.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' : // Purple for resubmitted
-                      pir.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :   // Blue for in progress
-                      pir.status === 'submitted' ? 'bg-cyan-100 text-cyan-800' :         // Cyan for sent
-                      pir.status === 'rejected' ? 'bg-red-100 text-red-800' :       // Red for rejected
-                      pir.status === 'canceled' ? 'bg-red-100 text-red-800' :       // Red for canceled
-                      pir.status === 'draft' ? 'bg-gray-100 text-gray-800' :         // Gray for draft
+                      pir.status === 'reviewed' ? 'bg-green-100 text-green-800' :
+                      pir.status === 'submitted' ? 'bg-orange-100 text-orange-800' : // Needs review
+                      pir.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' : // Needs review
+                      pir.status === 'sent' ? 'bg-yellow-100 text-yellow-800' : // Sent, awaiting supplier
+                      pir.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : // Supplier working
+                      pir.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      pir.status === 'canceled' ? 'bg-gray-500 text-white' : // Distinct gray for canceled
+                      pir.status === 'draft' ? 'bg-gray-100 text-gray-800' :
                       'bg-gray-100 text-gray-800' // Default fallback
                     }`}>
-                      {/* Use PIR_STATUS_DISPLAY map for consistent text */}
-                      {PIR_STATUS_DISPLAY[pir.status] || (pir.status.charAt(0).toUpperCase() + pir.status.slice(1))}
+                      {/* Display text logic aligned with OutgoingPIRs */}
+                      {pir.status === 'sent' ? 'Sent' :
+                       pir.status === 'submitted' ? 'Pending Review' :
+                       pir.status === 'resubmitted' ? 'Pending Review' :
+                       (PIR_STATUS_DISPLAY[pir.status] || (pir.status.charAt(0).toUpperCase() + pir.status.slice(1)))}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -310,25 +313,21 @@ const SupplierProducts = () => {
                       variant={ (pir.status === 'submitted' || pir.status === 'resubmitted') ? 'default' : 'outline' } // Default variant for review actions
                       // No need to disable, customer should always be able to view or review
                       // className adjusted for review state based on new statuses
+                      // Styling aligned with OutgoingPIRs (using outline as base, specific colors for review/terminal states)
                       className={
-                        pir.status === 'submitted' ? "bg-orange-500 hover:bg-orange-600 text-white" : // Match badge
-                        pir.status === 'resubmitted' ? "bg-purple-500 hover:bg-purple-600 text-white" : // Match badge
-                        pir.status === 'rejected' ? "bg-red-500 hover:bg-red-600 text-white" : // Match badge
-                        pir.status === 'canceled' ? "bg-red-500 hover:bg-red-600 text-white" : // Match badge
-                        pir.status === 'reviewed' ? "bg-green-500 hover:bg-green-600 text-white" : // Match badge
-                        // Add other statuses if specific button styling is desired, otherwise default outline is used
-                        ""
+                        pir.status === 'submitted' ? "bg-orange-500 hover:bg-orange-600 text-white" :
+                        pir.status === 'resubmitted' ? "bg-purple-500 hover:bg-purple-600 text-white" :
+                        pir.status === 'reviewed' ? "bg-green-500 hover:bg-green-600 text-white" :
+                        pir.status === 'rejected' ? "bg-red-500 hover:bg-red-600 text-white" :
+                        pir.status === 'canceled' ? "bg-gray-500 hover:bg-gray-600 text-white" : // Match badge
+                        "" // Default uses variant="outline"
                       }
                     >
-                      {/* Updated button text/icon based on new statuses */}
+                      {/* Button text/icon aligned with OutgoingPIRs */}
                       { pir.status === 'submitted' || pir.status === 'resubmitted' ? (
-                        <>
-                          <ClipboardCheck className="h-4 w-4 mr-2" /> Review
-                        </>
-                      ) : ( // Default to View for all other statuses
-                        <>
-                          <Eye className="h-4 w-4 mr-2" /> View
-                        </>
+                        <> <ClipboardCheck className="h-4 w-4 mr-2" /> Review </>
+                      ) : (
+                        <> <Eye className="h-4 w-4 mr-2" /> View </>
                       )}
                     </Button>
                     

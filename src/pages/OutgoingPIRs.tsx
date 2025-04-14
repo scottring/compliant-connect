@@ -168,19 +168,23 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
                   <TableCell>
                     {/* Customer-centric status display */}
                     {/* Use styles consistent with SupplierProducts */}
+                    {/* Customer-centric status display with updated logic */}
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       sheet.status === 'reviewed' ? 'bg-green-100 text-green-800' :
-                      sheet.status === 'submitted' ? 'bg-orange-100 text-orange-800' :
-                      sheet.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' :
-                      sheet.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      // Removed 'sent' styling, 'submitted' is handled above
+                      sheet.status === 'submitted' ? 'bg-orange-100 text-orange-800' : // Submitted by supplier, needs customer review
+                      sheet.status === 'resubmitted' ? 'bg-purple-100 text-purple-800' : // Resubmitted by supplier, needs customer review
+                      sheet.status === 'sent' ? 'bg-yellow-100 text-yellow-800' : // Sent by customer, awaiting supplier action
+                      sheet.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : // Supplier working on it
                       sheet.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      sheet.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                      sheet.status === 'canceled' ? 'bg-gray-500 text-white' : // Use a distinct gray for canceled
                       sheet.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                      'bg-gray-100 text-gray-800'
+                      'bg-gray-100 text-gray-800' // Default fallback
                     }`}>
-                      {/* Use PIR_STATUS_DISPLAY map */}
-                      {PIR_STATUS_DISPLAY[sheet.status] || (sheet.status.charAt(0).toUpperCase() + sheet.status.slice(1))}
+                      {/* Display text logic updated */}
+                      {sheet.status === 'sent' ? 'Sent' :
+                       sheet.status === 'submitted' ? 'Pending Review' :
+                       sheet.status === 'resubmitted' ? 'Pending Review' : // Also pending review
+                       (PIR_STATUS_DISPLAY[sheet.status] || (sheet.status.charAt(0).toUpperCase() + sheet.status.slice(1)))}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -196,11 +200,11 @@ const OutgoingPIRs = () => { // Renamed from ProductSheets
                       // disabled={sheet.status === 'draft'}
                     >
                       {/* Change label based on status */}
-                      {/* Update button based on new review statuses */}
+                      {/* Updated button label based on status */}
                       {sheet.status === 'submitted' || sheet.status === 'resubmitted' ? (
-                        <> <ClipboardCheck className="h-4 w-4 mr-2" /> Review </> // Changed icon
+                        <> <ClipboardCheck className="h-4 w-4 mr-2" /> Review </> // Action is to review
                       ) : (
-                        <> <Eye className="h-4 w-4 mr-2" /> View </>
+                        <> <Eye className="h-4 w-4 mr-2" /> View </> // Default action is to view for sent, in_progress, reviewed, rejected, canceled, draft
                       )}
                     </Button>
                   </TableCell>

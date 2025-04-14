@@ -1,0 +1,1 @@
+drop type "public"."question_type__old_version_to_be_dropped";

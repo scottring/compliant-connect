@@ -55,15 +55,20 @@ interface QuestionItemProps {
   onAnswerUpdate: (value: string | boolean | number | string[] | Record<string, string>[]) => void;
   onAddComment: (text: string) => void;
   isReadOnly?: boolean;
+  // Props for controlling the component add/edit dialog from the parent
+  isComponentDialogOpen?: boolean;
+  onComponentDialogOpenChange?: (open: boolean) => void;
 }
 
-const QuestionItem: React.FC<QuestionItemProps> = ({ 
-  question, 
-  answer, 
+const QuestionItem: React.FC<QuestionItemProps> = ({
+  question,
+  answer,
   pirId, // Destructure the new pirId prop
   onAnswerUpdate,
   onAddComment,
-  isReadOnly = false
+  isReadOnly = false,
+  isComponentDialogOpen = false, // Default to false if not provided
+  onComponentDialogOpenChange = () => {}, // Default to no-op if not provided
 }) => {
   // Log the received answer prop and its comments
   useEffect(() => {
@@ -579,12 +584,24 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           // Render ComponentManager and MaterialManager
           return (
             <div className="space-y-6">
-              <ComponentManager
-                pirResponseId={answer?.id ?? ''} // Pass the response ID
-                isReadOnly={isReadOnly}
-                onComponentSelect={setSelectedComponentId} // Pass the setter function
-                selectedComponentId={selectedComponentId} // Pass the current selection
-              />
+              {/* Add the "Add Component" button here, conditionally */}
+              {!isReadOnly && (
+                <div className="flex justify-end mt-4">
+                  <Button onClick={() => onComponentDialogOpenChange(true)}>
+                    Add Component
+                  </Button>
+                </div>
+              )}
+              {answer?.id && (
+                <ComponentManager
+                  pirResponseId={answer.id} // Pass the response ID
+                  isReadOnly={isReadOnly}
+                  onComponentSelect={setSelectedComponentId} // Pass the setter function
+                  selectedComponentId={selectedComponentId} // Pass the current selection
+                  isDialogOpen={isComponentDialogOpen} // Pass down dialog state
+                  onOpenChange={onComponentDialogOpenChange} // Pass down dialog handler
+                />
+              )}
               <MaterialManager
                 selectedComponentId={selectedComponentId}
                 isReadOnly={isReadOnly}
