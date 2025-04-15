@@ -26,4 +26,4 @@ dist-ssr
 ../stacks-local/temp-next/
 .vercel
 
-/.env*
+/.env*backup_*.tar.gz
