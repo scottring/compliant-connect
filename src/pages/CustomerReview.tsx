@@ -141,12 +141,12 @@ const useSubmitReviewMutation = (
             if (currentStatus === 'resubmitted' && hasFlags) {
                 const { error: pirUpdateError } = await supabase
                     .from('pir_requests')
-                    .update({ status: 'in_review' })
+                    .update({ status: 'reviewed' })
                     .eq('id', pirId);
                 if (pirUpdateError) {
-                    pirUpdateErrorInReview = new Error(`Failed to update PIR status to in_review: ${pirUpdateError.message}`);
+                    pirUpdateErrorInReview = new Error(`Failed to update PIR status to reviewed: ${pirUpdateError.message}`);
                 } else {
-                    finalPirStatus = 'rejected'; // Set finalPirStatus to rejected after in_review update
+                    finalPirStatus = 'rejected'; // Set finalPirStatus to rejected after review update
                 }
             }
 

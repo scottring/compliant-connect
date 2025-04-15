@@ -5,7 +5,7 @@ import type { Tag } from './tag';
 // Use generated Enums directly
 export type QuestionType = Database['public']['Enums']['question_type'];
 // Manually define PIRStatus based on direct DB query, as generation failed
-// Actual DB Enum: ('draft' | 'sent' | 'in_progress' | 'submitted' | 'reviewed' | 'rejected' | 'resubmitted' | 'canceled')
+// Actual DB Enum: ('draft', 'sent', 'in_progress', 'in_review', 'flagged', 'submitted', 'reviewed', 'rejected', 'resubmitted', 'canceled')
 export type PIRStatus =
   | 'draft'
   | 'sent'
@@ -15,7 +15,7 @@ export type PIRStatus =
   | 'rejected'
   | 'resubmitted'
   | 'canceled'
-  | 'in_review';
+  | 'flagged';
 // export type PIRStatus = Database['public']['Enums']['pir_status']; // Original line, commented out
 export type ResponseStatus = Database['public']['Enums']['response_status'];
 export type FlagStatus = Database['public']['Enums']['flag_status'];
@@ -31,11 +31,11 @@ export const PIR_STATUS_TRANSITIONS: Record<PIRStatus, PIRStatus[]> = {
   'sent': ['in_progress', 'submitted', 'canceled'], // Supplier starts, submits directly, or customer cancels
   'in_progress': ['submitted', 'canceled'],  // Supplier submits or cancels
   'submitted': ['reviewed', 'rejected', 'canceled'], // Customer reviews, rejects, or cancels
-  'reviewed': [],                            // Terminal state after customer review
+  'reviewed': ['rejected'],                  // Can be rejected if flags are added during review
   'rejected': ['resubmitted', 'canceled'],   // Supplier resubmits, or customer cancels
   'resubmitted': ['reviewed', 'rejected', 'canceled'], // Resubmitted goes back for review
   'canceled': [],                            // Terminal
-  'in_review': ['reviewed', 'rejected'],       // Customer is reviewing
+  'flagged': ['submitted'],                  // Response has been flagged for review
 };
 
 export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[]> = {
@@ -58,7 +58,7 @@ export const PIR_STATUS_DISPLAY: Record<PIRStatus, string> = {
   'rejected': 'Rejected', // Customer rejected response
   'resubmitted': 'Resubmitted', // Supplier resubmitted after rejection
   'canceled': 'Canceled', // Request canceled
-  'in_review': 'In Review', // Customer is reviewing
+  'flagged': 'Flagged' // Response has been flagged for review
 };
 
 export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {
