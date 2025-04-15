@@ -939,52 +939,41 @@ const CustomerReview = () => {
                     <Separator />
                     {filteredSectionQuestions.map((question, index) => {
                       const answer = answersMap[question.id];
-                      // Removed check: if (!answer) return null; We need to render even without an answer.
-                      const status = reviewStatus[answer.id] || "pending";
+                      // Handle case where there is no answer
+                      const status = answer ? reviewStatus[answer.id] || "pending" : "pending";
+                      const note = answer ? reviewNotes[answer.id] || "" : "";
+                      
                       // Map DBQuestionForReview to LocalQuestionType for the component prop
                       const questionForComponent: LocalQuestionType = {
-                          id: question.id,
-                          text: question.text,
-                          // title: question.text, // Removed title
-                          description: question.description,
-                          // Cast DB enum type directly to local type
-                          type: question.type as LocalQuestionType['type'],
-                          required: question.required ?? false,
-                          // is_required: question.required ?? false, // Removed is_required
-                          options: question.options,
-                          tags: question.tags || [],
-                          created_at: question.created_at || '',
-                          updated_at: question.updated_at || '',
-                          subsection_id: question.subsection?.id || '', // Use subsection property id
-                          // subsectionId: question.subsection_id || '', // Removed incorrect camelCase
-                          // category_id: question.subsection_id || '', // Removed category_id if not in LocalQuestionType
-                          // validation_rules: null, // Removed validation_rules
-                          // created_by: '', // Removed created_by
-                          // sectionId: question.subsection?.section?.id || '', // Removed sectionId as it's not in LocalQuestionType
+                        id: question.id,
+                        text: question.text,
+                        description: question.description,
+                        type: question.type as LocalQuestionType['type'],
+                        required: question.required ?? false,
+                        options: question.options,
+                        tags: question.tags || [],
+                        created_at: question.created_at || '',
+                        updated_at: question.updated_at || '',
+                        subsection_id: question.subsection?.id || '',
                       };
-                      // DEBUG: Log props being passed to ReviewQuestionItem
-                      console.log(`CustomerReview: Rendering ReviewQuestionItem for Q:${question.id}`, { answerExists: !!answer, status, note: reviewNotes[answer?.id] || "" });
-                      
-                      // Determine if this specific question is locked - either the whole PIR is locked or the response is already approved
+
+                      // Determine if this specific question is locked
                       const isResponseLocked = isLocked || status === "approved" || (
-                        // Also lock if the answer has been previously approved in the database
-                        answer?.status === "approved" as any  // Cast as any to resolve type error
+                        answer?.status === "approved" as any
                       );
-                      
+
                       return (
                         <div key={question.id}>
                           <ReviewQuestionItem
-                            question={questionForComponent} // Pass mapped question
+                            question={questionForComponent}
                             answer={answer}
                             status={status}
-                            customerReviewStatus={answer?.customer_review_status} // Pass down the persistent status
-                            note={reviewNotes[answer.id] || ""}
+                            customerReviewStatus={answer?.customer_review_status}
+                            note={note}
                             onApprove={() => { if (answer) handleApprove(answer.id); }}
                             onFlag={(note) => { if (answer) handleFlag(answer.id, note); }}
                             onUpdateNote={(note) => { if (answer) handleUpdateNote(answer.id, note); }}
-                            isLocked={isResponseLocked} // Pass response-specific locked state
-                            // isPreviouslyFlagged is now handled internally by ReviewQuestionItem
-                            // Pass responseId for context if needed (already available via 'answer.id')
+                            isLocked={isResponseLocked}
                           />
                           {index < filteredSectionQuestions.length - 1 && <Separator />}
                         </div>

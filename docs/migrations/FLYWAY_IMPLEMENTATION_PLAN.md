@@ -42,7 +42,7 @@ flyway.baselineOnMigrate=true
 Create a `migrations` directory to store all migrations:
 
 ```bash
-mkdir -p migrations/V1
+mkdir -p db/migrations/V1
 ```
 
 ### 4. Convert Existing Migrations
@@ -51,7 +51,7 @@ Convert existing Supabase migrations to Flyway format:
 
 ```bash
 # Example: V1__baseline_schema.sql
-cp supabase/migrations/20250414103000_base_schema.sql migrations/V1/V1__baseline_schema.sql
+cp supabase/db/migrations/20250414103000_base_schema.sql db/migrations/V1/V1__baseline_schema.sql
 ```
 
 ### 5. Create New Migrations for Enum Fixes

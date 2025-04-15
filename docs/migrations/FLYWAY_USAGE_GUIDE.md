@@ -67,10 +67,10 @@ For example:
 
 ### Creating a New Migration
 
-1. Create a new SQL file in the `migrations/V{major_version}` directory:
+1. Create a new SQL file in the `db/migrations/V{major_version}` directory:
 
 ```bash
-touch migrations/V1/V1.2__add_new_column.sql
+touch db/migrations/V1/V1.2__add_new_column.sql
 ```
 
 2. Add your SQL statements to the file:

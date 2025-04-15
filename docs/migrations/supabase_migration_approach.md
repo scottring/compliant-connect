@@ -141,7 +141,7 @@ on:
   push:
     branches: [ main, staging ]
     paths:
-      - 'supabase/migrations/**'
+      - 'supabase/db/migrations/**'
 
 jobs:
   migrate:

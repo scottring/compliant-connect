@@ -72,7 +72,7 @@ This will:
 We've discovered a schema drift between development and staging environments for the `pir_status` enum. To fix this issue:
 
 1. Go to https://app.supabase.com/project/fubuiiecraslloezxshs/sql/new
-2. Copy and paste the contents of `supabase/migrations/20250414162700_add_sent_value_to_enum.sql`
+2. Copy and paste the contents of `supabase/db/migrations/20250414162700_add_sent_value_to_enum.sql`
 3. Run the SQL query
 
 This will add the 'sent' value to the pir_status enum if it doesn't already exist. This simple approach ensures that the enum includes the necessary value without trying to modify the entire enum structure.
