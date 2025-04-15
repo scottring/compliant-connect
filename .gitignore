@@ -27,3 +27,8 @@ dist-ssr
 .vercel
 
 /.env*backup_*.tar.gz
+.env
+.env.dev
+.env.new_staging
+.env.production
+.env.staging
