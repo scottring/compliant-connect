@@ -11,31 +11,31 @@ export type PIRStatus =
   | 'sent'
   | 'in_progress'
   | 'submitted'
+  | 'in_review'
   | 'reviewed'
+  | 'flagged'
+  | 'approved'
   | 'rejected'
   | 'resubmitted'
-  | 'canceled'
-  | 'flagged';
+  | 'canceled';
 // export type PIRStatus = Database['public']['Enums']['pir_status']; // Original line, commented out
 export type ResponseStatus = Database['public']['Enums']['response_status'];
 export type FlagStatus = Database['public']['Enums']['flag_status'];
 export type RelationshipStatus = Database['public']['Enums']['relationship_status'];
 
-// Valid status transitions
-// Valid status transitions based on migration 20250410103533 and allowing resubmission
-// Valid status transitions based on the *actual* DB enum values + observed usage
-// NOTE: These transitions might need refinement based on actual application logic.
-// Adjusted transitions based on actual enum and likely workflow
+// Define valid status transitions
 export const PIR_STATUS_TRANSITIONS: Record<PIRStatus, PIRStatus[]> = {
   'draft': ['sent', 'canceled'],             // Customer sends or cancels draft
-  'sent': ['in_progress', 'submitted', 'canceled'], // Supplier starts, submits directly, or customer cancels
-  'in_progress': ['submitted', 'canceled'],  // Supplier submits or cancels
-  'submitted': ['reviewed', 'rejected', 'canceled'], // Customer reviews, rejects, or cancels
-  'reviewed': ['rejected'],                  // Can be rejected if flags are added during review
+  'sent': ['in_progress', 'rejected', 'canceled'], // Supplier starts, submits directly, or customer cancels
+  'in_progress': ['submitted', 'rejected', 'canceled'],  // Supplier submits or cancels
+  'submitted': ['in_review', 'rejected', 'canceled'], // Customer reviews, rejects, or cancels
+  'in_review': ['reviewed', 'flagged', 'rejected', 'canceled'], // Customer reviews, rejects, or cancels
+  'reviewed': ['approved', 'rejected', 'canceled'],                  // Can be rejected if flags are added during review
+  'flagged': ['reviewed', 'rejected', 'canceled'], // Response has been flagged for review
+  'approved': [], // Terminal state - no further transitions except via admin
   'rejected': ['resubmitted', 'canceled'],   // Supplier resubmits, or customer cancels
-  'resubmitted': ['reviewed', 'rejected', 'canceled'], // Resubmitted goes back for review
+  'resubmitted': ['in_review', 'rejected', 'canceled'], // Resubmitted goes back for review
   'canceled': [],                            // Terminal
-  'flagged': ['submitted'],                  // Response has been flagged for review
 };
 
 export const RESPONSE_STATUS_TRANSITIONS: Record<ResponseStatus, ResponseStatus[]> = {
@@ -54,11 +54,13 @@ export const PIR_STATUS_DISPLAY: Record<PIRStatus, string> = {
   'sent': 'Sent', // Initial state after customer sends
   'in_progress': 'In Progress', // Supplier started working
   'submitted': 'Submitted', // Supplier submitted response, pending review
+  'in_review': 'In Review',
   'reviewed': 'Reviewed', // Customer completed review
+  'flagged': 'Flagged', // Response has been flagged for review
+  'approved': 'Approved',
   'rejected': 'Rejected', // Customer rejected response
   'resubmitted': 'Resubmitted', // Supplier resubmitted after rejection
   'canceled': 'Canceled', // Request canceled
-  'flagged': 'Flagged' // Response has been flagged for review
 };
 
 export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {
@@ -68,14 +70,36 @@ export const RESPONSE_STATUS_DISPLAY: Record<ResponseStatus, string> = {
   'approved': 'Approved'
 } as const;
 
-// Type guard functions
-export const isValidPIRStatusTransition = (from: PIRStatus, to: PIRStatus): boolean => {
-  return PIR_STATUS_TRANSITIONS[from].includes(to);
-};
+// Get all possible next statuses for a given status
+export function getNextPossibleStatuses(currentStatus: PIRStatus): PIRStatus[] {
+  return PIR_STATUS_TRANSITIONS[currentStatus];
+}
 
-export const isValidResponseStatusTransition = (from: ResponseStatus, to: ResponseStatus): boolean => {
-  return RESPONSE_STATUS_TRANSITIONS[from].includes(to);
-};
+// Check if a status is terminal (no further transitions possible)
+export function isTerminalStatus(status: PIRStatus): boolean {
+  return PIR_STATUS_TRANSITIONS[status].length === 0;
+}
+
+// Get a human-readable label for a status
+export function getPIRStatusLabel(status: PIRStatus): string {
+  return status
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+// Type guard to check if a status transition is valid
+export function isValidPIRStatusTransition(
+  currentStatus: PIRStatus,
+  newStatus: PIRStatus
+): boolean {
+  // Allow keeping the same status
+  if (currentStatus === newStatus) {
+    return true;
+  }
+  
+  return PIR_STATUS_TRANSITIONS[currentStatus].includes(newStatus);
+}
 
 // Define local types based on generated Row types, adding relationships if needed
 
