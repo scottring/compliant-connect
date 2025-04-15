@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useForm } from "react-hook-form";
 import {
@@ -92,7 +91,7 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
 
       // Call the Edge Function
       const { data: functionResponse, error: functionError } = await supabase.functions.invoke(
-        "invite-user", // Name of the Edge Function
+        "invite-user",
         {
           body: {
             email: data.contactEmail,
@@ -100,24 +99,38 @@ const InviteSupplierModal: React.FC<InviteSupplierModalProps> = ({
             invitingUserId: user.id,
             supplierName: data.supplierName,
             contactName: data.contactName,
-            invited_supplier_company_id: newSupplierCompany.id // Pass the created supplier ID
+            invited_supplier_company_id: newSupplierCompany.id
           },
         }
       );
 
       if (functionError) {
-        // Handle specific errors returned from the function
-        if (functionError.message.includes("User already registered")) {
-          throw new Error("This user is already registered.");
+        console.error("Edge Function Error:", functionError);
+        // Handle specific error cases
+        if (functionError.message?.includes("User already registered")) {
+          throw new Error("This email is already registered. Please use a different email address.");
         }
-        throw functionError; // Re-throw other function errors
+        // Handle missing environment variables error
+        if (functionError.message?.includes("Missing required environment variables")) {
+          throw new Error("Server configuration error. Please contact support.");
+        }
+        // Handle other specific error cases as needed
+        throw new Error(`Invitation failed: ${functionError.message}`);
+      }
+
+      if (!functionResponse) {
+        throw new Error("No response from invitation service");
       }
      
       toast.success(`Invitation sent successfully to ${data.contactEmail}`);
       onOpenChange(false);
       reset();
-    } catch (error: any) { // Catch any error type
+    } catch (error: any) {
       console.error("Failed to send invitation:", error);
+      // Clean up the created company if invitation fails
+      if (newSupplierCompany?.id) {
+        await supabase.from('companies').delete().eq('id', newSupplierCompany.id);
+      }
       toast.error(`Failed to send invitation: ${error.message}`);
     }
   };

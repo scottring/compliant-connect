@@ -57,10 +57,7 @@ const CheckCompany = () => {
 
   // If user exists but has no companies after loading, redirect to onboarding
   if (!isLoadingCompanies && (!userCompanies || userCompanies.length === 0)) {
-    // Prevent redirect loop if already on onboarding
-    if (location.pathname !== '/onboarding') {
-      return <Navigate to="/onboarding" state={{ from: location }} replace />;
-    }
+    return <Navigate to="/onboarding" state={{ from: location }} replace />;
   }
 
   // If there was an error loading companies, show an error message or redirect
@@ -93,12 +90,12 @@ const App = () => {
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/email-confirmation" element={<EmailConfirmation />} />
                     <Route path="/unauthorized" element={<Unauthorized />} />
-                    <Route path="/invitation/confirm" element={<InvitationConfirm />} /> {/* Old confirmation route */}
-                    <Route path="/invite/register" element={<InviteRegistration />} /> {/* New registration route */}
+                    <Route path="/invitation/confirm" element={<InvitationConfirm />} />
+                    <Route path="/invite/register" element={<InviteRegistration />} />
                     
                     {/* Protected Routes */}
                     <Route element={<ProtectedRoute />}>
-                      {/* Onboarding route */}
+                      {/* Onboarding route - restored to original */}
                       <Route path="/onboarding" element={<Onboarding />} />
                       
                       {/* Main Routes */}
@@ -108,7 +105,7 @@ const App = () => {
                         
                         {/* Routes that require company check */}
                         <Route element={<CheckCompany />}>
-                          <Route path="/admin/settings" element={<AdminSettings />} /> {/* Add route for Admin Settings */}
+                          <Route path="/admin/settings" element={<AdminSettings />} />
                           {/* Supplier Routes */}
                           <Route path="/suppliers" element={<Suppliers />} />
                           <Route path="/suppliers/:id" element={<SupplierDetail />} />
@@ -120,9 +117,6 @@ const App = () => {
                           <Route path="/customer-review/:id" element={<CustomerReview />} />
                           
                           {/* Product Routes */}
-                          {/* Route path="/product-sheets" element={<OutgoingPIRs />} was removed */}
-                          {/* <Route path="/incoming-pirs" element={<IncomingPIRs />} /> Removed as per request */}
-                          {/* Route path="/product-sheets/:id" element={<SupplierResponseForm />} was removed */}
                           <Route path="/our-products" element={<SupplierIncomingRequests />} />
                           
                           {/* Admin Routes */}

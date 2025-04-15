@@ -338,12 +338,24 @@ const Onboarding = () => {
   const isSubmitting = createCompanyMutation.isPending; // Use mutation state
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <Card className="w-full max-w-lg">
+    <div className="flex justify-center items-center min-h-screen bg-gray-100">
+      <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Welcome! Set up your company</CardTitle>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center font-semibold">✓</div>
+                <div className="h-1 w-12 bg-brand"></div>
+              </div>
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center font-semibold">2</div>
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground">Step 2 of 2</div>
+          </div>
+          <CardTitle>Set Up Your Company</CardTitle>
           <CardDescription>
-            Please provide your company details to get started.
+            Complete your company profile to start using the platform.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -404,26 +416,6 @@ const Onboarding = () => {
             </form>
           </Form>
         </CardContent>
-        <CardFooter className="flex flex-col items-start gap-4 pt-4 border-t">
-           <p className="text-sm text-muted-foreground">Troubleshooting:</p>
-           <div className="flex flex-wrap gap-2">
-             <Button variant="outline" size="sm" onClick={runDiagnostics} disabled={diagnosing || isSubmitting}>
-               {diagnosing ? "Running..." : "Run Diagnostics"}
-             </Button>
-             <Button variant="outline" size="sm" onClick={refreshAuthSession} disabled={isSubmitting}>
-               Refresh Session
-             </Button>
-             <Button variant="destructive" size="sm" onClick={createCompanyEmergency} disabled={isSubmitting}>
-               Emergency Create (Bypass RLS)
-             </Button>
-             {/* Add buttons for other debug functions if needed */}
-           </div>
-           {diagnosticResults && (
-             <pre className="mt-2 p-2 border rounded bg-gray-50 text-xs overflow-auto max-h-40 w-full">
-               {JSON.stringify(diagnosticResults, null, 2)}
-             </pre>
-           )}
-        </CardFooter>
       </Card>
     </div>
   );

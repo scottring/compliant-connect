@@ -161,13 +161,13 @@ const InviteRegistration = () => {
           console.error("Failed to create company relationship:", JSON.stringify(relationshipError, null, 2));
           toast.error("Registration complete, but failed to link companies. Please contact support.");
         } else {
-          toast.success("Registration complete! Companies linked. Redirecting...");
+          toast.success("Registration complete! Companies linked. Redirecting to company setup...");
         }
       }
 
-      // Redirect to dashboard or appropriate page after successful registration
+      // Redirect to onboarding page after successful registration
       // A small delay allows the user to see the success toast
-      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+      setTimeout(() => navigate('/onboarding', { replace: true }), 1500);
 
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -194,8 +194,23 @@ const InviteRegistration = () => {
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center font-semibold">1</div>
+                <div className="h-1 w-12 bg-brand"></div>
+              </div>
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-full border-2 border-brand bg-white text-brand flex items-center justify-center font-semibold">2</div>
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground">Step 1 of 2</div>
+          </div>
           <CardTitle>Complete Your Registration</CardTitle>
-          <CardDescription>Set your password and profile details for {email || 'your account'}.</CardDescription>
+          <CardDescription>
+            Set your password and profile details for {email || 'your account'}. 
+            After this, you'll be able to set up your company profile.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
